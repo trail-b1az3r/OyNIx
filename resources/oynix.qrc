@@ -1,9 +1,0 @@
-<RCC>
-    <qresource prefix="/">
-        <file alias="themes/nyx.css">../themes/nyx.css</file>
-        <file alias="themes/nyx-midnight.css">../themes/nyx-midnight.css</file>
-        <file alias="themes/nyx-violet.css">../themes/nyx-violet.css</file>
-        <file alias="themes/nyx-amethyst.css">../themes/nyx-amethyst.css</file>
-        <file alias="themes/nyx-ember.css">../themes/nyx-ember.css</file>
-    </qresource>
-</RCC>

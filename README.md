@@ -1,216 +1,127 @@
-# OyNIx Browser
+# OyNIx
 
-A custom Chromium-based **native desktop browser** built with C++17, Qt6 WebEngine, and .NET 8 NativeAOT. Features a built-in AI assistant, local search engine, web crawler, and an obsidian purple/black theme.
+A fast, private desktop web browser written in **Rust** and **QML**. The interface is drawn by Qt Quick on **Vulkan 1.3 / 1.2**, with **OpenGL ES** as the fallback.
 
-**Coded by Claude (Anthropic)** for the OyNIx project.
+OyNIx's interaction design follows modern macOS-style browsers: quiet chrome, a centred address field showing just the domain, a tab overview, vertical tabs and a focus mode. It ships with tracker and ad blocking switched on and sends no telemetry.
+
+![Vertical tabs, dark theme](docs/screenshot-dark-vertical.png)
+
+| Tab overview | Reader View |
+|---|---|
+| ![Tab overview](docs/screenshot-overview.png) | ![Reader](docs/screenshot-reader.png) |
 
 ## Features
 
-- **Nyx Search Engine** — Local FTS5 full-text search index with BM25 ranking. Hybrid mode combines local results with web search.
-- **Source Labels** — OYN, Nyx, OYN+, Nyx+ badges distinguish result origins (curated, crawled, enhanced).
-- **Native Web Crawler** — BFS crawler with configurable depth, concurrency, language filter, robots.txt support, and politeness delay.
-- **AI Assistant** — Sidebar chat panel with Ollama (local) or OpenAI-compatible backend support.
-- **Tree-Style Tabs** — Domain-grouped sidebar with drag-drop hierarchy, or toggle to classic tabs.
-- **Command Palette** — VS Code-style Ctrl+K launcher for quick actions.
-- **Community Database** — JSONL-based community site database synced from GitHub on startup. Export your crawled data to contribute.
-- **Web Cache** — SHA-256 hashed offline cache in `~/.cache/oynix/webcache/` with automatic pruning.
-- **Multiple Themes** — Nyx Dark, Midnight, Violet, Amethyst, Ember, Aether Light, and System.
-- **Chrome Import** — Import bookmarks, history, and credentials from Chrome/Chromium.
-- **GitHub Sync** — Sync bookmarks and settings via GitHub personal access token.
-- **Session Manager** — Save and restore browser sessions.
-- **Security Manager** — Detects login pages and warns before credential submission.
-- **NPI Extensions** — Custom extension format with a built-in compiler.
-- **Audio Player** — Web media detection and playback (when Qt6 Multimedia is available).
-- **Download Manager** — Built-in download manager with progress tracking.
-- **.NET 8 Core** — NativeAOT compiled C# library for advanced interop tasks.
-
-## Languages
-
-| Language | Purpose |
-|----------|---------|
-| **C++17** | Browser core, UI, search engine, crawler, all subsystems (Qt6) |
-| **C#** | NativeAOT interop core library (`core/OyNIx.Core/`) |
-| **CMake** | Build system |
-| **Shell** | Build scripts, packaging, installer (`scripts/`, `debian/`) |
-
-## Installation
-
-### Pre-built Packages
-
-Download from [GitHub Releases](https://github.com/minerofthesoal/OyNIx/releases):
-
-| Platform | Package | Install |
-|----------|---------|---------|
-| **Ubuntu/Mint** | `.deb` | `sudo apt install ./oynix_*.deb` |
-| **Arch Linux** | `.pkg.tar.zst` | `sudo pacman -U oynix-*.pkg.tar.zst` |
-| **Windows** | `.zip` / `.exe` | Extract and run `OyNIx.exe` |
-
-### Build from Source (Ubuntu/Mint)
-
-```bash
-# Install dependencies and build
-./scripts/build-ubuntu.sh --deps-only   # install build dependencies
-./scripts/build-ubuntu.sh                # build with CMake + Ninja
-./scripts/build-ubuntu.sh --install      # install to ~/.local
-```
-
-### Build from Source (Manual)
-
-```bash
-# Prerequisites: Qt6 (WebEngine, WebChannel, Network, Sql, Concurrent), .NET 8 SDK,
-#                CMake 3.16+, Ninja, g++ with C++17, SQLite3
-
-cmake -S . -B build -GNinja \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_PREFIX_PATH=/path/to/qt6
-cmake --build build -j$(nproc)
-
-# Run
-./build/oynix
-```
-
-### Build .deb Package
-
-```bash
-chmod +x scripts/build-deb.sh debian/rules debian/bundle-qt.sh
-./scripts/build-deb.sh v3.1.0
-sudo apt install ./oynix_3.1.0_amd64.deb
-```
-
-### Build Dependencies
-
-- **Qt6 6.7+** — Core, Widgets, WebEngineWidgets, WebEngineCore, Network, Sql, Concurrent, WebChannel
-- **CMake 3.16+** and **Ninja**
-- **g++ 10+** with C++17 support
-- **.NET 8 SDK** — for NativeAOT C# core library
-- **SQLite3** (optional — Qt6::Sql bundles a driver)
-- **Qt6 Multimedia** (optional — enables audio player)
-
-## Usage
-
-### Keyboard Shortcuts
-
-| Shortcut | Action |
-|----------|--------|
-| Ctrl+T | New Tab |
-| Ctrl+W | Close Tab |
-| Ctrl+L | Focus URL Bar |
-| Ctrl+F | Find on Page |
-| Ctrl+K | Command Palette |
-| Ctrl+D | Bookmark Page |
-| Ctrl+Shift+W | Web Crawler Panel |
-| F5 | Refresh |
-| F11 | Toggle Fullscreen |
-| Ctrl+= / Ctrl+- | Zoom In / Out |
-| Ctrl+0 | Reset Zoom |
-| Alt+Left | Back |
-| Alt+Right | Forward |
-
-### Search
-
-Type in the URL bar:
-- **URLs** load directly
-- **Keywords** trigger Nyx search (local FTS5 index + community DB + web results)
-- Hybrid mode fetches results from DuckDuckGo, Google, Bing, Brave, or Startpage
-
-### Web Crawler
-
-Open the crawler panel (Ctrl+Shift+W or toolbar button):
-1. **List crawl** — Enter URLs (one per line) and crawl those sites
-2. **Broad crawl** — BFS crawl starting from a seed URL
-- Configurable max depth, max pages, concurrency, and language filter
-- Respects robots.txt and politeness delays
-- Results are indexed into the local Nyx search database
+| Area | What you get |
+|------|--------------|
+| **Tabs** | Three layouts: *Standard* (tab bar under the toolbar), *Compact* (tabs inside the toolbar), *Vertical* (sidebar). Pinned tabs, drag to reorder, mute, duplicate, move to a new window. Reopen closed tabs. |
+| **Tab overview** | `Ctrl+Shift+\`: a searchable grid of live tab previews. |
+| **Memory** | Inactive tabs are unloaded after a configurable time. Restored sessions load lazily, so only the visible tab loads. Low Power Mode freezes background tabs and turns off animations. |
+| **Privacy** | Native content blocker (built-in tracker and ad rules plus your own EasyList, uBlock or hosts lists), per-site report, tracking-parameter stripping, third-party cookie blocking, fingerprinting protection, Global Privacy Control, optional Do Not Track. Privacy Report on the Start Page. |
+| **Address field** | Shows the domain when idle. Suggestions from bookmarks, history and your search engine, plus 25 built-in `!bang` shortcuts (`!w`, `!gh`, `!yt`, `!mdn`…). |
+| **Reading** | Reader View (`Ctrl+Shift+R`), Reading List, Focus Mode (`Ctrl+Shift+F`, hover the top edge to reveal the toolbar). |
+| **Library** | Sidebar with Bookmarks, Reading List and History. Favorites bar. HTML bookmark import and export. |
+| **Start Page** | Native and instant: Favorites, Frequently Visited, Privacy Report, Reading List. |
+| **Website settings** | Per-site zoom, JavaScript, content blocker, pop-ups and reader default. |
+| **Profiles** | Fully isolated profiles (`--profile work`), each running as its own app. Private windows. |
+| **Power users** | Developer Tools, user scripts (`*.user.js` with Greasemonkey metadata) and user styles (`*.user.css`), custom user agent, Print to PDF, view source. |
+| **Windows** | Frameless window with built-in close/minimise/zoom controls (left or right), or the system title bar. Light, dark or auto theme with eight accent colours. |
 
 ## Architecture
 
 ```
-OyNIx/
-├── src/
-│   ├── main.cpp                    # Application entry point
-│   ├── core/
-│   │   ├── BrowserWindow.cpp/h     # Main browser window
-│   │   ├── TabWidget.cpp/h         # Tab management
-│   │   ├── WebView.cpp/h           # WebEngine view wrapper
-│   │   ├── WebPage.cpp/h           # WebEngine page wrapper
-│   │   ├── UrlBar.cpp/h            # URL bar with search integration
-│   │   └── FindBar.cpp/h           # In-page find bar
-│   ├── ai/
-│   │   ├── AiManager.cpp/h         # AI backend (Ollama/OpenAI)
-│   │   └── AiChatPanel.cpp/h       # Sidebar AI chat panel
-│   ├── search/
-│   │   ├── NyxSearch.cpp/h         # FTS5 search engine
-│   │   ├── WebCrawler.cpp/h        # BFS web crawler
-│   │   ├── WebResultsFetcher.cpp/h # Web search integration
-│   │   └── SearchEngineBuilder.cpp/h
-│   ├── data/
-│   │   ├── Database.cpp/h          # SQLite database
-│   │   ├── CommunityDbSync.cpp/h   # GitHub community DB sync
-│   │   ├── WebCache.cpp/h          # Offline page cache
-│   │   ├── BookmarkManager.cpp/h   # Bookmark storage
-│   │   ├── HistoryManager.cpp/h    # Browsing history
-│   │   ├── ProfileManager.cpp/h    # User profiles
-│   │   ├── CredentialManager.cpp/h # Credential storage
-│   │   ├── SessionManager.cpp/h    # Session save/restore
-│   │   ├── ChromeImport.cpp/h      # Chrome data import
-│   │   └── NydtaFormat.cpp/h       # Custom data format
-│   ├── ui/
-│   │   ├── SettingsDialog.cpp/h    # Settings (8 tabs)
-│   │   ├── CommandPalette.cpp/h    # Ctrl+K command palette
-│   │   ├── DownloadManager.cpp/h   # Download management
-│   │   ├── TreeTabSidebar.cpp/h    # Tree-style tab sidebar
-│   │   ├── BookmarkPanel.cpp/h     # Bookmark sidebar
-│   │   ├── ExtensionPanel.cpp/h    # Extension manager UI
-│   │   └── CrawlerPanel.cpp/h      # Web crawler UI
-│   ├── security/
-│   │   └── SecurityManager.cpp/h   # Login detection & warnings
-│   ├── extensions/
-│   │   ├── ExtensionManager.cpp/h  # Extension lifecycle
-│   │   ├── ExtensionBridge.cpp/h   # JS ↔ C++ bridge
-│   │   └── NpiCompiler.cpp/h       # NPI extension compiler
-│   ├── theme/
-│   │   └── ThemeEngine.cpp/h       # Theme management (7 themes)
-│   ├── media/
-│   │   └── AudioPlayer.cpp/h       # Audio playback
-│   ├── sync/
-│   │   └── GitHubSync.cpp/h        # GitHub settings sync
-│   ├── interop/
-│   │   └── CoreBridge.cpp/h        # C# NativeAOT bridge
-│   └── pages/
-│       └── InternalPages.cpp/h     # oyn:// internal pages
-├── core/
-│   └── OyNIx.Core/                 # C# NativeAOT library (.NET 8)
-├── data/
-│   └── community.jsonl             # Seed community database
-├── debian/                         # Debian packaging (dpkg-buildpackage)
-├── scripts/
-│   ├── build-deb.sh                # Build .deb package
-│   ├── build-pacman.sh             # Build Arch pacman package
-│   └── build-ubuntu.sh             # Build from source on Ubuntu
-├── themes/                         # Theme files
-├── resources/                      # Qt resources (icons, QRC)
-├── assets/                         # Application icons
-└── CMakeLists.txt                  # Build system
+src/
+  main.rs            CLI, GPU selection, Qt/WebEngine start-up
+  gpu.rs             Vulkan 1.2/1.3 device probe (ash) → Vulkan | GLES | GL | software
+  core/              Pure Rust, no Qt types
+    omnibox.rs         input → URL, search engines, !bangs, tracking-param stripping
+    blocker.rs         network content blocker + statistics
+    library.rs         history, bookmarks, reading list, closed tabs
+    settings.rs        persistent preferences + per-site overrides
+    scripts.rs         injected JS: reader view, GPC, anti-fingerprinting
+    paths.rs           XDG paths per profile
+  bridge/
+    core.rs            CXX-Qt QML singleton `Core` (properties + invokables)
+    native.rs          cxx bridge to cpp/native.cpp
+cpp/native.cpp       graphics API, WebEngine init, request interceptor, cookie filter
+qml/                 the complete UI (BrowserWindow, AddressField, TabStrip, Sidebar,
+                     TabOverview, StartPage, SettingsWindow, popovers, Icon set…)
 ```
 
-## Building Packages
+Every network request passes through a C++ `QWebEngineUrlRequestInterceptor`, which calls the Rust blocker synchronously. Matching is a few hash lookups per request.
 
-### Automated (GitHub Actions)
+### Graphics backends
 
-Push a version tag to trigger release builds for all platforms:
+| Flag | Backend |
+|------|---------|
+| *(default)* | Vulkan if a non-CPU device with Vulkan ≥ 1.2 exists. Otherwise OpenGL ES (Wayland/EGL), otherwise desktop OpenGL. |
+| `--gpu vulkan` | Qt Quick RHI on Vulkan (1.3 preferred, 1.2 minimum) |
+| `--gpu gles` | OpenGL ES 3 via EGL |
+| `--gpu opengl` | Desktop OpenGL |
+| `--gpu software` | CPU rasteriser |
+
+You can also set `OYNIX_GPU=vulkan`. `oynix --gpu-info` prints the detected Vulkan device. The active backend is shown under Settings › About.
+
+> **Why no GLFW?** Qt Quick creates and owns its window and graphics context through its RHI layer. GLFW would have to replace that, which breaks QML input, popups and Qt WebEngine's compositor integration. The RHI already gives direct Vulkan and GLES rendering, so GLFW isn't needed.
+
+## Building
+
+Ubuntu 24.04 / Debian 13 / Mint 22 (Qt 6.4 or newer):
 
 ```bash
-git tag v3.1.0
-git push origin v3.1.0
+./scripts/deps-ubuntu.sh        # Qt 6 + QML modules + Vulkan loader (+ rustup if needed)
+cargo build --release
+./target/release/oynix
 ```
 
-Or trigger manually from the Actions tab (workflow_dispatch). Builds on `main` and `claude/*` branches also create pre-releases.
+Arch Linux: `pacman -S rust qt6-base qt6-declarative qt6-webengine qt6-shadertools vulkan-icd-loader`.
 
-Platforms built:
-- **Ubuntu/Mint (.deb)** — dpkg-buildpackage with bundled Qt6
-- **Windows (.exe/.zip)** — MSVC build with windeployqt
-- **Arch Linux (.pkg.tar.zst)** — makepkg with PKGBUILD
+Install for the current user, or build a Debian package:
+
+```bash
+./scripts/install.sh            # → ~/.local/bin/oynix + desktop entry + icons
+./scripts/build-deb.sh          # → target/deb/oynix_<version>_<arch>.deb
+```
+
+Run the unit tests (omnibox, blocker, library, settings) with `cargo test`.
+
+## Usage
+
+```
+oynix [URL]
+oynix --private                 private window
+oynix --profile work            separate profile
+oynix --gpu vulkan|gles|opengl|software
+oynix --wayland | --x11
+```
+
+### Keyboard shortcuts
+
+| Action | Keys |
+|--------|------|
+| New tab / window / private window | `Ctrl+T` / `Ctrl+N` / `Ctrl+Shift+N` |
+| Close tab / reopen closed tab | `Ctrl+W` / `Ctrl+Shift+T` |
+| Address field | `Ctrl+L`, `Ctrl+K`, `F6` |
+| Show all tabs | `Ctrl+Shift+\` |
+| Sidebar / Bookmarks / History | `Ctrl+Shift+L` / `Ctrl+B` / `Ctrl+H` |
+| Reader View / Focus Mode | `Ctrl+Shift+R` / `Ctrl+Shift+F` |
+| Find / next / previous | `Ctrl+F` / `Ctrl+G` / `Ctrl+Shift+G` |
+| Bookmark / add to Reading List | `Ctrl+D` / `Ctrl+Shift+D` |
+| Zoom in / out / reset | `Ctrl+=` / `Ctrl+-` / `Ctrl+0` |
+| Switch tab | `Ctrl+Tab`, `Ctrl+Shift+Tab`, `Ctrl+1…9` |
+| Downloads / Settings | `Ctrl+J` / `Ctrl+,` |
+| Developer Tools | `F12` (enable under Settings › Advanced) |
+
+## Files
+
+| Path | Contents |
+|------|----------|
+| `~/.config/oynix/<profile>/settings.json` | preferences and per-site settings |
+| `~/.config/oynix/<profile>/filters/*.txt` | extra blocklists (Adblock Plus / uBlock / hosts syntax) |
+| `~/.config/oynix/<profile>/userscripts/` | `*.user.js`, `*.user.css` |
+| `~/.local/share/oynix/<profile>/` | history, bookmarks, reading list, session, cookies |
+| `~/.cache/oynix/<profile>/` | HTTP cache |
 
 ## License
 
-See [LICENSE](LICENSE) for details.
+MIT. See [LICENSE](LICENSE).
