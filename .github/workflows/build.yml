@@ -88,23 +88,9 @@ jobs:
       - name: Test
         run: QMAKE="$QT_ROOT_DIR/bin/qmake" cargo test --locked
 
-      # Remove the bundled binary from the source staging directory.
-      # Adjust this path if your packaging script stages files elsewhere.
-      - name: Remove bundled Oynix binary
-        run: |
-          if [ -f usr/bin/oynix ]; then
-            rm -f usr/bin/oynix
-            echo "Removed usr/bin/oynix"
-          else
-            echo "usr/bin/oynix not found in source root; checking package staging."
-          fi
 
       - name: Build .deb (Debian / Ubuntu / Mint)
         run: QMAKE="$QT_ROOT_DIR/bin/qmake" ./scripts/build-deb.sh "${{ steps.ver.outputs.version }}"
-
-      - name: Remove Oynix binary from Debian package
-        run: |
-          rm -f "target/deb/oynix_${{ steps.ver.outputs.version }}_amd64/usr/bin/oynix"
 
       - name: Build .pkg.tar.zst (Arch / Manjaro / EndeavourOS)
         run: QMAKE="$QT_ROOT_DIR/bin/qmake" ./scripts/build-pkg.sh "${{ steps.ver.outputs.version }}"
