@@ -12,6 +12,12 @@
 #include <QtGui/QIcon>
 #include <QtGui/QStyleHints>
 #include <QtGui/QSurfaceFormat>
+#include <QtGui/QInputMethodEvent>
+#include <QtGui/QKeyEvent>
+#include <QtGui/QMouseEvent>
+#include <QtGui/QPointingDevice>
+#include <QtGui/QWheelEvent>
+#include <QtQuick/QQuickItem>
 #include <QtQuick/QQuickWindow>
 #include <QtQuick/QSGRendererInterface>
 #include <QtWebEngineCore/QWebEngineCookieStore>
@@ -125,6 +131,64 @@ rust::String active_graphics_api() {
     case QSGRendererInterface::Software: return rust::String("Software");
     default: return rust::String("Other");
     }
+}
+
+static QString qstr(rust::Str s) { return QString::fromUtf8(s.data(), static_cast<qsizetype>(s.size())); }
+
+void send_mouse(QObject *obj, double x, double y, int32_t button, int32_t clicks, int32_t modifiers, int32_t kind) {
+    auto *item = qobject_cast<QQuickItem *>(obj);
+    if (!item || !item->window()) return;
+    QQuickWindow *w = item->window();
+    const QPointF scene = item->mapToScene(QPointF(x, y));
+    const QPointF global = w->mapToGlobal(scene);
+    const auto mods = Qt::KeyboardModifiers(modifiers);
+    const Qt::MouseButton b = button == 2 ? Qt::RightButton : button == 4 ? Qt::MiddleButton : Qt::LeftButton;
+    auto post = [&](QEvent::Type t, Qt::MouseButton btn, Qt::MouseButtons held) {
+        QMouseEvent ev(t, scene, scene, global, btn, held, mods, QPointingDevice::primaryPointingDevice());
+        QCoreApplication::sendEvent(w, &ev);
+    };
+    post(QEvent::MouseMove, Qt::NoButton, Qt::NoButton);
+    if (kind == 0) return;
+    for (int i = 0; i < std::max(1, int(clicks)); ++i) {
+        post(i == 1 ? QEvent::MouseButtonDblClick : QEvent::MouseButtonPress, b, b);
+        post(QEvent::MouseButtonRelease, b, Qt::NoButton);
+    }
+}
+
+void send_key(QObject *obj, int32_t key, int32_t modifiers, rust::Str text) {
+    auto *item = qobject_cast<QQuickItem *>(obj);
+    if (!item || !item->window()) return;
+    item->forceActiveFocus();
+    const QString t = qstr(text);
+    const auto mods = Qt::KeyboardModifiers(modifiers);
+    QKeyEvent press(QEvent::KeyPress, key, mods, t);
+    QKeyEvent release(QEvent::KeyRelease, key, mods, t);
+    QCoreApplication::sendEvent(item->window(), &press);
+    QCoreApplication::sendEvent(item->window(), &release);
+}
+
+void send_text(QObject *obj, rust::Str text) {
+    auto *item = qobject_cast<QQuickItem *>(obj);
+    if (!item || !item->window()) return;
+    item->forceActiveFocus();
+    QObject *target = item->window()->focusObject();
+    if (!target) target = item;
+    // Commit text through the input method so any Unicode (accents, emoji,
+    // CJK) arrives as typed text, as an on-screen keyboard would deliver it.
+    QInputMethodEvent ev;
+    ev.setCommitString(qstr(text));
+    QCoreApplication::sendEvent(target, &ev);
+}
+
+void send_wheel(QObject *obj, double x, double y, double dx, double dy) {
+    auto *item = qobject_cast<QQuickItem *>(obj);
+    if (!item || !item->window()) return;
+    QQuickWindow *w = item->window();
+    const QPointF scene = item->mapToScene(QPointF(x, y));
+    // 120 angle units ≈ one notch; dx/dy are in pixels (positive = down/right).
+    const QPoint angle(int(-dx * 1.2), int(-dy * 1.2));
+    QWheelEvent ev(scene, w->mapToGlobal(scene), QPoint(), angle, Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+    QCoreApplication::sendEvent(w, &ev);
 }
 
 void set_color_scheme(int32_t scheme) {

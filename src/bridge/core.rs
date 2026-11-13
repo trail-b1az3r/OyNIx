@@ -48,6 +48,8 @@ pub mod qobject {
         #[qproperty(bool, dark_websites)]
         #[qproperty(bool, force_dark_websites)]
         #[qproperty(bool, cosmetic_filtering)]
+        #[qproperty(bool, agent_enabled)]
+        #[qproperty(QString, agent_mode)]
         #[qproperty(QString, user_agent)]
         #[qproperty(bool, start_page_show_privacy_report)]
         #[qproperty(bool, start_page_show_reading_list)]
@@ -194,6 +196,18 @@ pub mod qobject {
         #[qinvokable]
         fn blocker_generation(self: &Core) -> i32;
         #[qinvokable]
+        unsafe fn send_mouse(self: &Core, item: *mut QObject, x: f64, y: f64, button: i32, clicks: i32, modifiers: i32, kind: i32);
+        #[qinvokable]
+        unsafe fn send_key(self: &Core, item: *mut QObject, key: i32, modifiers: i32, text: &QString);
+        #[qinvokable]
+        unsafe fn send_text(self: &Core, item: *mut QObject, text: &QString);
+        #[qinvokable]
+        unsafe fn send_wheel(self: &Core, item: *mut QObject, x: f64, y: f64, dx: f64, dy: f64);
+        #[qinvokable]
+        fn notify(self: &Core, title: &QString, body: &QString);
+        #[qinvokable]
+        fn material_scheme(self: &Core, seed: &QString, dark: bool) -> QString;
+        #[qinvokable]
         unsafe fn attach_profile(self: &Core, profile: *mut QObject);
 
         // ── scripts ──
@@ -284,6 +298,8 @@ pub struct CoreRust {
     dark_websites: bool,
     force_dark_websites: bool,
     cosmetic_filtering: bool,
+    agent_enabled: bool,
+    agent_mode: QString,
     user_agent: QString,
     start_page_show_privacy_report: bool,
     start_page_show_reading_list: bool,
@@ -347,6 +363,8 @@ impl Default for CoreRust {
             dark_websites: true,
             force_dark_websites: false,
             cosmetic_filtering: true,
+            agent_enabled: false,
+            agent_mode: q("ask"),
             user_agent: q(""),
             start_page_show_privacy_report: true,
             start_page_show_reading_list: true,
@@ -432,6 +450,8 @@ impl CoreRust {
         self.dark_websites = st.dark_websites;
         self.force_dark_websites = st.force_dark_websites;
         self.cosmetic_filtering = st.cosmetic_filtering;
+        self.agent_enabled = st.agent_enabled;
+        self.agent_mode = qs(&st.agent_mode);
         self.user_agent = qs(&st.user_agent);
         self.start_page_show_privacy_report = st.start_page_show_privacy_report;
         self.start_page_show_reading_list = st.start_page_show_reading_list;
@@ -497,6 +517,8 @@ impl qobject::Core {
         self.as_mut().set_dark_websites(st.dark_websites);
         self.as_mut().set_force_dark_websites(st.force_dark_websites);
         self.as_mut().set_cosmetic_filtering(st.cosmetic_filtering);
+        self.as_mut().set_agent_enabled(st.agent_enabled);
+        self.as_mut().set_agent_mode(qs(&st.agent_mode));
         self.as_mut().set_user_agent(qs(&st.user_agent));
         self.as_mut().set_start_page_show_privacy_report(st.start_page_show_privacy_report);
         self.as_mut().set_start_page_show_reading_list(st.start_page_show_reading_list);
@@ -881,6 +903,48 @@ impl qobject::Core {
 
     pub fn filter_list_failed(self: Pin<&mut Self>, id: &QString, error: &QString) {
         filterlists::record_error(&s(id), &s(error));
+    }
+
+    /// # Safety
+    /// `item` must be a live QQuickItem handed over by QML.
+    pub unsafe fn send_mouse(&self, item: *mut cxx_qt::QObject, x: f64, y: f64, button: i32, clicks: i32, modifiers: i32, kind: i32) {
+        if !item.is_null() {
+            crate::bridge::native::ffi::send_mouse(item, x, y, button, clicks, modifiers, kind);
+        }
+    }
+
+    /// # Safety
+    /// `item` must be a live QQuickItem handed over by QML.
+    pub unsafe fn send_key(&self, item: *mut cxx_qt::QObject, key: i32, modifiers: i32, text: &QString) {
+        if !item.is_null() {
+            crate::bridge::native::ffi::send_key(item, key, modifiers, &s(text));
+        }
+    }
+
+    /// # Safety
+    /// `item` must be a live QQuickItem handed over by QML.
+    pub unsafe fn send_text(&self, item: *mut cxx_qt::QObject, text: &QString) {
+        if !item.is_null() {
+            crate::bridge::native::ffi::send_text(item, &s(text));
+        }
+    }
+
+    /// # Safety
+    /// `item` must be a live QQuickItem handed over by QML.
+    pub unsafe fn send_wheel(&self, item: *mut cxx_qt::QObject, x: f64, y: f64, dx: f64, dy: f64) {
+        if !item.is_null() {
+            crate::bridge::native::ffi::send_wheel(item, x, y, dx, dy);
+        }
+    }
+
+    /// Material 3 colour roles for a seed colour (JSON object of #rrggbb).
+    pub fn material_scheme(&self, seed: &QString, dark: bool) -> QString {
+        to_qjson(&crate::core::material::scheme(&s(seed), dark))
+    }
+
+    /// Desktop notification (used by extensions' notifications API).
+    pub fn notify(&self, title: &QString, body: &QString) {
+        let _ = std::process::Command::new("notify-send").args(["-a", "OyNIx", &s(title), &s(body)]).spawn();
     }
 
     /// Bumps each time a new rule set is installed (lists loaded/updated).

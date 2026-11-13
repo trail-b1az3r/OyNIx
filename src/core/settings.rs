@@ -68,6 +68,19 @@ pub struct Settings {
     /// Tell websites to use their dark theme when OyNIx is dark.
     pub dark_websites: bool,
 
+    // ── Claude for OyNIx ──────────────────────────────────────────
+    /// Allow Claude (MCP clients and the built-in panel) to control the browser.
+    pub agent_enabled: bool,
+    /// "ask": ask before Claude uses a site not in the allowed list;
+    /// "auto": act on any site except blocked ones.
+    pub agent_mode: String,
+    pub agent_allowed_sites: Vec<String>,
+    pub agent_blocked_sites: Vec<String>,
+    /// Model for the built-in Claude panel.
+    pub agent_model: String,
+    /// "low" | "medium" | "high" | "xhigh" | "max"
+    pub agent_effort: String,
+
     // ── Advanced ──────────────────────────────────────────────────
     pub javascript: bool,
     pub autoplay_media: bool,
@@ -94,7 +107,7 @@ impl Default for Settings {
             show_favorites_bar: false,
             show_status_bar: false,
             use_system_title_bar: false,
-            window_controls_side: "left".into(),
+            window_controls_side: "right".into(),
             show_full_url: false,
             default_zoom: 1.0,
             on_launch: "restore".into(),
@@ -125,6 +138,12 @@ impl Default for Settings {
             filter_update_days: 4,
             force_dark_websites: false,
             dark_websites: true,
+            agent_enabled: false,
+            agent_mode: "ask".into(),
+            agent_allowed_sites: Vec::new(),
+            agent_blocked_sites: Vec::new(),
+            agent_model: "claude-opus-5-5".into(),
+            agent_effort: "high".into(),
             javascript: true,
             autoplay_media: false,
             smooth_scrolling: true,

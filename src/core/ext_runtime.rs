@@ -71,7 +71,7 @@ pub const RUNTIME: &str = r#"
     var ev = {
       message: makeEvent(), installed: makeEvent(), startup: makeEvent(), connect: makeEvent(),
       storage: makeEvent(), tabCreated: makeEvent(), tabUpdated: makeEvent(), tabActivated: makeEvent(),
-      tabRemoved: makeEvent(), alarm: makeEvent(), actionClicked: makeEvent()
+      tabRemoved: makeEvent(), alarm: makeEvent(), actionClicked: makeEvent(), menuClicked: makeEvent()
     };
 
     // Wrap a promise-returning implementation so it also accepts a callback.
@@ -140,6 +140,79 @@ pub const RUNTIME: &str = r#"
       return text.replace(/\$(\d)/g, function (_, n) { var v = subs[n - 1]; return v === undefined ? '' : String(v); });
     }
 
+    // Script / CSS injection into tabs (tabs.executeScript, scripting.*).
+    function readFiles(files) {
+      return Promise.all((files || []).map(function (f) {
+        return fetch(chrome.runtime.getURL(f)).then(function (r) { if (!r.ok) throw new Error('Could not load ' + f); return r.text(); });
+      }));
+    }
+    function execInTab(tabId, code, world, allFrames) {
+      return tabsCall('exec', { tabId: tabId === undefined ? null : tabId, code: code, world: world || 'ISOLATED', allFrames: !!allFrames });
+    }
+    function cssInTab(tabId, css, remove) {
+      return tabsCall(remove ? 'uncss' : 'css', { tabId: tabId === undefined ? null : tabId, css: css, ext: ctx.ext });
+    }
+    function mv2Exec(tabId, details) {
+      if (typeof tabId === 'object' && tabId !== null) { details = tabId; tabId = undefined; }
+      details = details || {};
+      var codeP = details.code !== undefined ? Promise.resolve([details.code]) : readFiles(details.file ? [details.file] : []);
+      return codeP.then(function (parts) { return execInTab(tabId, parts.join('\n;\n'), 'ISOLATED', details.allFrames); }).then(function (r) { return [r]; });
+    }
+    function mv2Css(tabId, details, remove) {
+      if (typeof tabId === 'object' && tabId !== null) { details = tabId; tabId = undefined; }
+      details = details || {};
+      var p = details.code !== undefined ? Promise.resolve([details.code]) : readFiles(details.file ? [details.file] : []);
+      return p.then(function (parts) { return cssInTab(tabId, parts.join('\n'), remove); }).then(function () {});
+    }
+    function mv3Exec(inj) {
+      var t = inj.target || {};
+      var codeP;
+      if (inj.func) codeP = Promise.resolve(['(' + inj.func.toString() + ').apply(null, ' + JSON.stringify(inj.args || []) + ')']);
+      else if (inj.files) codeP = readFiles(inj.files);
+      else return Promise.reject(new Error('executeScript needs func or files'));
+      return codeP.then(function (parts) { return execInTab(t.tabId, parts.join('\n;\n'), inj.world, t.allFrames); })
+                  .then(function (r) { return [{ frameId: 0, documentId: '', result: r === null ? undefined : r }]; });
+    }
+    function mv3Css(inj, remove) {
+      var t = inj.target || {};
+      var p = inj.css !== undefined ? Promise.resolve([inj.css]) : readFiles(inj.files);
+      return p.then(function (parts) { return cssInTab(t.tabId, parts.join('\n'), remove); }).then(function () {});
+    }
+
+    // Context menu items (shown in the page context menu by OyNIx).
+    var menuClicks = {};
+    function menus(op, props, id) {
+      if (props && typeof props.onclick === 'function') { menuClicks[props.id || id] = props.onclick; }
+      var clean = props ? JSON.parse(JSON.stringify(props)) : null;
+      return tabsCall('menus', { op: op, ext: ctx.ext, extName: ctx.manifest && ctx.manifest.name, id: id, props: clean });
+    }
+
+    // Long-lived connections (runtime.connect / tabs.connect / onConnect).
+    var ports = {};
+    function makePort(portId, name, peer, target, sender) {
+      var port = { name: name || '', sender: sender, onMessage: makeEvent(), onDisconnect: makeEvent(), _peer: peer, _queue: [], _closed: false };
+      port.postMessage = function (msg) {
+        if (port._closed) throw new Error('Attempting to use a disconnected port object');
+        var payload = { id: uid(), from: me.id, portMsg: portId, msg: msg };
+        if (port._peer) call('post', ctx.ext, 'inst:' + port._peer, JSON.stringify(payload)); else port._queue.push(payload);
+      };
+      port.disconnect = function () {
+        if (port._closed) return;
+        port._closed = true; delete ports[portId];
+        if (port._peer) call('post', ctx.ext, 'inst:' + port._peer, JSON.stringify({ id: uid(), from: me.id, portClose: portId }));
+      };
+      ports[portId] = port;
+      return port;
+    }
+    function connect(target, info) {
+      var portId = uid();
+      var port = makePort(portId, info && info.name, null, target);
+      var sender = { id: ctx.ext, url: location.href, origin: location.origin };
+      if (ctx.kind === 'content') sender.tab = { id: g.__oynixTabId || -1, url: location.href, title: document.title };
+      call('post', ctx.ext, target, JSON.stringify({ id: uid(), from: me.id, connect: { port: portId, name: port.name }, sender: sender }));
+      return port;
+    }
+
     var badge = { text: '', color: '#d93025', title: ctx.manifest && ((ctx.manifest.action || ctx.manifest.browser_action || {}).default_title || ctx.manifest.name) || '' };
     var action = {
       setBadgeText: api(function (d) { badge.text = (d && d.text) || ''; return call('setBadge', ctx.ext, badge.text, badge.color, badge.title); }),
@@ -180,7 +253,7 @@ pub const RUNTIME: &str = r#"
         }),
         onMessage: ev.message, onMessageExternal: makeEvent(), onInstalled: ev.installed, onStartup: ev.startup,
         onConnect: ev.connect, onSuspend: makeEvent(), onUpdateAvailable: makeEvent(),
-        connect: function () { var p = { name: '', onMessage: makeEvent(), onDisconnect: makeEvent(), postMessage: function () {}, disconnect: function () {} }; return p; },
+        connect: function (a, b) { var info = typeof a === 'object' ? a : b; return connect('extension', info); },
         openOptionsPage: api(function () { return call('openOptions', ctx.ext); }),
         getPlatformInfo: api(function () { return { os: 'linux', arch: 'x86-64', nacl_arch: 'x86-64' }; }),
         getBackgroundPage: api(function () { return ctx.kind === 'background' ? g : null; }),
@@ -206,8 +279,10 @@ pub const RUNTIME: &str = r#"
         reload: api(function (id) { return tabsCall('reload', typeof id === 'number' ? id : null); }),
         duplicate: api(function (id) { return tabsCall('duplicate', id); }),
         sendMessage: api(function (tabId, msg) { return send('tab:' + tabId, msg); }),
-        executeScript: api(function () { throw new Error('tabs.executeScript is not supported in OyNIx'); }),
-        insertCSS: api(function () { throw new Error('tabs.insertCSS is not supported in OyNIx'); }),
+        executeScript: api(function (tabId, details) { return mv2Exec(tabId, details); }),
+        insertCSS: api(function (tabId, details) { return mv2Css(tabId, details, false); }),
+        removeCSS: api(function (tabId, details) { return mv2Css(tabId, details, true); }),
+        connect: function (tabId, info) { return connect('tab:' + tabId, info); },
         onCreated: ev.tabCreated, onUpdated: ev.tabUpdated, onActivated: ev.tabActivated, onRemoved: ev.tabRemoved,
         onHighlighted: makeEvent(), onMoved: makeEvent(), onReplaced: makeEvent(), onAttached: makeEvent(), onDetached: makeEvent()
       },
@@ -233,9 +308,16 @@ pub const RUNTIME: &str = r#"
         remove: api(function () { return false; }), getAll: api(function () { return { permissions: (ctx.manifest && ctx.manifest.permissions) || [], origins: (ctx.manifest && ctx.manifest.host_permissions) || [] }; }),
         onAdded: makeEvent(), onRemoved: makeEvent()
       },
-      contextMenus: { create: function () { return uid(); }, update: stub(undefined), remove: stub(undefined), removeAll: stub(undefined), onClicked: makeEvent() },
+      contextMenus: {
+        create: function (props, cb) { var id = (props && props.id) || uid(); props = Object.assign({}, props, { id: id }); menus('create', props, id).then(function () { if (cb) cb(); }, function () { if (cb) cb(); }); return id; },
+        update: api(function (id, props) { return menus('update', props, id); }),
+        remove: api(function (id) { delete menuClicks[id]; return menus('remove', null, id); }),
+        removeAll: api(function () { menuClicks = {}; return menus('removeAll', null, null); }),
+        onClicked: ev.menuClicked,
+        ContextType: { ALL: 'all', PAGE: 'page', SELECTION: 'selection', LINK: 'link', IMAGE: 'image', EDITABLE: 'editable', ACTION: 'action' }
+      },
       notifications: {
-        create: api(function (a, b) { var o = typeof a === 'object' ? a : b; try { if (g.Notification && Notification.permission === 'granted') new Notification(o.title || '', { body: o.message || '' }); } catch (e) {} return typeof a === 'string' ? a : uid(); }),
+        create: api(function (a, b) { var o = typeof a === 'object' ? a : b; var id = typeof a === 'string' ? a : uid(); return tabsCall('notify', { title: (o && o.title) || (ctx.manifest && ctx.manifest.name) || '', message: (o && o.message) || '' }).then(function () { return id; }); }),
         clear: stub(true), getAll: stub({}), onClicked: makeEvent(), onClosed: makeEvent(), onButtonClicked: makeEvent()
       },
       extension: {
@@ -245,8 +327,9 @@ pub const RUNTIME: &str = r#"
         getViews: function () { return []; }
       },
       scripting: {
-        executeScript: api(function () { throw new Error('scripting.executeScript is not supported in OyNIx'); }),
-        insertCSS: api(function () { throw new Error('scripting.insertCSS is not supported in OyNIx'); }),
+        executeScript: api(function (inj) { return mv3Exec(inj || {}); }),
+        insertCSS: api(function (inj) { return mv3Css(inj || {}, false); }),
+        removeCSS: api(function (inj) { return mv3Css(inj || {}, true); }),
         registerContentScripts: api(function () { throw new Error('scripting.registerContentScripts is not supported in OyNIx'); })
       }
     };
@@ -256,6 +339,26 @@ pub const RUNTIME: &str = r#"
 
     me._deliver = function (ext, target, p) {
       if (ext !== ctx.ext || p.from === me.id || seen[p.id]) return;
+      if (target.indexOf('inst:') === 0) {
+        if (target !== 'inst:' + me.id) return;
+        seen[p.id] = true;
+        var port = ports[p.portMsg || p.portClose || p.portAck];
+        if (!port) return;
+        if (p.portAck) { port._peer = p.from; port._queue.splice(0).forEach(function (q) { call('post', ctx.ext, 'inst:' + p.from, JSON.stringify(q)); }); }
+        else if (p.portMsg) port.onMessage._fire(p.msg, port);
+        else if (p.portClose) { port._closed = true; delete ports[p.portClose]; port.onDisconnect._fire(port); }
+        return;
+      }
+      if (p.connect) {
+        if (target === 'extension' && ctx.kind === 'content') return;
+        if (target.indexOf('tab:') === 0 && !(ctx.kind === 'content' && target === 'tab:' + g.__oynixTabId)) return;
+        if (!ev.connect._listeners.length) return;
+        seen[p.id] = true;
+        var np = makePort(p.connect.port, p.connect.name, p.from, null, p.sender);
+        call('post', ctx.ext, 'inst:' + p.from, JSON.stringify({ id: uid(), from: me.id, portAck: p.connect.port }));
+        ev.connect._fire(np);
+        return;
+      }
       if (target === 'extension' && ctx.kind === 'content') return;
       if (target.indexOf('tab:') === 0 && !(ctx.kind === 'content' && target === 'tab:' + g.__oynixTabId)) return;
       var ls = ev.message._listeners;
@@ -303,6 +406,11 @@ pub const RUNTIME: &str = r#"
       var e = { 'tabs.onCreated': ev.tabCreated, 'tabs.onUpdated': ev.tabUpdated, 'tabs.onActivated': ev.tabActivated, 'tabs.onRemoved': ev.tabRemoved }[name];
       if (e) e._fire.apply(null, a);
       if (name === 'action.onClicked' && a[0] === ctx.ext) ev.actionClicked._fire(a[1]);
+      if (name === 'contextMenus.onClicked' && a[0] === ctx.ext) {
+        var cb = menuClicks[a[1].menuItemId];
+        if (cb) { try { cb(a[1], a[2]); } catch (e) { console.error(e); } }
+        ev.menuClicked._fire(a[1], a[2]);
+      }
     };
 
     runtimes.push(me);

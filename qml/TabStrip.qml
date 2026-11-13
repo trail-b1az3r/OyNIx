@@ -13,7 +13,41 @@ Item {
     readonly property int pinnedCount: { var n = 0; for (var i = 0; i < win.tabs.count; i++) if (win.tabs.get(i).pinned) n++; return n }
     readonly property real pinnedWidth: 40
     readonly property real tabWidth: Math.max(compact ? 90 : 110, Math.min(compact ? 220 : 260, (width - pinnedCount * (pinnedWidth + 4)) / Math.max(1, count - pinnedCount) - 4))
-    implicitHeight: compact ? 30 : Theme.tabHeight + 8
+    implicitHeight: compact ? 40 : Theme.tabHeight + 10
+
+    property var previewFor: null
+    function showPreview(tabItem) {
+        previewFor = tabItem
+        var p = tabItem.mapToItem(strip.win.contentItem, 0, tabItem.height + 6)
+        preview.x = Math.max(8, Math.min(p.x, strip.win.width - preview.width - 8))
+        preview.y = p.y
+        preview.open()
+    }
+    function hidePreview() { previewFor = null; preview.close() }
+
+    Popover {
+        id: preview
+        parent: strip.win.contentItem
+        width: 280
+        padding: 8
+        closePolicy: Popup.NoAutoClose
+        readonly property var m: strip.previewFor ? strip.previewFor.model : null
+        contentItem: Column {
+            spacing: 8
+            Rectangle {
+                width: 264; height: preview.m && preview.m.thumb ? 150 : 0
+                visible: height > 0
+                radius: Theme.shapeM
+                color: Theme.surfaceContainerHighest
+                clip: true
+                Image { anchors.fill: parent; source: preview.m ? (preview.m.thumb || "") : ""; fillMode: Image.PreserveAspectCrop; verticalAlignment: Image.AlignTop }
+            }
+            Txt { width: 264; text: preview.m ? (preview.m.title || qsTr("Start Page")) : ""; font.weight: Font.DemiBold; elide: Text.ElideRight }
+            Txt { width: 264; text: preview.m ? Core.displayUrl(preview.m.url || "") : ""; color: Theme.textDim; font.pixelSize: 12
+                  visible: text !== "" }
+            Txt { visible: preview.m && preview.m.suspended; text: qsTr("Unloaded to save memory"); color: Theme.tertiary; font.pixelSize: 11 }
+        }
+    }
 
     function xFor(i) {
         var x = 0
@@ -43,16 +77,21 @@ Item {
                 width: pinned ? strip.pinnedWidth : strip.tabWidth
                 height: flick.height
                 z: dragArea.drag.active ? 10 : 0
-                radius: 7
-                color: current ? Theme.tabActive : (hov.hovered ? Theme.tabHover : "transparent")
-                border.color: current && !Theme.dark ? Theme.separator : "transparent"
+                radius: current ? height / 2 : (hov.hovered ? height / 2 : Theme.shapeM)
+                color: current ? Theme.secondaryContainer : (hov.hovered ? Theme.hover : "transparent")
+                Behavior on radius { SpringAnimation { spring: Theme.springFast; damping: Theme.damping } }
+                Behavior on color { ColorAnimation { duration: Theme.animFast } }
                 Behavior on x { enabled: !dragArea.drag.active; NumberAnimation { duration: Theme.anim; easing.type: Easing.OutCubic } }
                 Behavior on width { NumberAnimation { duration: Theme.animFast } }
                 HoverHandler { id: hov }
 
-                ToolTip.visible: hov.hovered && !dragArea.pressed && Core.tabHoverPreviews
-                ToolTip.delay: 700
-                ToolTip.text: (model.title || "") + "\n" + Core.displayUrl(model.url || "")
+                // Hover preview card (thumbnail, title, address)
+                Timer {
+                    interval: 600
+                    running: hov.hovered && !dragArea.pressed && Core.tabHoverPreviews && !t.current
+                    onTriggered: strip.showPreview(t)
+                }
+                Connections { target: hov; function onHoveredChanged() { if (!hov.hovered && strip.previewFor === t) strip.hidePreview() } }
 
                 MouseArea {
                     id: dragArea
@@ -85,7 +124,7 @@ Item {
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: t.pinned ? 0 : 9
+                    anchors.leftMargin: t.pinned ? 0 : 14
                     anchors.rightMargin: t.pinned ? 0 : 5
                     spacing: 7
                     Item { Layout.fillWidth: t.pinned; visible: t.pinned }
@@ -102,13 +141,14 @@ Item {
                         visible: !t.pinned
                         Layout.fillWidth: true
                         text: t.model.title || Core.displayUrl(t.model.url || "") || qsTr("Start Page")
-                        color: t.current ? Theme.text : Theme.textDim
-                        font.pixelSize: 12
+                        color: t.current ? Theme.secondaryContainerFg : Theme.textDim
+                        font.pixelSize: 13
+                        font.weight: t.current ? Font.DemiBold : Font.Normal
                         opacity: t.model.suspended ? 0.6 : 1
                     }
                     IconButton {
                         visible: !t.pinned && (t.model.audible || t.model.muted)
-                        implicitWidth: 20; implicitHeight: 20
+                        implicitWidth: 26; implicitHeight: 26
                         glyph: t.model.muted ? "mute" : "speaker"
                         iconSize: 13
                         iconColor: Theme.textDim
@@ -116,7 +156,7 @@ Item {
                     }
                     IconButton {
                         visible: !t.pinned && (hov.hovered || t.current)
-                        implicitWidth: 20; implicitHeight: 20
+                        implicitWidth: 26; implicitHeight: 26
                         glyph: "close"; iconSize: 11
                         iconColor: Theme.textDim
                         tip: qsTr("Close Tab")

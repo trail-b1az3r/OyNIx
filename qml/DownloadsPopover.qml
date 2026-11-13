@@ -44,7 +44,18 @@ Popover {
                     }
                 }
                 IconButton {
-                    glyph: d.done ? "folder" : (d.dl.isPaused ? "reload" : "close")
+                    visible: d.dl.state === WebEngineDownloadRequest.DownloadInProgress
+                    glyph: d.dl.isPaused ? "download" : "minus"
+                    tip: d.dl.isPaused ? qsTr("Resume") : qsTr("Pause")
+                    onClicked: d.dl.isPaused ? d.dl.resume() : d.dl.pause()
+                }
+                IconButton {
+                    visible: d.done
+                    glyph: "external"; tip: qsTr("Open")
+                    onClicked: Core.openExternally(d.dl.downloadDirectory + "/" + d.dl.downloadFileName)
+                }
+                IconButton {
+                    glyph: d.done ? "folder" : "close"
                     tip: d.done ? qsTr("Show in Folder") : qsTr("Cancel")
                     onClicked: {
                         if (d.done) Core.openExternally(d.dl.downloadDirectory)

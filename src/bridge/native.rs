@@ -22,6 +22,10 @@ pub mod ffi {
         fn qt_runtime_version() -> String;
         fn webchannel_js() -> String;
         fn set_color_scheme(scheme: i32);
+        unsafe fn send_mouse(item: *mut QObject, x: f64, y: f64, button: i32, clicks: i32, modifiers: i32, kind: i32);
+        unsafe fn send_key(item: *mut QObject, key: i32, modifiers: i32, text: &str);
+        unsafe fn send_text(item: *mut QObject, text: &str);
+        unsafe fn send_wheel(item: *mut QObject, x: f64, y: f64, dx: f64, dy: f64);
     }
 }
 
@@ -39,9 +43,13 @@ fn privacy_flags() -> u32 {
 }
 
 fn should_block(url: &str, first_party: &str, resource_type: i32) -> bool {
-    crate::core::blocker::should_block(url, first_party, resource_type)
+    let blocked = crate::core::blocker::should_block(url, first_party, resource_type);
+    crate::core::agent::log_request(url, first_party, resource_type, blocked);
+    blocked
 }
 
 fn strip_tracking(url: &str) -> String {
+    // Called for every main-frame navigation; record it for network_requests.
+    crate::core::agent::log_request(url, url, 0, false);
     crate::core::omnibox::strip_tracking(url)
 }

@@ -19,11 +19,12 @@ Rectangle {
 
     signal siteInfoRequested(var anchor)
 
-    implicitHeight: 30
-    radius: 8
-    color: editing ? Theme.fieldFocus : (hover.hovered ? Qt.darker(Theme.field, Theme.dark ? 0.9 : 1.03) : Theme.field)
+    implicitHeight: 44
+    radius: editing ? Theme.shapeL : height / 2
+    color: editing ? Theme.surfaceContainerLowest : (hover.hovered ? Theme.surfaceContainerHighest : Theme.surfaceContainerHigh)
     border.width: editing ? 2 : 0
-    border.color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.55)
+    border.color: Theme.primary
+    Behavior on radius { SpringAnimation { spring: Theme.springDefault; damping: Theme.damping } }
     Behavior on color { ColorAnimation { duration: Theme.animFast } }
 
     HoverHandler { id: hover }
@@ -99,28 +100,24 @@ Rectangle {
         }
     }
 
-    // Loading progress, drawn along the bottom edge of the field.
-    Rectangle {
-        anchors.left: parent.left
-        anchors.bottom: parent.bottom
-        anchors.margins: 1
-        height: 2
-        radius: 1
-        width: (parent.width - 2) * field.progress
-        color: Theme.accent
+    // Loading progress: Material 3 Expressive wavy indicator along the bottom.
+    WavyProgress {
+        anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
+        anchors.leftMargin: 18; anchors.rightMargin: 18; anchors.bottomMargin: -1
+        height: 8
+        value: field.progress
         visible: field.progress > 0 && field.progress < 1 && !field.editing
-        Behavior on width { NumberAnimation { duration: 180 } }
     }
 
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: 6
-        anchors.rightMargin: 4
+        anchors.leftMargin: 10
+        anchors.rightMargin: 6
         spacing: 2
 
         IconButton {
             id: lockBtn
-            implicitWidth: 24; implicitHeight: 22
+            implicitWidth: 32; implicitHeight: 32
             visible: !field.editing && field.url !== "" && field.url.indexOf("oynix://") !== 0
             glyph: field.win.privateMode ? "mask" : (Core.isSecure(field.url) ? "lock" : "warning")
             iconSize: 13
@@ -146,7 +143,7 @@ Rectangle {
                 selectionColor: Theme.selection
                 selectedTextColor: Theme.text
                 font.family: Theme.font
-                font.pixelSize: Theme.fontSize
+                font.pixelSize: 15
                 clip: true
                 selectByMouse: true
                 opacity: field.editing ? 1 : 0
@@ -200,7 +197,7 @@ Rectangle {
             MouseArea { anchors.fill: parent; onClicked: field.tab.setZoom(Core.defaultZoom) }
         }
         IconButton {
-            implicitWidth: 24; implicitHeight: 22
+            implicitWidth: 32; implicitHeight: 32
             visible: !field.editing && field.tab !== null && field.tab.readerAvailable
             glyph: "reader"; iconSize: 14
             checkable: false
@@ -209,7 +206,7 @@ Rectangle {
             onClicked: field.tab.toggleReader()
         }
         IconButton {
-            implicitWidth: 24; implicitHeight: 22
+            implicitWidth: 32; implicitHeight: 32
             visible: !field.editing && field.url !== "" && field.url.indexOf("oynix://") !== 0
             glyph: "star"; iconSize: 14
             property bool marked: Core.bookmarksRevision >= 0 && Core.isBookmarked(field.url)
@@ -219,7 +216,7 @@ Rectangle {
             onClicked: Core.toggleBookmark(field.url, field.tab.model.title)
         }
         IconButton {
-            implicitWidth: 24; implicitHeight: 22
+            implicitWidth: 32; implicitHeight: 32
             visible: !field.editing && field.tab !== null && field.tab.view !== null
             glyph: field.tab && field.tab.model.loading ? "close" : "reload"
             iconSize: 13
@@ -239,9 +236,8 @@ Rectangle {
         visible: false
         focus: false
         background: Rectangle {
-            radius: Theme.radiusLarge
-            color: Theme.popover
-            border.color: Theme.separator
+            radius: Theme.shapeXL - 4
+            color: Theme.surfaceContainer
         }
         contentItem: Column {
             spacing: 1
@@ -251,9 +247,9 @@ Rectangle {
                     required property var modelData
                     required property int index
                     width: popup.width - 12
-                    height: 32
-                    radius: 6
-                    color: index === field.selected ? Theme.accent : (rowHover.hovered ? Theme.hover : "transparent")
+                    height: 44
+                    radius: Theme.shapeL
+                    color: index === field.selected ? Theme.secondaryContainer : (rowHover.hovered ? Theme.hover : "transparent")
                     HoverHandler { id: rowHover }
                     TapHandler {
                         onTapped: {
@@ -271,16 +267,16 @@ Rectangle {
                         Icon {
                             name: ({ search: "search", suggest: "search", go: "globe", bookmark: "star", history: "clock", bang: "sparkles" })[modelData.kind]
                             size: 14
-                            color: index === field.selected ? "white" : Theme.textDim
+                            color: index === field.selected ? Theme.secondaryContainerFg : Theme.textDim
                         }
                         Txt {
                             text: modelData.title
-                            color: index === field.selected ? "white" : Theme.text
+                            color: index === field.selected ? Theme.secondaryContainerFg : Theme.text
                             Layout.maximumWidth: parent.width * 0.6
                         }
                         Txt {
                             text: modelData.subtitle ? "— " + modelData.subtitle : ""
-                            color: index === field.selected ? Qt.rgba(1, 1, 1, 0.8) : Theme.textDim
+                            color: Theme.textDim
                             Layout.fillWidth: true
                         }
                     }

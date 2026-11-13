@@ -12,12 +12,14 @@
 //!                Vulkan or OpenGL ES.
 
 mod bridge {
+    pub mod agentbridge;
     pub mod core;
     pub mod extbridge;
     pub mod native;
 }
 mod core;
 mod gpu;
+mod mcp;
 
 use bridge::native;
 
@@ -66,6 +68,8 @@ OPTIONS:
                          Install a .crx / .xpi / .zip / folder (Chrome, Firefox
                          or OyNIx format) into the profile and exit
     --list-extensions    Print installed extensions and exit
+    --mcp                Run as an MCP server on stdio so Claude Desktop /
+                         Claude Code can control the browser
     --list-profiles      Print existing profiles and exit
     --gpu-info           Print the detected Vulkan device and exit
     -h, --help           Show this help
@@ -73,6 +77,7 @@ OPTIONS:
 ";
 
 struct Args {
+    mcp: bool,
     install: Vec<String>,
     list_extensions: bool,
     profile: String,
@@ -82,7 +87,7 @@ struct Args {
 }
 
 fn parse_args() -> Args {
-    let mut a = Args { install: vec![], list_extensions: false, profile: "default".into(), private: false, gpu: None, url: String::new() };
+    let mut a = Args { mcp: false, install: vec![], list_extensions: false, profile: "default".into(), private: false, gpu: None, url: String::new() };
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
         match arg.as_str() {
@@ -98,6 +103,7 @@ fn parse_args() -> Args {
             "--private" | "--incognito" => a.private = true,
             "--install-extension" => a.install.extend(it.next()),
             "--list-extensions" => a.list_extensions = true,
+            "--mcp" => a.mcp = true,
             "--gpu" => a.gpu = it.next(),
             "--wayland" => std::env::set_var("QT_QPA_PLATFORM", "wayland;xcb"),
             "--x11" => std::env::set_var("QT_QPA_PLATFORM", "xcb"),
@@ -156,6 +162,10 @@ fn system_prefers_dark() -> Option<bool> {
 fn main() {
     let args = parse_args();
     core::paths::set_profile(&args.profile);
+
+    if args.mcp {
+        std::process::exit(mcp::run());
+    }
 
     if !args.install.is_empty() || args.list_extensions {
         let mut list = core::extensions::load();

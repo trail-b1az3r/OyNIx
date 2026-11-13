@@ -20,6 +20,10 @@ Item {
     property string hoveredLink: ""
     property string loadError: ""
     property var certError: null
+    // For Claude for OyNIx: recent console output and screenshot scale.
+    property var consoleLog: []
+    property real agentShotScale: 1
+    readonly property var pageItem: pageLoader.item
     readonly property string host: Core.hostOf(model.url || "")
 
     visible: isCurrent
@@ -275,6 +279,11 @@ Item {
                 if (status !== WebEngineView.NormalTerminationStatus) tab.crashed = true
             }
             onFindTextFinished: function (result) { tab.win.findResult(result) }
+            onJavaScriptConsoleMessage: function (level, message, lineNumber, sourceID) {
+                var l = tab.consoleLog.length > 299 ? tab.consoleLog.slice(-299) : tab.consoleLog.slice()
+                l.push({ level: level, message: String(message).slice(0, 2000), line: lineNumber, source: String(sourceID).slice(0, 200), time: Date.now() })
+                tab.consoleLog = l
+            }
             onContextMenuRequested: function (request) {
                 request.accepted = true
                 tab.win.showContextMenu(view, request)

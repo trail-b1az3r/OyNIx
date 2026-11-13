@@ -101,9 +101,24 @@ QtObject {
         Core.attachProfile(defaultProfile)
         Core.applyColorScheme(Theme.dark)
         extensionHost.start()
+        if (Core.agentEnabled) agentBridge.start()
     }
 
     property ExtensionHost extensionHost: ExtensionHost { app: app }
+
+    // ── Claude for OyNIx ──
+    property Agent agent: Agent { app: app }
+    property AgentBridge agentBridge: AgentBridge {
+        onToolRequested: function (id, name, args, source) {
+            var parsed = {}
+            try { parsed = JSON.parse(args) } catch (e) {}
+            app.agent.call(name, parsed, source, function (res) { app.agentBridge.reply(id, JSON.stringify(res)) })
+        }
+    }
+    property Connections agentSwitch: Connections {
+        target: Core
+        function onAgentEnabledChanged() { if (Core.agentEnabled) app.agentBridge.start(); else { app.agent.stop(); app.agentBridge.stop() } }
+    }
 
     // WebChannel endpoint used by the extension runtime in pages.
     property ExtBridge extBridge: ExtBridge { WebChannel.id: "oynixExtensions" }
@@ -203,6 +218,19 @@ QtObject {
     function handleDownload(download) {
         if (download.state !== WebEngineDownloadRequest.DownloadRequested) return
         download.downloadDirectory = Core.downloadDir
+        var ask = JSON.parse(Core.settingsJson).askWhereToSave
+        var w = null
+        for (var k = 0; k < windows.length; k++) if (windows[k].active) w = windows[k]
+        if (!w && windows.length) w = windows[windows.length - 1]
+        if (ask && w) {
+            // The request stays pending until the user picks a location.
+            w.askDownloadLocation(download, function (ok) {
+                if (!ok) { download.cancel(); return }
+                download.accept()
+                app.downloads = [download].concat(app.downloads)
+            })
+            return
+        }
         download.accept()
         downloads = [download].concat(downloads)
         for (var i = 0; i < windows.length; i++) if (windows[i].active) windows[i].requestActivate()
@@ -229,6 +257,7 @@ QtObject {
     }
 
     function shutdown() {
+        agentBridge.stop()
         Core.flush()
         if (settingsWindow) settingsWindow.close()
         for (var i = 0; i < devToolsWindows.length; i++) devToolsWindows[i].close()

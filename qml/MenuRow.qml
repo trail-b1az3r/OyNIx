@@ -3,41 +3,44 @@ import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import OyNIx
 
-// A row in a popover menu: icon, label, optional shortcut / trailing text.
+// Material 3 Expressive menu item: rounded state layer, leading icon,
+// trailing shortcut text.
 AbstractButton {
     id: row
     property string glyph: ""
     property string shortcut: ""
-    property color tint: Theme.text
-    implicitHeight: 28
+    property color tint: Theme.surfaceFg
+    implicitHeight: 44
     hoverEnabled: true
     focusPolicy: Qt.NoFocus
     Layout.fillWidth: true
     background: Rectangle {
-        radius: 5
-        color: row.hovered && row.enabled ? Theme.accent : "transparent"
+        radius: Theme.shapeM
+        color: row.pressed ? Theme.secondaryContainer : (row.hovered && row.enabled ? Theme.hover : "transparent")
+        Behavior on color { ColorAnimation { duration: Theme.animFast } }
     }
     contentItem: RowLayout {
-        spacing: 9
+        spacing: 12
         Icon {
             visible: row.glyph !== ""
             name: row.glyph
-            size: 15
-            color: row.hovered && row.enabled ? "white" : row.tint
-            Layout.leftMargin: 6
+            size: 20
+            color: row.enabled ? (row.tint === Theme.surfaceFg ? Theme.surfaceVariantFg : row.tint) : Theme.alpha(Theme.surfaceFg, 0.38)
+            Layout.leftMargin: 12
         }
         Txt {
             text: row.text
             Layout.fillWidth: true
-            Layout.leftMargin: row.glyph === "" ? 8 : 0
-            color: row.hovered && row.enabled ? "white" : (row.enabled ? row.tint : Theme.textFaint)
+            Layout.leftMargin: row.glyph === "" ? 12 : 0
+            color: row.enabled ? row.tint : Theme.alpha(Theme.surfaceFg, 0.38)
+            font.pixelSize: 14
         }
         Txt {
             visible: row.shortcut !== ""
             text: row.shortcut
-            color: row.hovered ? "white" : Theme.textFaint
+            color: Theme.surfaceVariantFg
             font.pixelSize: 12
-            Layout.rightMargin: 8
+            Layout.rightMargin: 12
         }
     }
 }
