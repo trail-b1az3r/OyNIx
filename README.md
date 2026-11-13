@@ -17,7 +17,8 @@ OyNIx's interaction design follows modern macOS-style browsers: quiet chrome, a 
 | **Tabs** | Three layouts: *Standard* (tab bar under the toolbar), *Compact* (tabs inside the toolbar), *Vertical* (sidebar). Pinned tabs, drag to reorder, mute, duplicate, move to a new window. Reopen closed tabs. |
 | **Tab overview** | `Ctrl+Shift+\`: a searchable grid of live tab previews. |
 | **Memory** | Inactive tabs are unloaded after a configurable time. Restored sessions load lazily, so only the visible tab loads. Low Power Mode freezes background tabs and turns off animations. |
-| **Privacy** | Native content blocker (built-in tracker and ad rules plus your own EasyList, uBlock or hosts lists), per-site report, tracking-parameter stripping, third-party cookie blocking, fingerprinting protection, Global Privacy Control, optional Do Not Track. Privacy Report on the Start Page. |
+| **Privacy** | Built-in content blocker with downloadable, auto-updating filter lists (EasyList, EasyPrivacy, uBlock filters, Peter Lowe, AdGuard, Fanboy annoyances, cookie notices, social widgets, malware), custom list URLs and local files. Network blocking and element hiding, a per-site report and per-site allowlist. Tracking-parameter stripping, third-party cookie blocking, fingerprinting protection, Global Privacy Control, optional Do Not Track. |
+| **Dark mode for websites** | When OyNIx is dark, sites get their own dark theme (`prefers-color-scheme`). *Darken all websites* also darkens sites without one, and Website settings can switch this per site. |
 | **Address field** | Shows the domain when idle. Suggestions from bookmarks, history and your search engine, plus 25 built-in `!bang` shortcuts (`!w`, `!gh`, `!yt`, `!mdn`…). |
 | **Reading** | Reader View (`Ctrl+Shift+R`), Reading List, Focus Mode (`Ctrl+Shift+F`, hover the top edge to reveal the toolbar). |
 | **Library** | Sidebar with Bookmarks, Reading List and History. Favorites bar. HTML bookmark import and export. |
@@ -164,6 +165,29 @@ oynix --wayland | --x11
 | Switch tab | `Ctrl+Tab`, `Ctrl+Shift+Tab`, `Ctrl+1…9` |
 | Downloads / Settings | `Ctrl+J` / `Ctrl+,` |
 | Developer Tools | `F12` (enable under Settings › Advanced) |
+
+## Content blocker
+
+Settings › Privacy › **Filter Lists** chooses the subscriptions. Enabled lists download on first launch and refresh every few days (*Update Now* forces a refresh):
+
+| Category | Lists (default on in **bold**) |
+|----------|--------------------------------|
+| Ads | **EasyList**, **uBlock filters**, AdGuard Base |
+| Privacy | **EasyPrivacy**, **uBlock filters – Privacy**, **Peter Lowe’s list**, AdGuard Tracking Protection |
+| Annoyances | Fanboy’s Annoyance List |
+| Cookie notices | EasyList Cookie List |
+| Social widgets | Fanboy’s Social Blocking List |
+| Security | Online Malicious URL Blocklist (URLhaus) |
+
+Lists are fetched from their maintainers and stored in `~/.local/share/oynix/<profile>/filter-lists/`; OyNIx doesn't bundle them. You can also add any list by URL, or drop `.txt` files into `~/.config/oynix/<profile>/filters/`.
+
+The engine understands the common Adblock Plus / uBlock Origin syntax:
+- **Network rules:** `||host^`, anchors, wildcards and `^` separators.
+- **Options:** `$third-party` / `1p` / `3p`, resource types, `domain=`, `important`.
+- **Exceptions:** `@@`, `$document`, `$elemhide`, `$generichide`.
+- **Element hiding:** `##`, `domain##` and `#@#`.
+
+Rules that need features OyNIx doesn't implement are skipped: scriptlets (`##+js`), procedural selectors (`:has-text` and similar), `$redirect`, `$csp`, `$removeparam` and regex rules. With the default lists that's about 110,000 network and 66,000 element-hiding rules, parsed in the background in about 0.2 s; a request check takes about 1.5 µs.
 
 ## Files
 

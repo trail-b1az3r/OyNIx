@@ -124,6 +124,35 @@ fn parse_args() -> Args {
     a
 }
 
+/// Dark (true) / light (false) scheme websites should see, or None to let
+/// the platform decide.
+fn website_scheme(st: &core::settings::Settings) -> Option<bool> {
+    let dark = match st.theme.as_str() {
+        "dark" => true,
+        "light" => false,
+        _ => system_prefers_dark()?,
+    };
+    Some(dark && st.dark_websites)
+}
+
+/// Best-effort desktop dark-mode detection (GNOME / GTK / KDE), used only
+/// when OyNIx follows the system theme.
+fn system_prefers_dark() -> Option<bool> {
+    if let Ok(t) = std::env::var("GTK_THEME") {
+        return Some(t.to_lowercase().contains("dark"));
+    }
+    if let Ok(out) = std::process::Command::new("gsettings").args(["get", "org.gnome.desktop.interface", "color-scheme"]).output() {
+        let v = String::from_utf8_lossy(&out.stdout);
+        if out.status.success() && !v.trim().is_empty() {
+            return Some(v.contains("dark"));
+        }
+    }
+    let kde = std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".config/kdeglobals"))?;
+    let txt = std::fs::read_to_string(kde).ok()?;
+    let scheme = txt.lines().find_map(|l| l.strip_prefix("ColorScheme="))?;
+    Some(scheme.to_lowercase().contains("dark"))
+}
+
 fn main() {
     let args = parse_args();
     core::paths::set_profile(&args.profile);
@@ -168,6 +197,14 @@ fn main() {
     if selection.backend == gpu::Backend::Vulkan {
         chromium.push_str(" --enable-features=Vulkan");
     }
+    // prefers-color-scheme for websites. Qt only forwards the desktop's
+    // scheme when the platform theme supports it, so pin it explicitly when
+    // OyNIx's theme is known (0 = dark, 1 = light in Blink).
+    match website_scheme(&early) {
+        Some(true) => chromium.push_str(" --blink-settings=preferredColorScheme=0"),
+        Some(false) => chromium.push_str(" --blink-settings=preferredColorScheme=1"),
+        None => {}
+    }
     std::env::set_var("QTWEBENGINE_CHROMIUM_FLAGS", chromium.trim());
     native::ffi::init_webengine();
     native::ffi::prepare_graphics(selection.backend.id());
@@ -176,8 +213,8 @@ fn main() {
     native::ffi::set_app_metadata(&args.profile);
 
     // Content blocker + privacy defaults before any page loads.
-    core::blocker::init();
     let settings = core::settings::Settings::load();
+    core::blocker::init(bridge::core::active_lists(&settings));
     bridge::core::apply_privacy(&settings);
 
 

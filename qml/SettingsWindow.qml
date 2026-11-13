@@ -301,6 +301,12 @@ ApplicationWindow {
                 }
             }
             Section {
+                title: qsTr("Websites")
+                SwitchRow { label: qsTr("Use dark themes on websites"); hint: qsTr("When OyNIx is dark, sites that offer a dark theme show it (prefers-color-scheme)."); key: "darkWebsites" }
+                Divider {}
+                SwitchRow { label: qsTr("Darken all websites"); hint: qsTr("When OyNIx is dark, automatically darken sites that have no dark theme. Can be changed per site in Website settings."); key: "forceDarkWebsites" }
+            }
+            Section {
                 title: qsTr("Toolbar")
                 ChoiceRow { label: qsTr("Window controls"); key: "windowControlsSide"; options: [{ v: "left", t: qsTr("Left") }, { v: "right", t: qsTr("Right") }] }
                 Divider {}
@@ -439,15 +445,92 @@ ApplicationWindow {
             }
             Section {
                 title: qsTr("Content Blocker")
-                SwitchRow { label: qsTr("Block trackers and ads"); hint: qsTr("%1 rules active · %2 custom filter lists").arg(report.rules).arg(report.lists); key: "contentBlocker" }
+                SwitchRow {
+                    label: qsTr("Block trackers and ads")
+                    hint: report.loading ? qsTr("Loading filter lists…")
+                          : qsTr("%1 network rules · %2 element-hiding rules · %3 lists").arg(Number(report.rules).toLocaleString(Qt.locale(), "f", 0)).arg(Number(report.cosmetic).toLocaleString(Qt.locale(), "f", 0)).arg(report.lists)
+                    key: "contentBlocker"
+                }
                 Divider {}
                 SwitchRow { label: qsTr("Block trackers"); key: "blockTrackers" }
                 Divider {}
                 SwitchRow { label: qsTr("Block ads"); key: "blockAds" }
                 Divider {}
+                SwitchRow { label: qsTr("Hide blocked page elements"); hint: qsTr("Applies the lists’ element-hiding rules, removing empty ad slots, banners and widgets."); key: "cosmeticFiltering" }
+            }
+            Section {
+                id: listsSection
+                title: qsTr("Filter Lists")
+                property var lists: { Core.settingsJson; listsRefresh.tick; return JSON.parse(Core.filterLists()) }
+                Timer { id: listsRefresh; property int tick: 0; interval: 1000; repeat: true; running: sw.visible && (sw.app.filterUpdating || report.loading); onTriggered: tick++ }
+                Repeater {
+                    model: [
+                        { id: "ads", t: qsTr("Ads") }, { id: "privacy", t: qsTr("Privacy") },
+                        { id: "annoyances", t: qsTr("Annoyances") }, { id: "cookies", t: qsTr("Cookie Notices") },
+                        { id: "social", t: qsTr("Social Widgets") }, { id: "security", t: qsTr("Security") },
+                        { id: "custom", t: qsTr("Custom") }
+                    ]
+                    delegate: ColumnLayout {
+                        id: group
+                        required property var modelData
+                        readonly property var items: listsSection.lists.filter(function (l) { return l.category === group.modelData.id })
+                        visible: items.length > 0
+                        Layout.fillWidth: true
+                        spacing: 0
+                        Txt { text: group.modelData.t; color: Theme.textDim; font.pixelSize: 11; font.weight: Font.DemiBold; Layout.leftMargin: 12; Layout.topMargin: 8 }
+                        Repeater {
+                            model: group.items
+                            delegate: Row_ {
+                                required property var modelData
+                                label: modelData.name
+                                hint: (modelData.error ? "⚠ " + modelData.error + " · " : "")
+                                      + (modelData.updated ? qsTr("%1 rules · updated %2").arg(Number(modelData.rules).toLocaleString(Qt.locale(), "f", 0)).arg(new Date(modelData.updated * 1000).toLocaleDateString(Qt.locale(), Locale.ShortFormat))
+                                                           : (modelData.enabled ? qsTr("Not downloaded yet") : modelData.description))
+                                IconButton {
+                                    visible: modelData.category === "custom"
+                                    glyph: "trash"; tip: qsTr("Remove")
+                                    onClicked: Core.removeFilterList(modelData.id)
+                                }
+                                Toggle {
+                                    checked: modelData.enabled
+                                    onToggled: {
+                                        Core.setFilterListEnabled(modelData.id, checked)
+                                        if (checked && !modelData.downloaded) sw.app.updateFilterLists(false)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Divider {}
                 Row_ {
-                    label: qsTr("Custom filter lists")
-                    hint: qsTr("Drop EasyList / uBlock / hosts-format .txt files into the filters folder, then reload.")
+                    label: qsTr("Add a list by URL")
+                    hint: qsTr("Any Adblock Plus, uBlock Origin or hosts-format list.")
+                    Rectangle {
+                        Layout.preferredWidth: 220; implicitHeight: 28; radius: 6; color: Theme.field; border.color: Theme.separator
+                        TextInput {
+                            id: listUrl
+                            anchors.fill: parent; anchors.margins: 6
+                            color: Theme.text; font.family: Theme.font; font.pixelSize: 12; clip: true
+                            Txt { visible: !listUrl.text; text: "https://…"; color: Theme.textFaint; font.pixelSize: 12 }
+                        }
+                    }
+                    PushButton {
+                        text: qsTr("Add")
+                        enabled: /^https?:\/\/./.test(listUrl.text.trim())
+                        onClicked: { if (Core.addFilterListUrl(listUrl.text.trim())) { listUrl.text = ""; sw.app.updateFilterLists(false) } }
+                    }
+                }
+                Divider {}
+                Row_ {
+                    label: sw.app.filterUpdating ? sw.app.filterStatus : qsTr("Update lists")
+                    hint: qsTr("Lists refresh automatically every %1 days.").arg(sw.s.filterUpdateDays || 4)
+                    PushButton { text: qsTr("Update Now"); enabled: !sw.app.filterUpdating; onClicked: sw.app.updateFilterLists(true) }
+                }
+                Divider {}
+                Row_ {
+                    label: qsTr("Local filter files")
+                    hint: qsTr(".txt files in this folder are loaded as extra lists.")
                     PushButton { text: qsTr("Open Folder"); onClicked: Core.openExternally(Core.configPath("filters")) }
                     PushButton { text: qsTr("Reload"); onClicked: Core.reloadFilterLists() }
                 }

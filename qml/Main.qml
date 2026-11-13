@@ -35,11 +35,71 @@ QtObject {
         function onDownloadRequested(download) { app.handleDownload(download) }
     }
 
+    // Websites follow OyNIx's light/dark theme (prefers-color-scheme).
+    property bool themeDark: Theme.dark
+    onThemeDarkChanged: Core.applyColorScheme(themeDark)
+    property Connections schemeEvents: Connections {
+        target: Core
+        function onDarkWebsitesChanged() { Core.applyColorScheme(Theme.dark) }
+        function onThemeChanged() { Core.applyColorScheme(Theme.dark) }
+    }
+
+    // ── Content-blocker list updates ──
+    // Subscribed filter lists are fetched in the background on start-up
+    // (when older than the update interval) and on demand from Settings.
+    property var filterQueue: []
+    property bool filterUpdating: false
+    property string filterStatus: ""
+    property Timer filterStartup: Timer { interval: 4000; running: true; onTriggered: app.updateFilterLists(false) }
+    property Timer filterPeriodic: Timer { interval: 6 * 3600 * 1000; running: true; repeat: true; onTriggered: app.updateFilterLists(false) }
+
+    function updateFilterLists(force) {
+        if (filterUpdating) return
+        filterQueue = JSON.parse(Core.dueFilterLists(force))
+        if (!filterQueue.length) return
+        filterUpdating = true
+        nextFilterList(0)
+    }
+
+    function nextFilterList(done) {
+        if (!filterQueue.length) {
+            filterUpdating = false
+            filterStatus = ""
+            if (done > 0) Core.reloadFilterLists()
+            return
+        }
+        var item = filterQueue.shift()
+        filterStatus = qsTr("Downloading %1…").arg(item.id)
+        var xhr = new XMLHttpRequest()
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState !== XMLHttpRequest.DONE) return
+            if (xhr.status === 200) {
+                var err = Core.storeFilterList(item.id, xhr.responseText)
+                if (err) console.warn("OyNIx: filter list", item.id, err)
+                app.nextFilterList(done + (err ? 0 : 1))
+            } else {
+                Core.filterListFailed(item.id, xhr.status ? "HTTP " + xhr.status : qsTr("network error"))
+                app.nextFilterList(done)
+            }
+        }
+        xhr.open("GET", item.url)
+        xhr.send()
+    }
+
+    // Bumped when a freshly parsed rule set is installed, so open pages can
+    // re-apply element hiding.
+    property int filterGeneration: 0
+    property Timer filterWatch: Timer {
+        interval: 700; repeat: true; running: true
+        onTriggered: { var g = Core.blockerGeneration(); if (g !== app.filterGeneration) app.filterGeneration = g }
+    }
+
     function setupProfile() {
         defaultProfile = profilePrototype.instance()
         if (Core.userAgent !== "") defaultProfile.httpUserAgent = Core.userAgent
         defaultProfile.spellCheckEnabled = false
         Core.attachProfile(defaultProfile)
+        Core.applyColorScheme(Theme.dark)
         extensionHost.start()
     }
 

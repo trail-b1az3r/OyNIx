@@ -55,6 +55,18 @@ pub struct Settings {
     pub strip_tracking_params: bool,
     pub https_upgrade: bool,
     pub fingerprint_protection: bool,
+    /// Hide page elements using the lists' cosmetic (`##`) rules.
+    pub cosmetic_filtering: bool,
+    /// Subscription id -> enabled (absent = catalogue default).
+    pub filter_lists: BTreeMap<String, bool>,
+    /// User-added filter list URLs.
+    pub custom_filter_urls: Vec<String>,
+    /// Refresh subscribed lists when older than this many days.
+    pub filter_update_days: i32,
+    /// Darken websites that have no dark theme of their own (when OyNIx is dark).
+    pub force_dark_websites: bool,
+    /// Tell websites to use their dark theme when OyNIx is dark.
+    pub dark_websites: bool,
 
     // ── Advanced ──────────────────────────────────────────────────
     pub javascript: bool,
@@ -107,6 +119,12 @@ impl Default for Settings {
             strip_tracking_params: true,
             https_upgrade: true,
             fingerprint_protection: true,
+            cosmetic_filtering: true,
+            filter_lists: BTreeMap::new(),
+            custom_filter_urls: Vec::new(),
+            filter_update_days: 4,
+            force_dark_websites: false,
+            dark_websites: true,
             javascript: true,
             autoplay_media: false,
             smooth_scrolling: true,

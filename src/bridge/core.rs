@@ -45,6 +45,9 @@ pub mod qobject {
         #[qproperty(bool, smooth_scrolling)]
         #[qproperty(bool, developer_mode)]
         #[qproperty(bool, low_power_mode)]
+        #[qproperty(bool, dark_websites)]
+        #[qproperty(bool, force_dark_websites)]
+        #[qproperty(bool, cosmetic_filtering)]
         #[qproperty(QString, user_agent)]
         #[qproperty(bool, start_page_show_privacy_report)]
         #[qproperty(bool, start_page_show_reading_list)]
@@ -171,6 +174,26 @@ pub mod qobject {
         #[qinvokable]
         fn reload_filter_lists(self: Pin<&mut Core>) -> QString;
         #[qinvokable]
+        fn filter_lists(self: &Core) -> QString;
+        #[qinvokable]
+        fn set_filter_list_enabled(self: Pin<&mut Core>, id: &QString, enabled: bool);
+        #[qinvokable]
+        fn add_filter_list_url(self: Pin<&mut Core>, url: &QString) -> QString;
+        #[qinvokable]
+        fn remove_filter_list(self: Pin<&mut Core>, id: &QString);
+        #[qinvokable]
+        fn due_filter_lists(self: &Core, force: bool) -> QString;
+        #[qinvokable]
+        fn store_filter_list(self: Pin<&mut Core>, id: &QString, text: &QString) -> QString;
+        #[qinvokable]
+        fn filter_list_failed(self: Pin<&mut Core>, id: &QString, error: &QString);
+        #[qinvokable]
+        fn cosmetic_script(self: &Core, host: &QString) -> QString;
+        #[qinvokable]
+        fn apply_color_scheme(self: &Core, dark: bool);
+        #[qinvokable]
+        fn blocker_generation(self: &Core) -> i32;
+        #[qinvokable]
         unsafe fn attach_profile(self: &Core, profile: *mut QObject);
 
         // ── scripts ──
@@ -228,7 +251,7 @@ use cxx_qt::CxxQtType;
 use cxx_qt_lib::QString;
 use serde_json::{json, Value};
 
-use crate::core::{blocker, extensions, library::Library, omnibox, paths, scripts, settings::Settings};
+use crate::core::{blocker, extensions, filterlists, library::Library, omnibox, paths, scripts, settings::Settings};
 
 pub struct CoreRust {
     theme: QString,
@@ -258,6 +281,9 @@ pub struct CoreRust {
     smooth_scrolling: bool,
     developer_mode: bool,
     low_power_mode: bool,
+    dark_websites: bool,
+    force_dark_websites: bool,
+    cosmetic_filtering: bool,
     user_agent: QString,
     start_page_show_privacy_report: bool,
     start_page_show_reading_list: bool,
@@ -318,6 +344,9 @@ impl Default for CoreRust {
             smooth_scrolling: true,
             developer_mode: false,
             low_power_mode: false,
+            dark_websites: true,
+            force_dark_websites: false,
+            cosmetic_filtering: true,
             user_agent: q(""),
             start_page_show_privacy_report: true,
             start_page_show_reading_list: true,
@@ -400,6 +429,9 @@ impl CoreRust {
         self.smooth_scrolling = st.smooth_scrolling;
         self.developer_mode = st.developer_mode;
         self.low_power_mode = st.low_power_mode;
+        self.dark_websites = st.dark_websites;
+        self.force_dark_websites = st.force_dark_websites;
+        self.cosmetic_filtering = st.cosmetic_filtering;
         self.user_agent = qs(&st.user_agent);
         self.start_page_show_privacy_report = st.start_page_show_privacy_report;
         self.start_page_show_reading_list = st.start_page_show_reading_list;
@@ -410,9 +442,18 @@ impl CoreRust {
     }
 }
 
+/// Subscriptions the blocker should load: (id, category) of enabled lists.
+pub fn active_lists(st: &Settings) -> Vec<(String, filterlists::Category)> {
+    filterlists::subscriptions(&st.filter_lists, &st.custom_filter_urls)
+        .into_iter()
+        .filter(|x| x.4)
+        .map(|(id, _, cat, _, _)| (id, cat))
+        .collect()
+}
+
 /// Push privacy settings down into the blocker and the network interceptor.
 pub fn apply_privacy(st: &Settings) {
-    blocker::configure(st.content_blocker, st.block_ads, st.block_trackers);
+    blocker::configure(st.content_blocker, st.block_ads, st.block_trackers, st.cosmetic_filtering);
     blocker::set_allowlist(
         st.sites
             .iter()
@@ -453,6 +494,9 @@ impl qobject::Core {
         self.as_mut().set_smooth_scrolling(st.smooth_scrolling);
         self.as_mut().set_developer_mode(st.developer_mode);
         self.as_mut().set_low_power_mode(st.low_power_mode);
+        self.as_mut().set_dark_websites(st.dark_websites);
+        self.as_mut().set_force_dark_websites(st.force_dark_websites);
+        self.as_mut().set_cosmetic_filtering(st.cosmetic_filtering);
         self.as_mut().set_user_agent(qs(&st.user_agent));
         self.as_mut().set_start_page_show_privacy_report(st.start_page_show_privacy_report);
         self.as_mut().set_start_page_show_reading_list(st.start_page_show_reading_list);
@@ -754,9 +798,9 @@ impl qobject::Core {
 
     pub fn privacy_report(&self) -> QString {
         let (b, a, t) = blocker::totals();
-        let (rules, lists) = blocker::rule_count();
+        let (rules, cosmetic, lists) = blocker::rule_count();
         let top: Vec<Value> = blocker::top_trackers(8).into_iter().map(|(d, n)| json!({ "domain": d, "sites": n })).collect();
-        to_qjson(&json!({ "blocked": b, "ads": a, "trackers": t, "rules": rules, "lists": lists, "top": top }))
+        to_qjson(&json!({ "blocked": b, "ads": a, "trackers": t, "rules": rules, "cosmetic": cosmetic, "lists": lists, "loading": blocker::loading(), "top": top }))
     }
 
     pub fn reset_privacy_stats(self: Pin<&mut Self>) {
@@ -765,9 +809,111 @@ impl qobject::Core {
     }
 
     pub fn reload_filter_lists(self: Pin<&mut Self>) -> QString {
-        blocker::init();
+        blocker::init(active_lists(&self.settings));
         apply_privacy(&self.settings);
         self.privacy_report()
+    }
+
+    pub fn filter_lists(&self) -> QString {
+        to_qjson(&filterlists::describe(&self.settings.filter_lists, &self.settings.custom_filter_urls))
+    }
+
+    pub fn set_filter_list_enabled(mut self: Pin<&mut Self>, id: &QString, enabled: bool) {
+        self.as_mut().rust_mut().settings.filter_lists.insert(s(id), enabled);
+        self.rust().settings.save();
+        self.as_mut().sync();
+        blocker::init(active_lists(&self.settings));
+    }
+
+    /// Returns the new list's id, or "" if the URL is invalid / already added.
+    pub fn add_filter_list_url(mut self: Pin<&mut Self>, url: &QString) -> QString {
+        let u = s(url).trim().to_string();
+        let ok = url::Url::parse(&u).map(|x| matches!(x.scheme(), "https" | "http")).unwrap_or(false);
+        if !ok || self.settings.custom_filter_urls.contains(&u) {
+            return qs("");
+        }
+        self.as_mut().rust_mut().settings.custom_filter_urls.push(u.clone());
+        self.rust().settings.save();
+        self.as_mut().sync();
+        qs(filterlists::custom_id(&u))
+    }
+
+    pub fn remove_filter_list(mut self: Pin<&mut Self>, id: &QString) {
+        let id = s(id);
+        {
+            let mut r = self.as_mut().rust_mut();
+            r.settings.custom_filter_urls.retain(|u| filterlists::custom_id(u) != id);
+            r.settings.filter_lists.remove(&id);
+        }
+        filterlists::remove(&id);
+        self.rust().settings.save();
+        self.as_mut().sync();
+        blocker::init(active_lists(&self.settings));
+    }
+
+    /// `[{id, url}]` of enabled lists that need downloading.
+    pub fn due_filter_lists(&self, force: bool) -> QString {
+        let st = &self.settings;
+        let days = if force { 0 } else { st.filter_update_days.max(1) as i64 };
+        let list: Vec<Value> = if force {
+            filterlists::subscriptions(&st.filter_lists, &st.custom_filter_urls)
+                .into_iter()
+                .filter(|x| x.4)
+                .map(|(id, _, _, url, _)| json!({ "id": id, "url": url }))
+                .collect()
+        } else {
+            filterlists::due(&st.filter_lists, &st.custom_filter_urls, days).into_iter().map(|(id, url)| json!({ "id": id, "url": url })).collect()
+        };
+        to_qjson(&Value::Array(list))
+    }
+
+    /// Save a downloaded list. Returns "" on success or an error message.
+    pub fn store_filter_list(self: Pin<&mut Self>, id: &QString, text: &QString) -> QString {
+        let id = s(id);
+        match filterlists::store(&id, &String::from(text)) {
+            Ok(_) => qs(""),
+            Err(e) => {
+                filterlists::record_error(&id, &e);
+                qs(e)
+            }
+        }
+    }
+
+    pub fn filter_list_failed(self: Pin<&mut Self>, id: &QString, error: &QString) {
+        filterlists::record_error(&s(id), &s(error));
+    }
+
+    /// Bumps each time a new rule set is installed (lists loaded/updated).
+    pub fn blocker_generation(&self) -> i32 {
+        blocker::generation() as i32
+    }
+
+    /// Tell Chromium (prefers-color-scheme) which scheme pages should use.
+    /// With "dark websites" off, pages always get the light scheme while
+    /// OyNIx is dark; with theme "auto" the system setting is followed.
+    pub fn apply_color_scheme(&self, dark: bool) {
+        let st = &self.settings;
+        let scheme = if dark && !st.dark_websites {
+            1
+        } else if st.theme == "auto" {
+            0
+        } else if dark {
+            2
+        } else {
+            1
+        };
+        crate::bridge::native::ffi::set_color_scheme(scheme);
+    }
+
+    /// Script that hides elements matched by cosmetic rules on `host`, or ""
+    /// when nothing applies. Idempotent; runs in the isolated world.
+    pub fn cosmetic_script(&self, host: &QString) -> QString {
+        let sels = blocker::cosmetic_selectors(&s(host));
+        if sels.is_empty() {
+            return qs("");
+        }
+        let list = serde_json::to_string(&sels).unwrap_or_else(|_| "[]".into());
+        qs(format!("({})({});", scripts::COSMETIC, list))
     }
 
     /// # Safety

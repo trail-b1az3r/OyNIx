@@ -59,11 +59,19 @@ Popover {
         }
         RowLayout {
             Layout.fillWidth: true
+            Txt { text: qsTr("Dark Mode"); Layout.fillWidth: true }
+            Toggle {
+                checked: sp.s.forceDark !== undefined ? sp.s.forceDark : Core.forceDarkWebsites
+                onToggled: sp.set("forceDark", checked === Core.forceDarkWebsites ? null : checked)
+            }
+        }
+        RowLayout {
+            Layout.fillWidth: true
             Txt { text: qsTr("Open in Reader View"); Layout.fillWidth: true }
             Toggle { checked: sp.s.reader === true; onToggled: sp.set("reader", checked ? true : null) }
         }
         Rectangle { Layout.fillWidth: true; height: 1; color: Theme.separator }
         MenuRow { text: qsTr("Copy Link"); glyph: "copy"; onClicked: { sp.win.copyText(sp.tab.model.url); sp.close() } }
-        MenuRow { text: qsTr("Reset Settings for This Website"); glyph: "trash"; onClicked: { ["zoom", "blocker", "javascript", "popups", "reader"].forEach(function (k) { Core.setSiteSetting(sp.host, k, "null") }); sp.s = {}; sp.tab.applySiteSettings() } }
+        MenuRow { text: qsTr("Reset Settings for This Website"); glyph: "trash"; onClicked: { ["zoom", "blocker", "javascript", "popups", "reader", "forceDark"].forEach(function (k) { Core.setSiteSetting(sp.host, k, "null") }); sp.s = {}; sp.tab.applySiteSettings() } }
     }
 }

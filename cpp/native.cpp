@@ -8,7 +8,9 @@
 #include <QtCore/QUrl>
 #include <QtCore/QtGlobal>
 #include <QtGui/QGuiApplication>
+#include <QtNetwork/QNetworkProxyFactory>
 #include <QtGui/QIcon>
+#include <QtGui/QStyleHints>
 #include <QtGui/QSurfaceFormat>
 #include <QtQuick/QQuickWindow>
 #include <QtQuick/QSGRendererInterface>
@@ -93,6 +95,9 @@ void init_webengine() {
 void set_app_metadata(rust::Str profile) {
     QGuiApplication::setApplicationDisplayName(QStringLiteral("OyNIx"));
     QGuiApplication::setDesktopFileName(QStringLiteral("oynix"));
+    // Filter-list downloads etc. honour the system / environment proxy,
+    // like the web views do.
+    QNetworkProxyFactory::setUseSystemConfiguration(true);
     QGuiApplication::setWindowIcon(QIcon::fromTheme(QStringLiteral("oynix"),
                                                     QIcon(QStringLiteral(":/qt/qml/OyNIx/assets/icon.png"))));
     Q_UNUSED(profile);
@@ -120,6 +125,17 @@ rust::String active_graphics_api() {
     case QSGRendererInterface::Software: return rust::String("Software");
     default: return rust::String("Other");
     }
+}
+
+void set_color_scheme(int32_t scheme) {
+    QStyleHints *hints = QGuiApplication::styleHints();
+    if (!hints) return;
+    switch (scheme) {
+    case 1: hints->setColorScheme(Qt::ColorScheme::Light); break;
+    case 2: hints->setColorScheme(Qt::ColorScheme::Dark); break;
+    default: hints->unsetColorScheme(); break;
+    }
+    if (qEnvironmentVariableIsSet("OYNIX_DEBUG_SCHEME")) qWarning("oynix: requested scheme %d, styleHints now %d", int(scheme), int(hints->colorScheme()));
 }
 
 rust::String webchannel_js() {

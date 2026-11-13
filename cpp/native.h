@@ -26,6 +26,10 @@ void attach_interceptor(QObject *profile);
 // Actual graphics API Qt Quick ended up using (for the About page).
 rust::String active_graphics_api();
 
+// Colour scheme websites see via prefers-color-scheme (and Qt widgets/dialogs):
+// 0 = follow the system, 1 = light, 2 = dark.
+void set_color_scheme(int32_t scheme);
+
 // Qt's qwebchannel.js client library (from the Qt WebChannel resources).
 rust::String webchannel_js();
 

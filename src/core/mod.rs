@@ -3,6 +3,7 @@
 pub mod blocker;
 pub mod ext_runtime;
 pub mod extensions;
+pub mod filterlists;
 pub mod library;
 pub mod omnibox;
 pub mod paths;

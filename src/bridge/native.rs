@@ -21,6 +21,7 @@ pub mod ffi {
         fn active_graphics_api() -> String;
         fn qt_runtime_version() -> String;
         fn webchannel_js() -> String;
+        fn set_color_scheme(scheme: i32);
     }
 }
 
