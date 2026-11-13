@@ -3,6 +3,7 @@
 
 #include <QtCore/QByteArray>
 #include <QtCore/QCoreApplication>
+#include <QtCore/QFile>
 #include <QtCore/QString>
 #include <QtCore/QUrl>
 #include <QtCore/QtGlobal>
@@ -107,20 +108,6 @@ static void install(QQuickWebEngineProfile *p) {
     }
 }
 
-void configure_default_profile(rust::Str storage_dir, rust::Str cache_dir, rust::Str user_agent) {
-    QQuickWebEngineProfile *p = QQuickWebEngineProfile::defaultProfile();
-    if (!p) return;
-    p->setOffTheRecord(false);
-    p->setStorageName(QStringLiteral("Default"));
-    p->setPersistentStoragePath(QString::fromUtf8(storage_dir.data(), static_cast<qsizetype>(storage_dir.size())));
-    p->setCachePath(QString::fromUtf8(cache_dir.data(), static_cast<qsizetype>(cache_dir.size())));
-    p->setHttpCacheType(QQuickWebEngineProfile::DiskHttpCache);
-    p->setPersistentCookiesPolicy(QQuickWebEngineProfile::AllowPersistentCookies);
-    if (user_agent.size() > 0)
-        p->setHttpUserAgent(QString::fromUtf8(user_agent.data(), static_cast<qsizetype>(user_agent.size())));
-    install(p);
-}
-
 void attach_interceptor(QObject *obj) {
     if (auto *p = qobject_cast<QQuickWebEngineProfile *>(obj)) install(p);
 }
@@ -133,6 +120,13 @@ rust::String active_graphics_api() {
     case QSGRendererInterface::Software: return rust::String("Software");
     default: return rust::String("Other");
     }
+}
+
+rust::String webchannel_js() {
+    QFile f(QStringLiteral(":/qtwebchannel/qwebchannel.js"));
+    if (!f.open(QIODevice::ReadOnly)) return rust::String();
+    const QByteArray b = f.readAll();
+    return rust::String(b.constData(), static_cast<size_t>(b.size()));
 }
 
 rust::String qt_runtime_version() { return rust::String(qVersion()); }

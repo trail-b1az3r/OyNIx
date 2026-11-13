@@ -55,6 +55,7 @@ pub mod qobject {
         #[qproperty(i32, bookmarks_revision)]
         #[qproperty(i32, reading_revision)]
         #[qproperty(i32, history_revision)]
+        #[qproperty(i32, extensions_revision)]
         #[qproperty(f64, total_blocked)]
         #[qproperty(f64, total_ads)]
         #[qproperty(f64, total_trackers)]
@@ -180,6 +181,28 @@ pub mod qobject {
         #[qinvokable]
         fn page_scripts(self: &Core) -> QString;
 
+        // ── extensions ──
+        #[qinvokable]
+        fn extensions(self: &Core) -> QString;
+        #[qinvokable]
+        fn install_extension(self: Pin<&mut Core>, path_or_url: &QString) -> QString;
+        #[qinvokable]
+        fn remove_extension(self: Pin<&mut Core>, id: &QString) -> bool;
+        #[qinvokable]
+        fn set_extension_enabled(self: Pin<&mut Core>, id: &QString, enabled: bool);
+        #[qinvokable]
+        fn create_extension(self: Pin<&mut Core>, name: &QString) -> QString;
+        #[qinvokable]
+        fn extensions_dir(self: &Core) -> QString;
+        #[qinvokable]
+        fn set_extension_web_id(self: Pin<&mut Core>, id: &QString, web_id: &QString);
+        #[qinvokable]
+        fn consume_first_run(self: Pin<&mut Core>, id: &QString) -> bool;
+        #[qinvokable]
+        fn extension_scripts(self: &Core, tab_id: i32) -> QString;
+        #[qinvokable]
+        fn extension_page_scripts(self: &Core, kind: &QString) -> QString;
+
         // ── system ──
         #[qinvokable]
         fn profiles(self: &Core) -> QString;
@@ -205,7 +228,7 @@ use cxx_qt::CxxQtType;
 use cxx_qt_lib::QString;
 use serde_json::{json, Value};
 
-use crate::core::{blocker, library::Library, omnibox, paths, scripts, settings::Settings};
+use crate::core::{blocker, extensions, library::Library, omnibox, paths, scripts, settings::Settings};
 
 pub struct CoreRust {
     theme: QString,
@@ -245,6 +268,7 @@ pub struct CoreRust {
     bookmarks_revision: i32,
     reading_revision: i32,
     history_revision: i32,
+    extensions_revision: i32,
     total_blocked: f64,
     total_ads: f64,
     total_trackers: f64,
@@ -258,6 +282,7 @@ pub struct CoreRust {
 
     settings: Settings,
     library: Library,
+    extensions: Vec<extensions::Entry>,
 }
 
 impl Default for CoreRust {
@@ -302,6 +327,7 @@ impl Default for CoreRust {
             bookmarks_revision: 0,
             reading_revision: 0,
             history_revision: 0,
+            extensions_revision: 0,
             total_blocked: 0.0,
             total_ads: 0.0,
             total_trackers: 0.0,
@@ -313,6 +339,7 @@ impl Default for CoreRust {
             start_private: env.private,
             settings,
             library: Library::load(),
+            extensions: extensions::load(),
         };
         me.copy_settings_to_fields();
         me
@@ -771,6 +798,11 @@ impl qobject::Core {
         if st.fingerprint_protection {
             v.push(json!({ "name": "oynix-fp", "source": scripts::ANTI_FINGERPRINT, "main": true }));
         }
+        for e in self.extensions.iter().filter(|e| e.enabled && e.kind == "oynix") {
+            if let Some(src) = extensions::oynix_script(e) {
+                v.push(json!({ "name": format!("oynix-ext-{}", e.id), "source": src, "main": e.world == "main", "greasemonkey": true }));
+            }
+        }
         if let Ok(rd) = std::fs::read_dir(paths::userscripts_dir()) {
             let mut files: Vec<_> = rd.flatten().map(|e| e.path()).collect();
             files.sort();
@@ -789,6 +821,117 @@ impl qobject::Core {
             }
         }
         to_qjson(&Value::Array(v))
+    }
+
+    // ── extensions ──────────────────────────────────────────────────
+    fn bump_extensions(mut self: Pin<&mut Self>) {
+        let r = self.extensions_revision + 1;
+        self.as_mut().set_extensions_revision(r);
+    }
+
+    pub fn extensions(&self) -> QString {
+        to_qjson(&serde_json::to_value(&self.extensions).unwrap_or(Value::Null))
+    }
+
+    /// Returns `{ok, error, extension}` as JSON.
+    pub fn install_extension(mut self: Pin<&mut Self>, path_or_url: &QString) -> QString {
+        let p = to_path(&s(path_or_url));
+        let mut list = self.extensions.clone();
+        let r = extensions::install(&p, &mut list);
+        self.as_mut().rust_mut().extensions = list;
+        self.as_mut().bump_extensions();
+        match r {
+            Ok(e) => to_qjson(&json!({ "ok": true, "error": "", "extension": e })),
+            Err(err) => to_qjson(&json!({ "ok": false, "error": err })),
+        }
+    }
+
+    pub fn remove_extension(mut self: Pin<&mut Self>, id: &QString) -> bool {
+        let mut list = self.extensions.clone();
+        let ok = extensions::remove(&s(id), &mut list);
+        self.as_mut().rust_mut().extensions = list;
+        self.bump_extensions();
+        ok
+    }
+
+    pub fn set_extension_enabled(mut self: Pin<&mut Self>, id: &QString, enabled: bool) {
+        let id = s(id);
+        if let Some(e) = self.as_mut().rust_mut().extensions.iter_mut().find(|e| e.id == id) {
+            e.enabled = enabled;
+        }
+        extensions::save(&self.extensions);
+        self.bump_extensions();
+    }
+
+    /// Returns the folder of the new extension, or "" on failure.
+    pub fn create_extension(mut self: Pin<&mut Self>, name: &QString) -> QString {
+        let mut list = self.extensions.clone();
+        let r = extensions::create_template(&s(name), &mut list);
+        self.as_mut().rust_mut().extensions = list;
+        self.as_mut().bump_extensions();
+        qs(r.map(|e| e.path).unwrap_or_default())
+    }
+
+    pub fn extensions_dir(&self) -> QString {
+        qs(extensions::root().to_string_lossy())
+    }
+
+    pub fn set_extension_web_id(mut self: Pin<&mut Self>, id: &QString, web_id: &QString) {
+        let (id, w) = (s(id), s(web_id));
+        let mut changed = false;
+        if let Some(e) = self.as_mut().rust_mut().extensions.iter_mut().find(|e| e.id == id) {
+            if e.web_id != w {
+                e.web_id = w;
+                changed = true;
+            }
+        }
+        if changed {
+            extensions::save(&self.extensions);
+            self.bump_extensions();
+        }
+    }
+
+    pub fn consume_first_run(mut self: Pin<&mut Self>, id: &QString) -> bool {
+        let id = s(id);
+        let mut was = false;
+        if let Some(e) = self.as_mut().rust_mut().extensions.iter_mut().find(|e| e.id == id) {
+            was = e.first_run;
+            e.first_run = false;
+        }
+        if was {
+            extensions::save(&self.extensions);
+        }
+        was
+    }
+
+    /// Scripts a web view needs for Chrome/Firefox content scripts: the
+    /// WebChannel client, the OyNIx runtime, the view's tab id, then every
+    /// enabled extension's content scripts. Empty when none are active.
+    pub fn extension_scripts(&self, tab_id: i32) -> QString {
+        let mut v: Vec<Value> = Vec::new();
+        for e in self.extensions.iter().filter(|e| e.enabled && e.kind != "oynix" && !e.web_id.is_empty()) {
+            v.extend(extensions::content_scripts(e));
+        }
+        if v.is_empty() {
+            return qs("[]");
+        }
+        let mut pre = vec![
+            json!({ "name": "oynix-webchannel", "source": crate::bridge::native::ffi::webchannel_js(), "main": false, "start": true, "allFrames": true }),
+            json!({ "name": "oynix-ext-runtime", "source": format!("var __oynixTabId = {tab_id};\n{}", crate::core::ext_runtime::RUNTIME), "main": false, "start": true, "allFrames": true }),
+        ];
+        pre.extend(v);
+        to_qjson(&Value::Array(pre))
+    }
+
+    /// Scripts for extension pages (popup / options / background), which run
+    /// in the page's main world.
+    pub fn extension_page_scripts(&self, kind: &QString) -> QString {
+        let ctx = extensions::page_contexts(&self.extensions, &s(kind));
+        let boot = format!("{}\n__oynixExtPage({});", crate::core::ext_runtime::RUNTIME, ctx);
+        to_qjson(&json!([
+            { "name": "oynix-webchannel", "source": crate::bridge::native::ffi::webchannel_js(), "main": true, "start": true, "allFrames": false },
+            { "name": "oynix-ext-page", "source": boot, "main": true, "start": true, "allFrames": false }
+        ]))
     }
 
     // ── system ──────────────────────────────────────────────────────

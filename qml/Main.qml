@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Window
 import QtWebEngine
+import QtWebChannel
 import OyNIx
 
 // Application controller: owns the shared browsing profile, all windows,
@@ -19,18 +20,40 @@ QtObject {
     property var devToolsWindows: []
     property bool quitting: false
 
-    property WebEngineProfile defaultProfile: WebEngineProfile {
-        storageName: "OyNIx-" + Core.profile
-        offTheRecord: Core.startPrivate
+    // Qt ≥ 6.9: profiles are created from a prototype, then configured.
+    property WebEngineProfilePrototype profilePrototype: WebEngineProfilePrototype {
+        storageName: Core.startPrivate ? "" : "OyNIx-" + Core.profile
         persistentStoragePath: Core.configPath("data") + "/webengine"
         cachePath: Core.configPath("cache") + "/webengine"
         httpCacheType: WebEngineProfile.DiskHttpCache
         persistentCookiesPolicy: WebEngineProfile.AllowPersistentCookies
-        httpUserAgent: Core.userAgent !== "" ? Core.userAgent : httpUserAgent
-        spellCheckEnabled: false
-        onDownloadRequested: function (download) { app.handleDownload(download) }
-        Component.onCompleted: Core.attachProfile(defaultProfile)
     }
+    property var defaultProfile: null
+
+    property Connections profileEvents: Connections {
+        target: app.defaultProfile
+        function onDownloadRequested(download) { app.handleDownload(download) }
+    }
+
+    function setupProfile() {
+        defaultProfile = profilePrototype.instance()
+        if (Core.userAgent !== "") defaultProfile.httpUserAgent = Core.userAgent
+        defaultProfile.spellCheckEnabled = false
+        Core.attachProfile(defaultProfile)
+        extensionHost.start()
+    }
+
+    property ExtensionHost extensionHost: ExtensionHost { app: app }
+
+    // WebChannel endpoint used by the extension runtime in pages.
+    property ExtBridge extBridge: ExtBridge { WebChannel.id: "oynixExtensions" }
+    property WebChannel extChannel: WebChannel { registeredObjects: [app.extBridge] }
+
+    // Tab and window ids are global so extensions can address them.
+    property int lastTabId: 0
+    property int lastWindowId: 0
+    function nextTabId() { lastTabId += 1; return lastTabId }
+    function nextWindowId() { lastWindowId += 1; return lastWindowId }
 
     property Component windowComponent: Component { BrowserWindow {} }
     property Component settingsComponent: Component { SettingsWindow {} }
@@ -160,5 +183,5 @@ QtObject {
         shutdown()
     }
 
-    Component.onCompleted: restore()
+    Component.onCompleted: { setupProfile(); restore() }
 }

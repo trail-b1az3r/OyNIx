@@ -12,7 +12,7 @@ ApplicationWindow {
     property bool privateMode: false
     property var initialTabs: []
     property int initialIndex: 0
-    property var profile: privateMode ? privateProfile : app.defaultProfile
+    property var profile: privateMode ? privateProfileInstance() : app.defaultProfile
 
     property alias tabs: tabModel
     property int currentIndex: 0
@@ -26,6 +26,7 @@ ApplicationWindow {
     property bool overviewOpen: false
     property bool contentFullScreen: false
     property int uidCounter: 0
+    readonly property int windowId: app.nextWindowId()
     property var permission: null
 
     readonly property bool chromeVisible: !contentFullScreen && (!focusMode || peek)
@@ -44,23 +45,30 @@ ApplicationWindow {
     onCurrentIndexChanged: syncCurrent()
     onClosing: function (close) { app.windowClosing(win) }
 
-    WebEngineProfile {
-        id: privateProfile
-        offTheRecord: true
-        httpUserAgent: Core.userAgent !== "" ? Core.userAgent : httpUserAgent
-        onDownloadRequested: function (download) { win.app.handleDownload(download) }
-        Component.onCompleted: if (win.privateMode) Core.attachProfile(privateProfile)
+    // Private windows get their own off-the-record profile (no storage name).
+    WebEngineProfilePrototype { id: privatePrototype }
+    property var privateProfile: null
+    function privateProfileInstance() {
+        if (!privateProfile) {
+            privateProfile = privatePrototype.instance()
+            if (Core.userAgent !== "") privateProfile.httpUserAgent = Core.userAgent
+            privateProfile.downloadRequested.connect(function (d) { win.app.handleDownload(d) })
+            Core.attachProfile(privateProfile)
+        }
+        return privateProfile
     }
 
     ListModel { id: tabModel }
 
     // ── Tab management ──────────────────────────────────────────────
+    function tabItem(i) { return tabRepeater.itemAt(i) }
+
     function syncCurrent() {
         currentTab = (currentIndex >= 0 && currentIndex < tabRepeater.count) ? tabRepeater.itemAt(currentIndex) : null
     }
 
     function makeTab(url, extra) {
-        uidCounter += 1
+        uidCounter = app.nextTabId()
         return Object.assign({
             uid: uidCounter, url: url, title: "", icon: "", loading: false, progress: 0,
             pinned: false, suspended: false, audible: false, muted: false,
@@ -85,6 +93,7 @@ ApplicationWindow {
         if (opts.pinned) idx = firstUnpinned()
         tabModel.insert(idx, makeTab(url, { title: opts.title || "", pinned: !!opts.pinned, muted: !!opts.muted, suspended: !!opts.suspended }))
         if (opts.request) tabRepeater.itemAt(idx).adopt(opts.request)
+        app.extensionHost.tabEvent("tabs.onCreated", [app.extensionHost.tabInfo(win, idx)])
         if (opts.background) {
             if (idx <= currentIndex) currentIndex += 1
             syncCurrent()
@@ -107,11 +116,13 @@ ApplicationWindow {
         tabModel.setProperty(i, "lastActive", Date.now())
         currentIndex = i
         syncCurrent()
+        app.extensionHost.tabEvent("tabs.onActivated", [{ tabId: tabModel.get(i).uid, windowId: win.windowId }])
     }
 
     function closeTab(i, noHistory) {
         if (i < 0 || i >= tabModel.count) return
         var t = tabModel.get(i)
+        var closedId = t.uid
         if (!privateMode && !noHistory) Core.pushClosedTab(t.url, t.title)
         if (tabModel.count === 1) {
             if (Core.closeWindowWithLastTab) { win.close(); return }
@@ -121,6 +132,7 @@ ApplicationWindow {
         if (i < currentIndex) next = currentIndex - 1
         else if (i === currentIndex) next = Math.min(i, tabModel.count - 2)
         tabModel.remove(i)
+        app.extensionHost.tabEvent("tabs.onRemoved", [closedId, { windowId: win.windowId, isWindowClosing: false }])
         currentIndex = -1
         currentIndex = Math.max(0, next)
         app.scheduleSave()
@@ -447,6 +459,67 @@ ApplicationWindow {
                         shareMenu.open()
                     }
                 }
+                // Extension action buttons (Chrome / Firefox extensions with a popup)
+                Repeater {
+                    model: {
+                        var host = win.app.extensionHost
+                        host.revision; Core.extensionsRevision
+                        if (win.privateMode || !host.supported) return []
+                        return JSON.parse(Core.extensions()).filter(function (e) { return e.enabled && e.kind !== "oynix" && host.isLoaded(e.id) })
+                    }
+                    delegate: AbstractButton {
+                        id: extBtn
+                        required property var modelData
+                        implicitWidth: 30; implicitHeight: 28
+                        hoverEnabled: true
+                        focusPolicy: Qt.NoFocus
+                        background: Rectangle { radius: 6; color: extBtn.pressed ? Theme.pressed : (extBtn.hovered ? Theme.hover : "transparent") }
+                        contentItem: Item {
+                            Image {
+                                anchors.centerIn: parent
+                                width: 16; height: 16
+                                sourceSize: Qt.size(32, 32)
+                                source: extBtn.modelData.icon ? "file://" + extBtn.modelData.icon : ""
+                                visible: status === Image.Ready
+                            }
+                            Icon { anchors.centerIn: parent; visible: !extBtn.modelData.icon; name: "puzzle"; size: 16 }
+                            Rectangle {
+                                readonly property var b: win.app.extensionHost.badgeFor(extBtn.modelData)
+                                visible: b !== null && b.text !== ""
+                                anchors.right: parent.right; anchors.bottom: parent.bottom
+                                anchors.rightMargin: -2; anchors.bottomMargin: -1
+                                height: 12; width: Math.max(12, bt.implicitWidth + 6); radius: 6
+                                color: b ? b.color : "transparent"
+                                Text { id: bt; anchors.centerIn: parent; text: parent.b ? parent.b.text : ""; color: "white"; font.pixelSize: 8; font.bold: true }
+                            }
+                        }
+                        ToolTip.visible: hovered; ToolTip.delay: 600
+                        ToolTip.text: { var b = win.app.extensionHost.badgeFor(modelData); return b && b.title ? b.title : modelData.name }
+                        onClicked: {
+                            var u = win.app.extensionHost.popupUrl(modelData.id)
+                            if (!u) {
+                                // No popup: the extension handles clicks itself.
+                                var info = win.app.extensionHost.tabInfo(win, win.currentIndex)
+                                win.app.extBridge.dispatch("action.onClicked", JSON.stringify([modelData.webId, info]))
+                                return
+                            }
+                            extPopup.url = u
+                            var p = extBtn.mapToItem(win.contentItem, extBtn.width, extBtn.height + 6)
+                            extPopup.x = Math.max(8, p.x - extPopup.width); extPopup.y = p.y
+                            extPopup.open()
+                        }
+                    }
+                }
+                IconButton {
+                    id: extMenuBtn
+                    glyph: "puzzle"; tip: qsTr("Extensions")
+                    visible: !win.privateMode && Core.extensionsRevision >= 0 && JSON.parse(Core.extensions()).length > 0
+                    onClicked: {
+                        var p = extMenuBtn.mapToItem(win.contentItem, extMenuBtn.width - extMenu.width, extMenuBtn.height + 6)
+                        extMenu.x = p.x; extMenu.y = p.y
+                        extMenu.open()
+                    }
+                }
                 IconButton { glyph: "plus"; tip: qsTr("New Tab") + "  (Ctrl+T)"; onClicked: win.newTab() }
                 IconButton {
                     glyph: "tabs"; tip: qsTr("Show All Tabs") + "  (Ctrl+Shift+\\)"
@@ -691,6 +764,69 @@ ApplicationWindow {
         x: win.width - width - 12; y: Theme.toolbarHeight + 4
     }
 
+    // Extension action popup: a small web view sized to the popup's content.
+    Popover {
+        id: extPopup
+        parent: win.contentItem
+        property string url: ""
+        padding: 0
+        width: Math.max(220, Math.min(800, (popupView.contentsSize.width || 360) + 2))
+        height: Math.max(60, Math.min(600, (popupView.contentsSize.height || 420) + 2))
+        onClosed: url = ""
+        contentItem: Item {
+            clip: true
+            WebEngineView {
+                id: popupView
+                anchors.fill: parent
+                anchors.margins: 1
+                profile: win.app.defaultProfile
+                url: extPopup.url
+                backgroundColor: "transparent"
+                webChannel: win.app.extChannel
+                webChannelWorld: WebEngineScript.MainWorld
+                settings.showScrollBars: false
+                Component.onCompleted: win.app.extensionHost.installScripts(popupView, JSON.parse(Core.extensionPageScripts("popup")))
+                Connections {
+                    target: Core
+                    function onExtensionsRevisionChanged() { popupView.userScripts.clear(); win.app.extensionHost.installScripts(popupView, JSON.parse(Core.extensionPageScripts("popup"))) }
+                }
+                onNavigationRequested: function (request) {
+                    var u = request.url.toString()
+                    if (request.isMainFrame && u !== "" && u.indexOf("chrome-extension://") !== 0) { request.reject(); win.openTab(u, { afterCurrent: true }); extPopup.close() }
+                }
+                onWindowCloseRequested: extPopup.close()
+                onNewWindowRequested: function (request) { win.openTab(request.requestedUrl.toString(), { afterCurrent: true }); extPopup.close() }
+            }
+        }
+    }
+
+    Popover {
+        id: extMenu
+        parent: win.contentItem
+        width: 280
+        padding: 6
+        contentItem: ColumnLayout {
+            spacing: 1
+            Txt { text: qsTr("Extensions"); color: Theme.textDim; font.pixelSize: 12; Layout.leftMargin: 8; Layout.topMargin: 4; Layout.bottomMargin: 4 }
+            Repeater {
+                model: { Core.extensionsRevision; win.app.extensionHost.revision; return extMenu.opened ? JSON.parse(Core.extensions()) : [] }
+                delegate: RowLayout {
+                    required property var modelData
+                    Layout.fillWidth: true
+                    Layout.leftMargin: 8; Layout.rightMargin: 6
+                    Layout.preferredHeight: 30
+                    spacing: 8
+                    Image { Layout.preferredWidth: 16; Layout.preferredHeight: 16; sourceSize: Qt.size(32, 32); source: modelData.icon ? "file://" + modelData.icon : ""; visible: !!modelData.icon }
+                    Icon { visible: !modelData.icon; name: "puzzle"; size: 16; color: Theme.textDim }
+                    Txt { text: modelData.name; Layout.fillWidth: true; color: modelData.enabled ? Theme.text : Theme.textDim }
+                    Toggle { checked: modelData.enabled; onToggled: win.app.extensionHost.setEnabled(modelData.id, checked) }
+                }
+            }
+            Rectangle { Layout.fillWidth: true; height: 1; color: Theme.separator; Layout.topMargin: 4; Layout.bottomMargin: 4 }
+            MenuRow { text: qsTr("Manage Extensions…"); glyph: "sliders"; onClicked: { extMenu.close(); win.app.openSettings("extensions") } }
+        }
+    }
+
     Popover {
         id: shareMenu
         parent: win.contentItem
@@ -741,6 +877,7 @@ ApplicationWindow {
             MenuRow { text: qsTr("History"); glyph: "clock"; shortcut: "Ctrl+H"; onClicked: { mainMenu.close(); win.openTab("oynix://history", {}) } }
             MenuRow { text: qsTr("Downloads"); glyph: "download"; shortcut: "Ctrl+J"; onClicked: { mainMenu.close(); downloadsPopover.open() } }
             MenuRow { text: qsTr("Privacy Report"); glyph: "shieldCheck"; onClicked: { mainMenu.close(); win.openPrivacyReport() } }
+            MenuRow { text: qsTr("Extensions"); glyph: "puzzle"; onClicked: { mainMenu.close(); win.app.openSettings("extensions") } }
             MenuRow { text: qsTr("Profiles"); glyph: "user"; onClicked: { mainMenu.close(); win.app.openSettings("profiles") } }
             MenuRow { text: qsTr("Developer Tools"); glyph: "code"; shortcut: "F12"; visible: Core.developerMode; enabled: win.currentView !== null; onClicked: { mainMenu.close(); win.openDevTools() } }
             Rectangle { Layout.fillWidth: true; height: 1; color: Theme.separator; Layout.topMargin: 4; Layout.bottomMargin: 4 }

@@ -160,17 +160,20 @@ Item {
             settings.focusOnNavigationEnabled: false
             settings.webRTCPublicInterfacesOnly: true
 
+            // Content scripts of Chrome/Firefox extensions talk to OyNIx over
+            // this channel; it is only reachable from the isolated world.
+            webChannel: tab.win.app.extChannel
+            webChannelWorld: WebEngineScript.ApplicationWorld
+
             function installScripts() {
-                var list = JSON.parse(Core.pageScripts())
-                for (var i = 0; i < list.length; i++) {
-                    var s = WebEngine.script()
-                    s.name = list[i].name
-                    s.sourceCode = list[i].source
-                    s.injectionPoint = list[i].main ? WebEngineScript.DocumentCreation : WebEngineScript.DocumentReady
-                    s.worldId = list[i].main ? WebEngineScript.MainWorld : WebEngineScript.ApplicationWorld
-                    s.runsOnSubFrames = list[i].main
-                    userScripts.insert(s)
-                }
+                userScripts.clear()
+                var host = tab.win.app.extensionHost
+                host.installScripts(view, JSON.parse(Core.pageScripts()))
+                if (!tab.win.privateMode) host.installScripts(view, JSON.parse(Core.extensionScripts(tab.model.uid)))
+            }
+            Connections {
+                target: Core
+                function onExtensionsRevisionChanged() { view.installScripts() }
             }
 
             Component.onCompleted: {
@@ -205,6 +208,7 @@ Item {
                     tab.certError = null
                 } else if (info.status === WebEngineView.LoadSucceededStatus) {
                     if (!tab.win.privateMode) Core.recordVisit(url.toString(), title)
+                    tab.win.app.extensionHost.tabEvent("tabs.onUpdated", [tab.model.uid, { status: "complete", url: url.toString(), title: title }, tab.win.app.extensionHost.tabInfo(tab.win, tab.index)])
                     tab.applySiteSettings()
                     tab.probeReader()
                     snapTimer.restart()

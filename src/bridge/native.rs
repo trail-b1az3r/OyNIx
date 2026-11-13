@@ -17,10 +17,10 @@ pub mod ffi {
         fn prepare_graphics(backend: i32);
         fn init_webengine();
         fn set_app_metadata(profile: &str);
-        fn configure_default_profile(storage_dir: &str, cache_dir: &str, user_agent: &str);
         unsafe fn attach_interceptor(profile: *mut QObject);
         fn active_graphics_api() -> String;
         fn qt_runtime_version() -> String;
+        fn webchannel_js() -> String;
     }
 }
 

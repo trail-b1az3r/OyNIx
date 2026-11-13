@@ -27,6 +27,7 @@ ApplicationWindow {
         { id: "search", icon: "search", title: qsTr("Search") },
         { id: "privacy", icon: "shield", title: qsTr("Privacy") },
         { id: "websites", icon: "globe", title: qsTr("Websites") },
+        { id: "extensions", icon: "puzzle", title: qsTr("Extensions") },
         { id: "profiles", icon: "user", title: qsTr("Profiles") },
         { id: "advanced", icon: "code", title: qsTr("Advanced") },
         { id: "about", icon: "star", title: qsTr("About") }
@@ -154,7 +155,7 @@ ApplicationWindow {
             width: scroll.availableWidth
             sourceComponent: ({
                 general: generalPage, appearance: appearancePage, tabs: tabsPage, search: searchPage,
-                privacy: privacyPage, websites: websitesPage, profiles: profilesPage, advanced: advancedPage, about: aboutPage
+                privacy: privacyPage, websites: websitesPage, extensions: extensionsPage, profiles: profilesPage, advanced: advancedPage, about: aboutPage
             })[sw.page] || generalPage
         }
     }
@@ -228,6 +229,27 @@ ApplicationWindow {
         onAccepted: Core.exportBookmarks(selectedFile.toString())
     }
     MessageDialog { id: importResult; buttons: MessageDialog.Ok }
+
+    // ── Extensions ───────────────────────────────────────────────────
+    property string extMessage: ""
+    property bool extMessageError: false
+    function installExt(u) {
+        var r = sw.app.extensionHost.install(u)
+        extMessageError = !r.ok
+        extMessage = r.ok ? qsTr("Installed “%1”").arg(r.extension.name) + (r.extension.warnings.length ? " — " + r.extension.warnings.join("; ") : "")
+                          : qsTr("Could not install: %1").arg(r.error)
+    }
+    FileDialog {
+        id: extFileDialog
+        title: qsTr("Install Extension")
+        nameFilters: [qsTr("Extensions (*.crx *.xpi *.zip *.json)"), qsTr("All files (*)")]
+        onAccepted: sw.installExt(selectedFile.toString())
+    }
+    FolderDialog {
+        id: extFolderDialog
+        title: qsTr("Load Unpacked Extension")
+        onAccepted: sw.installExt(selectedFolder.toString())
+    }
 
     Component {
         id: appearancePage
@@ -482,6 +504,140 @@ ApplicationWindow {
                     }
                 }
                 Txt { visible: Object.keys(sw.s.sites || {}).length === 0; text: qsTr("No websites have custom settings."); color: Theme.textDim; Layout.margins: 12 }
+            }
+        }
+    }
+
+    Component {
+        id: extensionsPage
+        Page {
+            Section {
+                title: qsTr("Install")
+                Row_ {
+                    label: qsTr("Chrome & Firefox extensions")
+                    hint: qsTr(".crx, .xpi or .zip files, or an unpacked folder. Manifest V2 and V3. Firefox extensions are adapted to Chromium automatically.")
+                    PushButton { text: qsTr("From File…"); onClicked: extFileDialog.open() }
+                    PushButton { text: qsTr("From Folder…"); onClicked: extFolderDialog.open() }
+                }
+                Divider {}
+                Row_ {
+                    label: qsTr("OyNIx extensions")
+                    hint: qsTr("A folder with oynix.json, content.js and content.css — no build step.")
+                    Rectangle {
+                        Layout.preferredWidth: 150; implicitHeight: 28; radius: 6; color: Theme.field; border.color: Theme.separator
+                        TextInput {
+                            id: newExtName
+                            anchors.fill: parent; anchors.margins: 6
+                            color: Theme.text; font.family: Theme.font; font.pixelSize: 12; clip: true
+                            Txt { visible: !newExtName.text; text: qsTr("Name"); color: Theme.textFaint; font.pixelSize: 12 }
+                        }
+                    }
+                    PushButton {
+                        text: qsTr("Create");
+                        enabled: newExtName.text.trim() !== ""
+                        onClicked: {
+                            var dir = Core.createExtension(newExtName.text.trim())
+                            if (dir) { Core.openExternally(dir); sw.extMessageError = false; sw.extMessage = qsTr("Created %1 — edit the files, then Reload").arg(dir); newExtName.text = "" }
+                        }
+                    }
+                }
+                Txt {
+                    visible: sw.extMessage !== ""
+                    Layout.fillWidth: true; Layout.margins: 12
+                    wrapMode: Text.WordWrap; elide: Text.ElideNone
+                    text: sw.extMessage
+                    color: sw.extMessageError ? Theme.danger : Theme.success
+                    font.pixelSize: 12
+                }
+                Txt {
+                    visible: !sw.app.extensionHost.supported
+                    Layout.fillWidth: true; Layout.margins: 12
+                    wrapMode: Text.WordWrap; elide: Text.ElideNone
+                    color: Theme.warning; font.pixelSize: 12
+                    text: qsTr("This Qt build has no extension support (Qt WebEngine ≥ 6.10 is required). Only OyNIx extensions will run.")
+                }
+            }
+            Section {
+                title: qsTr("Installed")
+                Repeater {
+                    model: { Core.extensionsRevision; sw.app.extensionHost.revision; return JSON.parse(Core.extensions()) }
+                    delegate: ColumnLayout {
+                        id: ext
+                        required property var modelData
+                        required property int index
+                        readonly property var host: sw.app.extensionHost
+                        readonly property string err: host.errorFor(modelData.id)
+                        Layout.fillWidth: true
+                        spacing: 0
+                        Divider { visible: ext.index > 0 }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.margins: 12
+                            spacing: 12
+                            Rectangle {
+                                Layout.preferredWidth: 36; Layout.preferredHeight: 36; radius: 8; color: Theme.field
+                                Image { anchors.centerIn: parent; width: 24; height: 24; sourceSize: Qt.size(48, 48); source: ext.modelData.icon ? "file://" + ext.modelData.icon : ""; visible: status === Image.Ready }
+                                Icon { anchors.centerIn: parent; visible: !ext.modelData.icon; name: "puzzle"; size: 20; color: Theme.textDim }
+                            }
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 2
+                                RowLayout {
+                                    spacing: 6
+                                    Txt { text: ext.modelData.name; font.weight: Font.DemiBold; Layout.maximumWidth: 240 }
+                                    Txt { text: ext.modelData.version; color: Theme.textDim; font.pixelSize: 11 }
+                                    Rectangle {
+                                        implicitWidth: kindText.implicitWidth + 12; implicitHeight: 18; radius: 9
+                                        color: ext.modelData.kind === "firefox" ? "#33ff9f0a" : ext.modelData.kind === "oynix" ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.2) : "#330a84ff"
+                                        Txt {
+                                            id: kindText; anchors.centerIn: parent; font.pixelSize: 10; font.weight: Font.DemiBold
+                                            text: ext.modelData.kind === "oynix" ? "OyNIx" : (ext.modelData.kind === "firefox" ? "Firefox" : "Chrome") + (ext.modelData.manifestVersion ? " · MV" + ext.modelData.manifestVersion : "")
+                                        }
+                                    }
+                                }
+                                Txt { visible: text !== ""; text: ext.modelData.description; color: Theme.textDim; font.pixelSize: 12; Layout.fillWidth: true; wrapMode: Text.WordWrap; elide: Text.ElideNone; maximumLineCount: 2 }
+                                Txt {
+                                    visible: ext.modelData.kind === "oynix"
+                                    text: qsTr("Runs on: %1").arg(ext.modelData.matches.join(", "))
+                                    color: Theme.textFaint; font.pixelSize: 11; Layout.fillWidth: true
+                                }
+                                Repeater {
+                                    model: ext.modelData.warnings
+                                    delegate: Txt { required property string modelData; text: "⚠ " + modelData; color: Theme.warning; font.pixelSize: 11; Layout.fillWidth: true; wrapMode: Text.WordWrap; elide: Text.ElideNone }
+                                }
+                                Txt { visible: ext.err !== ""; text: ext.err; color: Theme.danger; font.pixelSize: 11; Layout.fillWidth: true; wrapMode: Text.WordWrap; elide: Text.ElideNone }
+                            }
+                            IconButton {
+                                glyph: "sliders"; tip: qsTr("Options")
+                                visible: ext.modelData.optionsPage !== "" && ext.host.isLoaded(ext.modelData.id)
+                                onClicked: { var w = sw.app.windows[sw.app.windows.length - 1]; if (w) { w.openTab(ext.host.optionsUrl(ext.modelData), {}); w.raise(); w.requestActivate() } }
+                            }
+                            IconButton {
+                                glyph: "reload"; tip: qsTr("Reload from disk")
+                                visible: ext.modelData.kind === "oynix"
+                                onClicked: sw.installExt(ext.modelData.path)
+                            }
+                            IconButton { glyph: "folder"; tip: qsTr("Show Files"); onClicked: Core.openExternally(ext.modelData.path) }
+                            IconButton { glyph: "trash"; tip: qsTr("Remove"); onClicked: ext.host.remove(ext.modelData.id) }
+                            Toggle { checked: ext.modelData.enabled; onToggled: ext.host.setEnabled(ext.modelData.id, checked) }
+                        }
+                    }
+                }
+                Txt {
+                    visible: Core.extensionsRevision >= 0 && JSON.parse(Core.extensions()).length === 0
+                    text: qsTr("No extensions installed.")
+                    color: Theme.textDim; Layout.margins: 12
+                }
+            }
+            Section {
+                title: qsTr("OyNIx extension format")
+                Txt {
+                    Layout.fillWidth: true; Layout.margins: 12
+                    wrapMode: Text.WordWrap; elide: Text.ElideNone
+                    color: Theme.textDim; font.pixelSize: 12
+                    textFormat: Text.StyledText
+                    text: qsTr("<b>oynix.json</b> — name, version, description, matches (e.g. *://*.example.com/*), exclude, run_at (document_start | document_end | document_idle), world (isolated | main).<br><b>content.js</b> — JavaScript run on matching pages.<br><b>content.css</b> — styles injected into matching pages (may be empty).<br>All three files are required. New page loads pick up changes.")
+                }
             }
         }
     }

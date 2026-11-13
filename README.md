@@ -24,6 +24,7 @@ OyNIx's interaction design follows modern macOS-style browsers: quiet chrome, a 
 | **Start Page** | Native and instant: Favorites, Frequently Visited, Privacy Report, Reading List. |
 | **Website settings** | Per-site zoom, JavaScript, content blocker, pop-ups and reader default. |
 | **Profiles** | Fully isolated profiles (`--profile work`), each running as its own app. Private windows. |
+| **Extensions** | Chrome and Firefox WebExtensions (`.crx`, `.xpi`, `.zip` or unpacked folder; Manifest V2 and V3) plus lightweight **OyNIx extensions** (`oynix.json` + `content.js` + `content.css`). Toolbar buttons with popups and badges, options pages, per-extension enable/disable. |
 | **Power users** | Developer Tools, user scripts (`*.user.js` with Greasemonkey metadata) and user styles (`*.user.css`), custom user agent, Print to PDF, view source. |
 | **Windows** | Frameless window with built-in close/minimise/zoom controls (left or right), or the system title bar. Light, dark or auto theme with eight accent colours. |
 
@@ -66,24 +67,56 @@ You can also set `OYNIX_GPU=vulkan`. `oynix --gpu-info` prints the detected Vulk
 
 ## Building
 
-Ubuntu 24.04 / Debian 13 / Mint 22 (Qt 6.4 or newer):
+OyNIx needs **Qt 6.10 or newer** (6.11 recommended) for Qt WebEngine's extension manager. Most distributions don't ship that yet, so a script downloads Qt 6.11 into `./.qt`, and `build.rs` finds it automatically:
 
 ```bash
-./scripts/deps-ubuntu.sh        # Qt 6 + QML modules + Vulkan loader (+ rustup if needed)
+./scripts/deps-ubuntu.sh        # system libraries + rustup + Qt 6.11 into ./.qt
 cargo build --release
 ./target/release/oynix
 ```
 
-Arch Linux: `pacman -S rust qt6-base qt6-declarative qt6-webengine qt6-shadertools vulkan-icd-loader`.
+To use a different Qt (for example a distribution's Qt 6.10+), point `QMAKE` at it: `QMAKE=/usr/bin/qmake6 cargo build --release`. If the Qt it finds is older than 6.10, the build stops and tells you how to fix it.
 
-Install for the current user, or build a Debian package:
+Install for the current user, or build a Debian package. Both bundle the Qt runtime under `lib/oynix/qt`, so they don't depend on (or conflict with) the system Qt:
 
 ```bash
 ./scripts/install.sh            # → ~/.local/bin/oynix + desktop entry + icons
-./scripts/build-deb.sh          # → target/deb/oynix_<version>_<arch>.deb
+./scripts/build-deb.sh          # → target/deb/oynix_<version>_<arch>.deb  (~115 MB)
 ```
 
-Run the unit tests (omnibox, blocker, library, settings) with `cargo test`.
+Run the unit tests (omnibox, blocker, library, settings, extensions) with `cargo test`.
+
+## Extensions
+
+Install from **Settings › Extensions** (*From File…* / *From Folder…*), or from the command line:
+
+```bash
+oynix --install-extension ublock.crx --install-extension darkreader.xpi --install-extension ./my-ext
+oynix --list-extensions
+```
+
+| Kind | Accepted | What OyNIx does |
+|------|----------|-----------------|
+| **Chrome** | `.crx` (v2/v3), `.zip`, folder; MV2 and MV3 | Loads it through Qt WebEngine's extension manager. |
+| **Firefox** | `.xpi`, `.zip`, folder; MV2 and MV3 | Rewrites the manifest for Chromium: removes Gecko-only keys, moves MV3 host permissions, turns `background.scripts` into a service worker, maps `menus` to `contextMenus`. `browser.*` works with promises. |
+| **OyNIx** | folder or `.zip` with `oynix.json`, `content.js`, `content.css` (all required) | Injects the CSS and JS on pages matching `matches`, at `run_at`, in an isolated (default) or the main world. **New Extension** in Settings creates a ready-to-edit template. |
+
+`manifest_version` must be 2 or 3. Higher numbers don't exist yet; they're accepted and loaded as MV3 with a warning.
+
+Qt WebEngine 6.11 loads extensions and serves their pages, but doesn't run content scripts or provide `chrome.*` APIs. OyNIx supplies those itself:
+
+- **Content scripts** are injected by OyNIx, with match patterns, `run_at`, `all_frames` and CSS.
+- **Background** scripts and service workers run in a hidden extension page.
+- A **WebChannel-backed runtime** implements:
+  - `runtime`: id, getURL, getManifest, sendMessage, onMessage, onInstalled, onStartup, openOptionsPage, lastError
+  - `storage`: local, sync, session, onChanged (persisted per profile)
+  - `i18n`
+  - `tabs`: query, get, create, update, remove, reload, duplicate, sendMessage and the created/updated/activated/removed events
+  - `windows.getCurrent` and `windows.getAll`
+  - `action` / `browserAction`: badge and title, onClicked
+  - `alarms` and `permissions`
+
+**Not supported:** `webRequest` blocking, `declarativeNetRequest`, `scripting.executeScript`, `tabs.executeScript`, long-lived `runtime.connect` ports, devtools panels, native messaging and Firefox `sidebar_action`. Calling these throws or does nothing. Extensions built mainly on them, such as network-filtering ad blockers, won't work fully; OyNIx's built-in blocker covers that need. Extensions don't run in private windows.
 
 ## Usage
 
@@ -120,6 +153,7 @@ oynix --wayland | --x11
 | `~/.config/oynix/<profile>/filters/*.txt` | extra blocklists (Adblock Plus / uBlock / hosts syntax) |
 | `~/.config/oynix/<profile>/userscripts/` | `*.user.js`, `*.user.css` |
 | `~/.local/share/oynix/<profile>/` | history, bookmarks, reading list, session, cookies |
+| `~/.local/share/oynix/<profile>/extensions/` | installed extensions (+ `extensions.json` registry, `extension-storage/`) |
 | `~/.cache/oynix/<profile>/` | HTTP cache |
 
 ## License

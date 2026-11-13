@@ -11,25 +11,35 @@ on:
 permissions:
   contents: write
 
+env:
+  QT_VERSION: '6.11.3'
+
 jobs:
   linux:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Install Qt 6 and Vulkan
+      - name: System libraries
         run: |
           sudo apt-get update
-          sudo apt-get install -y qt6-base-dev qt6-base-dev-tools qt6-declarative-dev \
-            qt6-webengine-dev qt6-webengine-dev-tools qml6-module-qtwebengine \
-            qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts \
-            qml6-module-qtquick-window qml6-module-qtquick-shapes qml6-module-qtquick-dialogs \
-            qml6-module-qtquick-templates qml6-module-qtqml-workerscript qml6-module-qtcore libvulkan-dev
+          sudo apt-get install -y build-essential libgl1-mesa-dev libegl-dev libvulkan-dev \
+            libxkbcommon-dev libxkbcommon-x11-0 libxcb-cursor0 libnss3 libfontconfig1
+      - name: Install Qt ${{ env.QT_VERSION }}
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: linux
+          target: desktop
+          arch: linux_gcc_64
+          modules: qtwebengine qtwebchannel qtpositioning qtshadertools qtpdf
+          dir: ${{ github.workspace }}/.qt-ci
+          cache: true
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Test
-        run: cargo test --locked
-      - name: Build .deb
-        run: ./scripts/build-deb.sh
+        run: QMAKE="$QT_ROOT_DIR/bin/qmake" cargo test --locked
+      - name: Build .deb (bundles Qt)
+        run: QMAKE="$QT_ROOT_DIR/bin/qmake" ./scripts/build-deb.sh
       - uses: actions/upload-artifact@v4
         with:
           name: oynix-deb
