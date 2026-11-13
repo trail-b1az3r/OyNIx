@@ -1,9 +1,0 @@
-# Qt6 libraries are intentionally bundled for portability across
-# Ubuntu 22.04+, Mint 21+, and other Debian derivatives that may
-# not ship Qt 6.8.x in their repositories.
-oynix: embedded-library *
-oynix: library-not-linked-against-libc *
-oynix: hardening-no-fortify-functions *
-oynix: hardening-no-pie *
-oynix: shlib-without-versioned-soname *
-oynix: package-name-doesnt-match-sonames *

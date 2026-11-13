@@ -1,0 +1,581 @@
+import QtQuick
+import QtQuick.Controls.Basic
+import QtQuick.Layouts
+import QtQuick.Window
+import QtQuick.Dialogs
+import OyNIx
+
+// Preferences window with a row of page icons along the top.
+ApplicationWindow {
+    id: sw
+    property var app
+    property string page: "general"
+    width: 760
+    height: 600
+    minimumWidth: 620
+    minimumHeight: 440
+    title: qsTr("Settings")
+    color: Theme.window
+
+    function set(key, value) { Core.setSetting(key, JSON.stringify(value)) }
+    readonly property var s: JSON.parse(Core.settingsJson)
+
+    readonly property var pages: [
+        { id: "general", icon: "sliders", title: qsTr("General") },
+        { id: "appearance", icon: "sun", title: qsTr("Appearance") },
+        { id: "tabs", icon: "tabs", title: qsTr("Tabs") },
+        { id: "search", icon: "search", title: qsTr("Search") },
+        { id: "privacy", icon: "shield", title: qsTr("Privacy") },
+        { id: "websites", icon: "globe", title: qsTr("Websites") },
+        { id: "profiles", icon: "user", title: qsTr("Profiles") },
+        { id: "advanced", icon: "code", title: qsTr("Advanced") },
+        { id: "about", icon: "star", title: qsTr("About") }
+    ]
+
+    Shortcut { sequences: ["Escape", "Ctrl+W"]; onActivated: sw.close() }
+
+    header: Rectangle {
+        height: 70
+        color: Theme.toolbar
+        Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.separator }
+        Row {
+            anchors.centerIn: parent
+            spacing: 2
+            Repeater {
+                model: sw.pages
+                delegate: AbstractButton {
+                    required property var modelData
+                    width: 68; height: 56
+                    hoverEnabled: true
+                    background: Rectangle { radius: 8; color: sw.page === modelData.id ? Theme.pressed : (parent.hovered ? Theme.hover : "transparent") }
+                    contentItem: Column {
+                        spacing: 4
+                        topPadding: 6
+                        Icon { anchors.horizontalCenter: parent.horizontalCenter; name: modelData.icon; size: 20; color: sw.page === modelData.id ? Theme.accent : Theme.textDim }
+                        Txt { anchors.horizontalCenter: parent.horizontalCenter; text: modelData.title; font.pixelSize: 11; color: sw.page === modelData.id ? Theme.text : Theme.textDim }
+                    }
+                    onClicked: sw.page = modelData.id
+                }
+            }
+        }
+    }
+
+    // ── Reusable rows ────────────────────────────────────────────────
+    component Section: ColumnLayout {
+        property string title: ""
+        default property alias rows: body.data
+        Layout.fillWidth: true
+        spacing: 6
+        Txt { text: parent.title; font.weight: Font.DemiBold; color: Theme.textDim; font.pixelSize: 12; visible: text !== ""; Layout.leftMargin: 4 }
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: body.implicitHeight + 8
+            radius: 10
+            color: Theme.card
+            border.color: Theme.separator
+            ColumnLayout { id: body; anchors.fill: parent; anchors.margins: 4; spacing: 0 }
+        }
+    }
+    component Row_: RowLayout {
+        property string label: ""
+        property string hint: ""
+        Layout.fillWidth: true
+        Layout.minimumHeight: hint ? 50 : 38
+        Layout.leftMargin: 12
+        Layout.rightMargin: 12
+        spacing: 12
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 1
+            Txt { text: parent.parent.label; Layout.fillWidth: true }
+            Txt { visible: text !== ""; text: parent.parent.hint; color: Theme.textDim; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true; elide: Text.ElideNone }
+        }
+    }
+    component SwitchRow: Row_ {
+        id: sr
+        property string key: ""
+        Toggle { checked: sw.s[sr.key] === true; onToggled: sw.set(sr.key, checked) }
+    }
+    component ChoiceRow: Row_ {
+        id: cr
+        property string key: ""
+        property var options: []   // [{v, t}]
+        ComboBox {
+            id: combo
+            Layout.preferredWidth: 220
+            implicitHeight: 28
+            model: cr.options
+            textRole: "t"
+            valueRole: "v"
+            currentIndex: { for (var i = 0; i < cr.options.length; i++) if (cr.options[i].v === sw.s[cr.key]) return i; return 0 }
+            onActivated: function (i) { sw.set(cr.key, cr.options[i].v) }
+            font.pixelSize: 12
+            background: Rectangle { radius: 6; color: Theme.field; border.color: Theme.separator }
+            contentItem: Txt { leftPadding: 10; text: combo.displayText; font.pixelSize: 12 }
+            popup.background: Rectangle { radius: 8; color: Theme.popover; border.color: Theme.separator }
+            delegate: ItemDelegate {
+                required property var modelData
+                required property int index
+                width: combo.width
+                height: 28
+                highlighted: combo.highlightedIndex === index
+                background: Rectangle { radius: 5; color: parent.highlighted ? Theme.accent : "transparent" }
+                contentItem: Txt { text: modelData.t; color: parent.highlighted ? "white" : Theme.text; font.pixelSize: 12 }
+            }
+        }
+    }
+    component TextRow: Row_ {
+        id: tr
+        property string key: ""
+        property string placeholder: ""
+        Rectangle {
+            Layout.preferredWidth: 260; implicitHeight: 28; radius: 6; color: Theme.field; border.color: Theme.separator
+            TextInput {
+                id: ti
+                anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8
+                verticalAlignment: TextInput.AlignVCenter
+                color: Theme.text; font.family: Theme.font; font.pixelSize: 12; clip: true
+                text: sw.s[tr.key] || ""
+                onEditingFinished: if (text !== (sw.s[tr.key] || "")) sw.set(tr.key, text)
+                Txt { visible: !ti.text; text: tr.placeholder; color: Theme.textFaint; anchors.verticalCenter: parent.verticalCenter; font.pixelSize: 12 }
+            }
+        }
+    }
+    component Divider: Rectangle { Layout.fillWidth: true; Layout.leftMargin: 12; Layout.rightMargin: 12; height: 1; color: Theme.separator }
+
+    // ── Pages ────────────────────────────────────────────────────────
+    ScrollView {
+        id: scroll
+        anchors.fill: parent
+        contentWidth: availableWidth
+        clip: true
+
+        Loader {
+            width: scroll.availableWidth
+            sourceComponent: ({
+                general: generalPage, appearance: appearancePage, tabs: tabsPage, search: searchPage,
+                privacy: privacyPage, websites: websitesPage, profiles: profilesPage, advanced: advancedPage, about: aboutPage
+            })[sw.page] || generalPage
+        }
+    }
+
+    component Page: ColumnLayout {
+        default property alias content: inner.data
+        width: parent ? parent.width : 0
+        ColumnLayout {
+            id: inner
+            Layout.fillWidth: true
+            Layout.maximumWidth: 600
+            Layout.alignment: Qt.AlignHCenter
+            Layout.topMargin: 22
+            Layout.bottomMargin: 30
+            Layout.leftMargin: 24
+            Layout.rightMargin: 24
+            spacing: 20
+        }
+    }
+
+    Component {
+        id: generalPage
+        Page {
+            Section {
+                title: qsTr("Startup")
+                ChoiceRow { label: qsTr("OyNIx opens with"); key: "onLaunch"; options: [{ v: "restore", t: qsTr("All windows from last session") }, { v: "startpage", t: qsTr("A new window") }, { v: "homepage", t: qsTr("Homepage") }] }
+                Divider {}
+                ChoiceRow { label: qsTr("New tabs open with"); key: "newTabPage"; options: [{ v: "startpage", t: qsTr("Start Page") }, { v: "homepage", t: qsTr("Homepage") }, { v: "blank", t: qsTr("Empty Page") }] }
+                Divider {}
+                TextRow { label: qsTr("Homepage"); key: "homepage"; placeholder: "https://" }
+            }
+            Section {
+                title: qsTr("Downloads")
+                TextRow { label: qsTr("Save downloaded files to"); key: "downloadDir" }
+            }
+            Section {
+                title: qsTr("Default Browser")
+                Row_ {
+                    label: qsTr("Make OyNIx your default web browser")
+                    PushButton { text: qsTr("Set as Default"); onClicked: text = Core.makeDefaultBrowser() ? qsTr("Done") : qsTr("Failed") }
+                }
+            }
+            Section {
+                title: qsTr("Import & Export")
+                Row_ {
+                    label: qsTr("Bookmarks")
+                    hint: qsTr("HTML bookmark files from Firefox, Chrome, Safari and others")
+                    PushButton { text: qsTr("Import…"); onClicked: importDialog.open() }
+                    PushButton { text: qsTr("Export…"); onClicked: exportDialog.open() }
+                }
+            }
+        }
+    }
+
+    FileDialog {
+        id: importDialog
+        title: qsTr("Import Bookmarks")
+        nameFilters: [qsTr("Bookmark files (*.html *.htm)")]
+        onAccepted: {
+            var n = Core.importBookmarks(selectedFile.toString())
+            importResult.text = n < 0 ? qsTr("Could not read that file.") : (n === 1 ? qsTr("Imported 1 bookmark.") : qsTr("Imported %1 bookmarks.").arg(n))
+            importResult.open()
+        }
+    }
+    FileDialog {
+        id: exportDialog
+        title: qsTr("Export Bookmarks")
+        fileMode: FileDialog.SaveFile
+        defaultSuffix: "html"
+        nameFilters: [qsTr("Bookmark files (*.html)")]
+        onAccepted: Core.exportBookmarks(selectedFile.toString())
+    }
+    MessageDialog { id: importResult; buttons: MessageDialog.Ok }
+
+    Component {
+        id: appearancePage
+        Page {
+            Section {
+                title: qsTr("Theme")
+                Row_ {
+                    label: qsTr("Appearance")
+                    Repeater {
+                        model: [{ v: "auto", t: qsTr("Auto") }, { v: "light", t: qsTr("Light") }, { v: "dark", t: qsTr("Dark") }]
+                        delegate: AbstractButton {
+                            required property var modelData
+                            implicitWidth: 72; implicitHeight: 62
+                            onClicked: sw.set("theme", modelData.v)
+                            contentItem: Column {
+                                spacing: 5
+                                Rectangle {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    width: 56; height: 38; radius: 7
+                                    border.width: Core.theme === modelData.v ? 2.5 : 1
+                                    border.color: Core.theme === modelData.v ? Theme.accent : Theme.separator
+                                    gradient: Gradient {
+                                        orientation: Gradient.Horizontal
+                                        GradientStop { position: 0; color: modelData.v === "dark" ? "#2a2a2d" : "#f3f3f4" }
+                                        GradientStop { position: 0.5; color: modelData.v === "dark" ? "#2a2a2d" : "#f3f3f4" }
+                                        GradientStop { position: 0.51; color: modelData.v === "light" ? "#f3f3f4" : "#2a2a2d" }
+                                        GradientStop { position: 1; color: modelData.v === "light" ? "#f3f3f4" : "#2a2a2d" }
+                                    }
+                                }
+                                Txt { anchors.horizontalCenter: parent.horizontalCenter; text: modelData.t; font.pixelSize: 12 }
+                            }
+                        }
+                    }
+                }
+                Divider {}
+                Row_ {
+                    label: qsTr("Accent colour")
+                    Repeater {
+                        model: ["#2f7cf6", "#8e5cf7", "#e8457a", "#f2562e", "#f5a623", "#34c759", "#14b8a6", "#8e8e93"]
+                        delegate: Rectangle {
+                            required property string modelData
+                            width: 20; height: 20; radius: 10
+                            color: modelData
+                            border.width: Core.accent === modelData ? 2 : 0
+                            border.color: Theme.text
+                            TapHandler { onTapped: sw.set("accent", modelData) }
+                        }
+                    }
+                }
+            }
+            Section {
+                title: qsTr("Toolbar")
+                ChoiceRow { label: qsTr("Window controls"); key: "windowControlsSide"; options: [{ v: "left", t: qsTr("Left") }, { v: "right", t: qsTr("Right") }] }
+                Divider {}
+                SwitchRow { label: qsTr("Use system title bar"); hint: qsTr("Let the window manager draw the window frame."); key: "useSystemTitleBar" }
+                Divider {}
+                SwitchRow { label: qsTr("Show Favorites bar"); key: "showFavoritesBar" }
+                Divider {}
+                SwitchRow { label: qsTr("Show full website address"); key: "showFullUrl" }
+            }
+            Section {
+                title: qsTr("Start Page")
+                SwitchRow { label: qsTr("Frequently Visited"); key: "startPageShowRecent" }
+                Divider {}
+                SwitchRow { label: qsTr("Privacy Report"); key: "startPageShowPrivacyReport" }
+                Divider {}
+                SwitchRow { label: qsTr("Reading List"); key: "startPageShowReadingList" }
+                Divider {}
+                ChoiceRow { label: qsTr("Background"); key: "startPageBackground"; options: [{ v: "default", t: qsTr("Soft gradient") }, { v: "plain", t: qsTr("Plain") }] }
+            }
+            Section {
+                title: qsTr("Page Zoom")
+                ChoiceRow { label: qsTr("Default zoom"); key: "defaultZoom"; options: [0.75, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5].map(function (z) { return { v: z, t: Math.round(z * 100) + "%" } }) }
+            }
+        }
+    }
+
+    Component {
+        id: tabsPage
+        Page {
+            Section {
+                title: qsTr("Tab Layout")
+                Row_ {
+                    label: qsTr("Tabs")
+                    Repeater {
+                        model: [{ v: "standard", t: qsTr("Standard"), i: "tabs" }, { v: "compact", t: qsTr("Compact"), i: "minus" }, { v: "vertical", t: qsTr("Vertical"), i: "sidebar" }]
+                        delegate: AbstractButton {
+                            required property var modelData
+                            implicitWidth: 76; implicitHeight: 62
+                            onClicked: sw.set("tabLayout", modelData.v)
+                            contentItem: Column {
+                                spacing: 5
+                                Rectangle {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    width: 56; height: 38; radius: 7
+                                    color: Theme.field
+                                    border.width: Core.tabLayout === modelData.v ? 2.5 : 1
+                                    border.color: Core.tabLayout === modelData.v ? Theme.accent : Theme.separator
+                                    Icon { anchors.centerIn: parent; name: modelData.i; size: 20; color: Theme.textDim }
+                                }
+                                Txt { anchors.horizontalCenter: parent.horizontalCenter; text: modelData.t; font.pixelSize: 12 }
+                            }
+                        }
+                    }
+                }
+            }
+            Section {
+                title: qsTr("Behaviour")
+                SwitchRow { label: qsTr("Open links in background"); hint: qsTr("Middle-click and Ctrl-click open tabs without switching to them."); key: "openLinksInBackground" }
+                Divider {}
+                SwitchRow { label: qsTr("Close window when closing last tab"); key: "closeWindowWithLastTab" }
+                Divider {}
+                SwitchRow { label: qsTr("Show tab previews on hover"); key: "tabHoverPreviews" }
+            }
+            Section {
+                title: qsTr("Memory")
+                SwitchRow { label: qsTr("Unload inactive tabs"); hint: qsTr("Free memory used by tabs you haven’t looked at. They reload when selected."); key: "suspendInactiveTabs" }
+                Divider {}
+                ChoiceRow { label: qsTr("Unload after"); key: "suspendAfterMinutes"; options: [5, 15, 30, 60, 120, 240].map(function (m) { return { v: m, t: m < 60 ? qsTr("%1 minutes").arg(m) : (m === 60 ? qsTr("1 hour") : qsTr("%1 hours").arg(m / 60)) } }) }
+                Divider {}
+                SwitchRow { label: qsTr("Low Power Mode"); hint: qsTr("Freeze background tabs and turn off animations to save battery."); key: "lowPowerMode" }
+            }
+        }
+    }
+
+    Component {
+        id: searchPage
+        Page {
+            Section {
+                title: qsTr("Search Engine")
+                ChoiceRow { label: qsTr("Default search engine"); key: "searchEngine"; options: JSON.parse(Core.searchEngines()).map(function (e) { return { v: e.id, t: e.name } }) }
+                Divider {}
+                SwitchRow { label: qsTr("Search suggestions"); hint: qsTr("Sends what you type to the search engine. Never in private windows."); key: "searchSuggestions" }
+                Divider {}
+                SwitchRow { label: qsTr("!Bang shortcuts"); hint: qsTr("Type “!w rust” to search Wikipedia, “!gh” for GitHub and so on."); key: "bangsEnabled" }
+            }
+            Section {
+                title: qsTr("Available !bangs")
+                Flow {
+                    Layout.fillWidth: true
+                    Layout.margins: 10
+                    spacing: 6
+                    Repeater {
+                        model: JSON.parse(Core.bangs())
+                        delegate: Rectangle {
+                            required property var modelData
+                            width: bt.implicitWidth + 14; height: 24; radius: 12; color: Theme.field
+                            Txt { id: bt; anchors.centerIn: parent; text: "!" + modelData.key + "  " + modelData.name; font.pixelSize: 12 }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Component {
+        id: privacyPage
+        Page {
+            property var report: { Core.totalBlocked; return JSON.parse(Core.privacyReport()) }
+            Section {
+                title: qsTr("Privacy Report")
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.margins: 14
+                    spacing: 24
+                    Repeater {
+                        model: [{ n: report.blocked, t: qsTr("Blocked") }, { n: report.trackers, t: qsTr("Trackers") }, { n: report.ads, t: qsTr("Ads") }]
+                        delegate: ColumnLayout {
+                            required property var modelData
+                            spacing: 0
+                            Txt { text: Number(modelData.n).toLocaleString(Qt.locale(), "f", 0); font.pixelSize: 26; font.weight: Font.Bold; color: Theme.accent }
+                            Txt { text: modelData.t; color: Theme.textDim; font.pixelSize: 12 }
+                        }
+                    }
+                    Item { Layout.fillWidth: true }
+                    PushButton { text: qsTr("Reset"); onClicked: Core.resetPrivacyStats() }
+                }
+                Divider { visible: report.top.length > 0 }
+                Repeater {
+                    model: report.top
+                    delegate: Row_ {
+                        required property var modelData
+                        label: modelData.domain
+                        Txt { text: (modelData.sites === 1 ? qsTr("on 1 site") : qsTr("on %1 sites").arg(modelData.sites)); color: Theme.textDim; font.pixelSize: 12 }
+                    }
+                }
+            }
+            Section {
+                title: qsTr("Content Blocker")
+                SwitchRow { label: qsTr("Block trackers and ads"); hint: qsTr("%1 rules active · %2 custom filter lists").arg(report.rules).arg(report.lists); key: "contentBlocker" }
+                Divider {}
+                SwitchRow { label: qsTr("Block trackers"); key: "blockTrackers" }
+                Divider {}
+                SwitchRow { label: qsTr("Block ads"); key: "blockAds" }
+                Divider {}
+                Row_ {
+                    label: qsTr("Custom filter lists")
+                    hint: qsTr("Drop EasyList / uBlock / hosts-format .txt files into the filters folder, then reload.")
+                    PushButton { text: qsTr("Open Folder"); onClicked: Core.openExternally(Core.configPath("filters")) }
+                    PushButton { text: qsTr("Reload"); onClicked: Core.reloadFilterLists() }
+                }
+            }
+            Section {
+                title: qsTr("Tracking Protection")
+                SwitchRow { label: qsTr("Remove tracking parameters from links"); hint: qsTr("Strips utm_*, fbclid, gclid and similar."); key: "stripTrackingParams" }
+                Divider {}
+                SwitchRow { label: qsTr("Block third-party cookies"); key: "blockThirdPartyCookies" }
+                Divider {}
+                SwitchRow { label: qsTr("Fingerprinting protection"); key: "fingerprintProtection" }
+                Divider {}
+                SwitchRow { label: qsTr("Send Global Privacy Control"); key: "sendGpc" }
+                Divider {}
+                SwitchRow { label: qsTr("Send “Do Not Track”"); key: "sendDoNotTrack" }
+                Divider {}
+                SwitchRow { label: qsTr("Upgrade typed addresses to HTTPS"); key: "httpsUpgrade" }
+            }
+            Section {
+                title: qsTr("Website Data")
+                Row_ {
+                    label: qsTr("Cache")
+                    PushButton { text: qsTr("Clear Cache"); onClicked: { sw.app.defaultProfile.clearHttpCache(); text = qsTr("Cleared") } }
+                }
+                Divider {}
+                Row_ {
+                    label: qsTr("History")
+                    PushButton { text: qsTr("Clear All History"); destructive: true; onClicked: { Core.clearHistory(0); text = qsTr("Cleared") } }
+                }
+            }
+        }
+    }
+
+    Component {
+        id: websitesPage
+        Page {
+            Section {
+                title: qsTr("Defaults for all websites")
+                SwitchRow { label: qsTr("JavaScript"); key: "javascript" }
+                Divider {}
+                SwitchRow { label: qsTr("Autoplay media with sound"); key: "autoplayMedia" }
+                Divider {}
+                SwitchRow { label: qsTr("Smooth scrolling"); key: "smoothScrolling" }
+            }
+            Section {
+                title: qsTr("Customised websites")
+                Repeater {
+                    model: Object.keys(sw.s.sites || {})
+                    delegate: Row_ {
+                        required property string modelData
+                        label: modelData
+                        hint: JSON.stringify(sw.s.sites[modelData]).replace(/[{}"]/g, "").replace(/,/g, ", ").replace(/:/g, ": ")
+                        IconButton { glyph: "trash"; onClicked: ["zoom", "blocker", "javascript", "popups", "reader"].forEach(function (k) { Core.setSiteSetting(modelData, k, "null") }) }
+                    }
+                }
+                Txt { visible: Object.keys(sw.s.sites || {}).length === 0; text: qsTr("No websites have custom settings."); color: Theme.textDim; Layout.margins: 12 }
+            }
+        }
+    }
+
+    Component {
+        id: profilesPage
+        Page {
+            Section {
+                title: qsTr("Profiles")
+                Txt {
+                    Layout.fillWidth: true; Layout.margins: 12
+                    wrapMode: Text.WordWrap; color: Theme.textDim; font.pixelSize: 12
+                    text: qsTr("Each profile has its own history, bookmarks, cookies, settings and website data, and runs as a separate app window. Current profile: %1").arg(Core.profile)
+                }
+                Repeater {
+                    model: JSON.parse(Core.profiles())
+                    delegate: Row_ {
+                        required property string modelData
+                        label: modelData + (modelData === Core.profile ? "  " + qsTr("(this window)") : "")
+                        PushButton { text: qsTr("Open"); enabled: modelData !== Core.profile; onClicked: Core.launchProfile(modelData, false) }
+                    }
+                }
+                Divider {}
+                Row_ {
+                    label: qsTr("New profile")
+                    Rectangle {
+                        Layout.preferredWidth: 180; implicitHeight: 28; radius: 6; color: Theme.field; border.color: Theme.separator
+                        TextInput { id: pname; anchors.fill: parent; anchors.margins: 6; color: Theme.text; font.pixelSize: 12; clip: true }
+                    }
+                    PushButton { text: qsTr("Create & Open"); primary: true; enabled: pname.text.trim() !== ""; onClicked: { Core.launchProfile(pname.text.trim(), false); pname.text = "" } }
+                }
+            }
+        }
+    }
+
+    Component {
+        id: advancedPage
+        Page {
+            Section {
+                title: qsTr("Developer")
+                SwitchRow { label: qsTr("Show developer tools"); hint: qsTr("Adds Inspect Element and the Developer Tools menu item (F12)."); key: "developerMode" }
+                Divider {}
+                TextRow { label: qsTr("Custom user agent"); key: "userAgent"; placeholder: qsTr("Default") }
+            }
+            Section {
+                title: qsTr("User Scripts & Styles")
+                Row_ {
+                    label: qsTr("Scripts folder")
+                    hint: qsTr("Files ending in .user.js (Greasemonkey metadata supported) or .user.css are injected into matching pages.")
+                    PushButton { text: qsTr("Open Folder"); onClicked: Core.openExternally(Core.configPath("userscripts")) }
+                }
+            }
+            Section {
+                title: qsTr("Rendering")
+                Row_ { label: qsTr("Graphics"); Txt { text: Core.graphics; color: Theme.textDim; font.pixelSize: 12 } }
+                Divider {}
+                Row_ { label: qsTr("Choose with"); Txt { text: "oynix --gpu vulkan|gles|opengl|software"; color: Theme.textDim; font.family: "monospace"; font.pixelSize: 12 } }
+            }
+            Section {
+                Row_ {
+                    label: qsTr("Reset all settings")
+                    PushButton { text: qsTr("Reset…"); destructive: true; onClicked: Core.resetSettings() }
+                }
+            }
+        }
+    }
+
+    Component {
+        id: aboutPage
+        Page {
+            ColumnLayout {
+                Layout.alignment: Qt.AlignHCenter
+                spacing: 10
+                Image { Layout.alignment: Qt.AlignHCenter; source: "qrc:/qt/qml/OyNIx/assets/icon.png"; sourceSize: Qt.size(96, 96); width: 96; height: 96 }
+                Txt { Layout.alignment: Qt.AlignHCenter; text: "OyNIx"; font.pixelSize: 26; font.weight: Font.Bold }
+                Txt { Layout.alignment: Qt.AlignHCenter; text: qsTr("Version %1").arg(Core.version); color: Theme.textDim }
+                Txt {
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.maximumWidth: 460
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.WordWrap
+                    color: Theme.textDim
+                    text: qsTr("A fast, private browser written in Rust and QML. Zero telemetry, built-in tracker and ad blocking.")
+                }
+            }
+            Section {
+                Row_ { label: qsTr("Graphics"); Txt { text: Core.graphics; color: Theme.textDim; font.pixelSize: 12 } }
+                Divider {}
+                Row_ { label: qsTr("Qt"); Txt { text: Core.qtVersion; color: Theme.textDim } }
+                Divider {}
+                Row_ { label: qsTr("Profile"); Txt { text: Core.profile; color: Theme.textDim } }
+                Divider {}
+                Row_ { label: qsTr("Configuration"); Txt { text: Core.configPath("config"); color: Theme.textDim; font.pixelSize: 12 } }
+            }
+        }
+    }
+}

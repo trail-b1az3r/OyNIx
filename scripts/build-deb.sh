@@ -1,119 +1,33 @@
-#!/bin/bash
-# ============================================================
-#  OyNIx Browser — Build apt package via dpkg-buildpackage
-#
-#  Produces a proper Debian/Ubuntu/Mint .deb using the debian/
-#  directory (debhelper + cmake).  When QT_PREFIX is set, Qt6
-#  libraries are bundled for portability.
-#
-#  Usage:
-#    ./scripts/build-deb.sh [version]
-#
-#  Environment:
-#    QT_PREFIX   — Qt6 install prefix (bundles Qt if set)
-#    QT_ROOT_DIR — alternative (set by install-qt-action)
-#    Qt6_DIR     — alternative (cmake-style)
-#    JOBS        — parallel build jobs (default: nproc)
-# ============================================================
+#!/usr/bin/env bash
+# Build a .deb that depends on the distribution's Qt 6 packages.
 set -euo pipefail
-
-VERSION="${1:-3.1.0}"
+cd "$(dirname "$0")/.."
+VERSION="${1:-$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)}"
 VERSION="${VERSION#v}"
-VERSION=$(echo "$VERSION" | tr -c '[:alnum:].~+\n-' '.' | sed 's/\.$//')
-VERSION="${VERSION:-3.1.0}"
-JOBS="${JOBS:-$(nproc)}"
-
-echo "=== OyNIx apt package builder v${VERSION} ==="
-
-# ── Prerequisites ────────────────────────────────────────────
-for cmd in cmake dpkg-buildpackage debhelper; do
-    case "$cmd" in
-        debhelper)
-            # debhelper is a package, not a command — check dh
-            if ! command -v dh &>/dev/null; then
-                echo "ERROR: debhelper not found — install with:" >&2
-                echo "  sudo apt install debhelper devscripts" >&2
-                exit 1
-            fi
-            ;;
-        *)
-            if ! command -v "$cmd" &>/dev/null; then
-                echo "ERROR: $cmd not found" >&2
-                exit 1
-            fi
-            ;;
-    esac
-done
-
-# ── Resolve Qt prefix ───────────────────────────────────────
-if [ -z "${QT_PREFIX:-}" ]; then
-    if [ -n "${QT_ROOT_DIR:-}" ] && [ -d "${QT_ROOT_DIR}/lib" ]; then
-        export QT_PREFIX="${QT_ROOT_DIR}"
-    elif [ -n "${Qt6_DIR:-}" ]; then
-        _candidate="$(cd "${Qt6_DIR}/../../.." 2>/dev/null && pwd)"
-        if [ -d "${_candidate}/lib" ]; then
-            export QT_PREFIX="${_candidate}"
-        fi
-    fi
-fi
-
-if [ -n "${QT_PREFIX:-}" ]; then
-    echo "  Qt prefix: ${QT_PREFIX} (will bundle)"
-    export QT_PREFIX
-else
-    echo "  Qt prefix: system (no bundling)"
-fi
-echo "  Jobs:      ${JOBS}"
-echo ""
-
-# ── Update debian/changelog with requested version ──────────
-TIMESTAMP=$(date -R)
-cat > debian/changelog <<CHLOG
-oynix (${VERSION}) unstable; urgency=medium
-
-  * Package build ${VERSION}
-
- -- OyNIx Project <oynix@users.noreply.github.com>  ${TIMESTAMP}
-CHLOG
-
-# ── Build with dpkg-buildpackage ─────────────────────────────
-echo "Building apt package with dpkg-buildpackage..."
-echo ""
-
-export DEB_BUILD_OPTIONS="parallel=${JOBS}"
-
-dpkg-buildpackage -b -us -uc -j"${JOBS}"
-
-# ── Collect output ───────────────────────────────────────────
-# dpkg-buildpackage places .deb in parent directory
-DEB=$(ls ../oynix_${VERSION}_*.deb 2>/dev/null | head -1)
-
-if [ -z "$DEB" ]; then
-    echo "ERROR: No .deb produced" >&2
-    exit 1
-fi
-
-# Move to project root for convenience
-OUTPUT="oynix-${VERSION}-amd64.deb"
-mv "$DEB" "./${OUTPUT}"
-
-# Clean up other dpkg-buildpackage artifacts from parent dir
-rm -f ../oynix_${VERSION}_*.buildinfo ../oynix_${VERSION}_*.changes 2>/dev/null || true
-
-# ── Verify ───────────────────────────────────────────────────
-echo ""
-echo "=== Package info ==="
-dpkg-deb --info "${OUTPUT}" 2>/dev/null \
-    | grep -E '^\s*(Package|Version|Architecture|Installed-Size|Depends|Section)' || true
-echo ""
-echo "=== Top-level contents ==="
-dpkg-deb --contents "${OUTPUT}" 2>/dev/null | head -25 || true
-echo "  ..."
-
-DEB_SIZE=$(du -sh "${OUTPUT}" | awk '{print $1}')
-echo ""
-echo "=== Done ==="
-echo "  File: ${OUTPUT} (${DEB_SIZE})"
-echo "  Install:   sudo apt install ./${OUTPUT}"
-echo "  Verify:    dpkg-deb --info ${OUTPUT}"
-echo "  Contents:  dpkg-deb --contents ${OUTPUT}"
+ARCH="$(dpkg --print-architecture)"
+ROOT="target/deb/oynix_${VERSION}_${ARCH}"
+cargo build --release
+rm -rf "$ROOT"
+PREFIX="$ROOT/usr"
+install -Dm755 target/release/oynix "$PREFIX/bin/oynix"
+install -Dm644 packaging/oynix.desktop "$PREFIX/share/applications/oynix.desktop"
+install -Dm644 assets/icon.svg "$PREFIX/share/icons/hicolor/scalable/apps/oynix.svg"
+for s in 48 64 128 256; do install -Dm644 "assets/icon-$s.png" "$PREFIX/share/icons/hicolor/${s}x${s}/apps/oynix.png"; done
+install -Dm644 LICENSE "$PREFIX/share/doc/oynix/copyright"
+mkdir -p "$ROOT/DEBIAN"
+cat > "$ROOT/DEBIAN/control" <<CTRL
+Package: oynix
+Version: $VERSION
+Section: web
+Priority: optional
+Architecture: $ARCH
+Maintainer: OyNIx contributors
+Depends: libqt6webenginequick6, libqt6quick6, libqt6gui6, qml6-module-qtwebengine, qml6-module-qtquick, qml6-module-qtquick-controls, qml6-module-qtquick-layouts, qml6-module-qtquick-window, qml6-module-qtquick-shapes, qml6-module-qtquick-dialogs, qml6-module-qtquick-templates, qml6-module-qtqml-workerscript, qml6-module-qtcore, libvulkan1
+Provides: www-browser
+Description: Fast, private web browser (Rust + QML)
+ OyNIx is a native desktop browser with a built-in tracker and ad blocker,
+ vertical or compact tabs, a tab overview, reader view, focus mode and
+ profiles. Rendering uses Qt Quick on Vulkan 1.2/1.3 or OpenGL ES.
+CTRL
+dpkg-deb --build --root-owner-group "$ROOT"
+echo "Built $ROOT.deb"
