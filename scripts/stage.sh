@@ -15,12 +15,18 @@ QMAKE="$(realpath "$QMAKE")"
 # must not replace the developer build in target/release.
 export CARGO_TARGET_DIR="$PWD/target/package"
 OYNIX_RPATH='$ORIGIN/qt/lib' QMAKE="$QMAKE" cargo build --release
-case "$ROOT" in */target/*) rm -rf "$ROOT" ;; esac   # never wipe a makepkg $pkgdir
+
+# Always start with a clean staging tree. ROOT may be relative (target/deb/…)
+# or absolute; match both forms without ever deleting a makepkg $pkgdir.
+case "$ROOT" in
+  target/*|*/target/*) rm -rf -- "$ROOT" ;;
+esac
+
 APP="$ROOT/usr/lib/oynix"
 install -Dm755 "$CARGO_TARGET_DIR/release/oynix" "$APP/oynix"
 EXTRA_ELF="$APP/oynix" scripts/bundle-qt.sh "$QMAKE" "$APP/qt"
 mkdir -p "$ROOT/usr/bin"
-ln -s ../lib/oynix/oynix "$ROOT/usr/bin/oynix"
+ln -sfn ../lib/oynix/oynix "$ROOT/usr/bin/oynix"
 install -Dm644 packaging/oynix.desktop "$ROOT/usr/share/applications/oynix.desktop"
 install -Dm644 assets/icon.svg "$ROOT/usr/share/icons/hicolor/scalable/apps/oynix.svg"
 for s in 48 64 128 256; do install -Dm644 "assets/icon-$s.png" "$ROOT/usr/share/icons/hicolor/${s}x${s}/apps/oynix.png"; done
