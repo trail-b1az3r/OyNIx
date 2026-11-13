@@ -20,6 +20,10 @@ Item {
     property string hoveredLink: ""
     property string loadError: ""
     property var certError: null
+    // For Claude for OyNIx: recent console output and screenshot scale.
+    property var consoleLog: []
+    property real agentShotScale: 1
+    readonly property var pageItem: pageLoader.item
     readonly property string host: Core.hostOf(model.url || "")
 
     visible: isCurrent
@@ -142,7 +146,9 @@ Item {
         WebEngineView {
             id: view
             profile: tab.win.profile
-            backgroundColor: Theme.window
+            // Pages without their own background get white, as in every browser;
+            // only force-darkened pages use the dark canvas.
+            backgroundColor: settings.forceDarkMode ? Theme.window : "white"
             audioMuted: tab.model.muted
             lifecycleState: (Core.lowPowerMode && !tab.isCurrent && !recentlyAudible)
                             ? WebEngineView.LifecycleState.Frozen : WebEngineView.LifecycleState.Active
@@ -159,6 +165,43 @@ Item {
             settings.javascriptCanOpenWindows: { var s = JSON.parse(Core.siteSettings(tab.host)); return s.popups === true }
             settings.focusOnNavigationEnabled: false
             settings.webRTCPublicInterfacesOnly: true
+            // Dark mode for websites: sites with a dark theme get it via
+            // prefers-color-scheme (set app-wide); this additionally darkens
+            // sites that have none, when enabled globally or for the site.
+            settings.forceDarkMode: {
+                if (!Theme.dark) return false
+                Core.settingsJson
+                var s = JSON.parse(Core.siteSettings(tab.host))
+                return s.forceDark !== undefined ? s.forceDark : Core.forceDarkWebsites
+            }
+
+            // Cosmetic filtering: element-hiding CSS for the host being
+            // loaded, injected at document creation in the isolated world.
+            function updateCosmetic(host) {
+                var old = userScripts.find("oynix-cosmetic")
+                for (var i = 0; i < old.length; i++) userScripts.remove(old[i])
+                var src = tab.win.privateMode && !Core.contentBlocker ? "" : Core.cosmeticScript(host)
+                if (!src) return
+                var sc = WebEngine.script()
+                sc.name = "oynix-cosmetic"
+                sc.sourceCode = src
+                sc.injectionPoint = WebEngineScript.DocumentCreation
+                sc.worldId = WebEngineScript.ApplicationWorld
+                sc.runsOnSubFrames = false
+                userScripts.insert(sc)
+            }
+            Connections {
+                target: tab.win.app
+                function onFilterGenerationChanged() {
+                    var h = Core.hostOf(view.url.toString())
+                    view.updateCosmetic(h)
+                    var cos = Core.cosmeticScript(h)
+                    if (cos) view.runJavaScript(cos, WebEngineScript.ApplicationWorld)
+                }
+            }
+            onNavigationRequested: function (request) {
+                if (request.isMainFrame) updateCosmetic(Core.hostOf(request.url.toString()))
+            }
 
             // Content scripts of Chrome/Firefox extensions talk to OyNIx over
             // this channel; it is only reachable from the isolated world.
@@ -207,6 +250,9 @@ Item {
                     tab.loadError = ""
                     tab.certError = null
                 } else if (info.status === WebEngineView.LoadSucceededStatus) {
+                    // Covers pages restored before the rules finished loading.
+                    var cos = Core.cosmeticScript(Core.hostOf(url.toString()))
+                    if (cos) runJavaScript(cos, WebEngineScript.ApplicationWorld)
                     if (!tab.win.privateMode) Core.recordVisit(url.toString(), title)
                     tab.win.app.extensionHost.tabEvent("tabs.onUpdated", [tab.model.uid, { status: "complete", url: url.toString(), title: title }, tab.win.app.extensionHost.tabInfo(tab.win, tab.index)])
                     tab.applySiteSettings()
@@ -233,6 +279,11 @@ Item {
                 if (status !== WebEngineView.NormalTerminationStatus) tab.crashed = true
             }
             onFindTextFinished: function (result) { tab.win.findResult(result) }
+            onJavaScriptConsoleMessage: function (level, message, lineNumber, sourceID) {
+                var l = tab.consoleLog.length > 299 ? tab.consoleLog.slice(-299) : tab.consoleLog.slice()
+                l.push({ level: level, message: String(message).slice(0, 2000), line: lineNumber, source: String(sourceID).slice(0, 200), time: Date.now() })
+                tab.consoleLog = l
+            }
             onContextMenuRequested: function (request) {
                 request.accepted = true
                 tab.win.showContextMenu(view, request)

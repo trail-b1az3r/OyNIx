@@ -15,11 +15,10 @@ PLUGINS=(platforms xcbglintegrations egldeviceintegrations platforminputcontexts
 for p in "${PLUGINS[@]}"; do
   [ -d "$QT/plugins/$p" ] && cp -a "$QT/plugins/$p" "$DEST/plugins/"
 done
-QML=(QtQml QtQuick QtWebEngine QtWebChannel QtCore QtNetwork QtPositioning QtWayland)
-for m in "${QML[@]}"; do
-  [ -d "$QT/qml/$m" ] && cp -a "$QT/qml/$m" "$DEST/qml/"
-done
-cp -a "$QT/qml/builtins.qmltypes" "$QT/qml/jsroot.qmltypes" "$DEST/qml/" 2>/dev/null || true
+# All QML modules (~18 MB). Hand-picking breaks indirect imports — e.g. the
+# QtQuick.Dialogs file/folder dialogs import Qt.labs.folderlistmodel.
+cp -a "$QT/qml/." "$DEST/qml/"
+rm -rf "$DEST/qml/QtTest" "$DEST/qml/QmlTime"
 cp -a "$QT/libexec/QtWebEngineProcess" "$DEST/libexec/"
 cp -a "$QT/resources/." "$DEST/resources/"
 [ -d "$QT/translations/qtwebengine_locales" ] && cp -a "$QT/translations/qtwebengine_locales" "$DEST/translations/"

@@ -25,9 +25,9 @@ Rectangle {
         Rectangle {
             Layout.fillWidth: true
             Layout.leftMargin: 10; Layout.rightMargin: 10; Layout.topMargin: 8
-            implicitHeight: 28
-            radius: 7
-            color: Theme.field
+            implicitHeight: 40
+            radius: 20
+            color: Theme.surfaceContainerHigh
             RowLayout {
                 anchors.fill: parent
                 anchors.margins: 2
@@ -36,7 +36,8 @@ Rectangle {
                     model: (sb.showTabs ? [{ id: "tabs", icon: "tabs", tip: qsTr("Tabs") }] : []).concat([
                         { id: "bookmarks", icon: "bookmark", tip: qsTr("Bookmarks") },
                         { id: "reading", icon: "glasses", tip: qsTr("Reading List") },
-                        { id: "history", icon: "clock", tip: qsTr("History") }
+                        { id: "history", icon: "clock", tip: qsTr("History") },
+                        { id: "claude", icon: "sparkles", tip: qsTr("Claude") }
                     ])
                     delegate: AbstractButton {
                         required property var modelData
@@ -44,10 +45,11 @@ Rectangle {
                         Layout.fillHeight: true
                         hoverEnabled: true
                         background: Rectangle {
-                            radius: 5
-                            color: sb.panel === modelData.id ? Theme.tabActive : "transparent"
+                            radius: height / 2
+                            color: sb.panel === modelData.id ? Theme.secondaryContainer : "transparent"
+                            Behavior on color { ColorAnimation { duration: Theme.animFast } }
                         }
-                        contentItem: Item { Icon { anchors.centerIn: parent; name: modelData.icon; size: 15; color: sb.panel === modelData.id ? Theme.text : Theme.textDim } }
+                        contentItem: Item { Icon { anchors.centerIn: parent; name: modelData.icon; size: 18; color: sb.panel === modelData.id ? Theme.secondaryContainerFg : Theme.surfaceVariantFg } }
                         ToolTip.visible: hovered; ToolTip.delay: 600; ToolTip.text: modelData.tip
                         onClicked: sb.panel = modelData.id
                     }
@@ -59,10 +61,10 @@ Rectangle {
         Rectangle {
             Layout.fillWidth: true
             Layout.leftMargin: 10; Layout.rightMargin: 10
-            implicitHeight: 26
-            radius: 6
-            color: Theme.field
-            visible: sb.panel !== "tabs"
+            implicitHeight: 40
+            radius: 20
+            color: Theme.surfaceContainerHigh
+            visible: sb.panel !== "tabs" && sb.panel !== "claude"
             RowLayout {
                 anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 6
                 Icon { name: "search"; size: 13; color: Theme.textDim }
@@ -81,11 +83,12 @@ Rectangle {
         Loader {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            sourceComponent: sb.panel === "tabs" ? tabsPanel : libraryPanel
+            sourceComponent: sb.panel === "tabs" ? tabsPanel : (sb.panel === "claude" ? claudePanel : libraryPanel)
         }
     }
 
     Component { id: tabsPanel; VerticalTabs { win: sb.win } }
+    Component { id: claudePanel; ClaudePanel { win: sb.win } }
 
     Component {
         id: libraryPanel

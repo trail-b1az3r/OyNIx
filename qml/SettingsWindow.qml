@@ -10,8 +10,8 @@ ApplicationWindow {
     id: sw
     property var app
     property string page: "general"
-    width: 760
-    height: 600
+    width: 900
+    height: 680
     minimumWidth: 620
     minimumHeight: 440
     title: qsTr("Settings")
@@ -35,27 +35,45 @@ ApplicationWindow {
 
     Shortcut { sequences: ["Escape", "Ctrl+W"]; onActivated: sw.close() }
 
-    header: Rectangle {
-        height: 70
-        color: Theme.toolbar
-        Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.separator }
-        Row {
-            anchors.centerIn: parent
-            spacing: 2
-            Repeater {
-                model: sw.pages
-                delegate: AbstractButton {
-                    required property var modelData
-                    width: 68; height: 56
-                    hoverEnabled: true
-                    background: Rectangle { radius: 8; color: sw.page === modelData.id ? Theme.pressed : (parent.hovered ? Theme.hover : "transparent") }
-                    contentItem: Column {
-                        spacing: 4
-                        topPadding: 6
-                        Icon { anchors.horizontalCenter: parent.horizontalCenter; name: modelData.icon; size: 20; color: sw.page === modelData.id ? Theme.accent : Theme.textDim }
-                        Txt { anchors.horizontalCenter: parent.horizontalCenter; text: modelData.title; font.pixelSize: 11; color: sw.page === modelData.id ? Theme.text : Theme.textDim }
+    // Material 3 navigation rail.
+    Rectangle {
+        id: rail
+        width: 96
+        anchors.top: parent.top; anchors.bottom: parent.bottom; anchors.left: parent.left
+        color: Theme.surfaceContainer
+        Flickable {
+            anchors.fill: parent
+            contentHeight: railCol.implicitHeight + 24
+            clip: true
+            Column {
+                id: railCol
+                y: 16
+                width: parent.width
+                spacing: 4
+                Repeater {
+                    model: sw.pages
+                    delegate: AbstractButton {
+                        id: railItem
+                        required property var modelData
+                        readonly property bool sel: sw.page === modelData.id
+                        width: rail.width; height: 64
+                        hoverEnabled: true
+                        onClicked: sw.page = modelData.id
+                        contentItem: Column {
+                            spacing: 4
+                            Rectangle {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                width: railItem.sel ? 56 : (railItem.hovered ? 56 : 32); height: 32; radius: 16
+                                color: railItem.sel ? Theme.secondaryContainer : (railItem.hovered ? Theme.hover : "transparent")
+                                Behavior on width { SpringAnimation { spring: Theme.springDefault; damping: Theme.damping } }
+                                Icon { anchors.centerIn: parent; name: railItem.modelData.icon; size: 20
+                                       color: railItem.sel ? Theme.secondaryContainerFg : Theme.surfaceVariantFg }
+                            }
+                            Txt { anchors.horizontalCenter: parent.horizontalCenter; text: railItem.modelData.title; font.pixelSize: 12
+                                  font.weight: railItem.sel ? Font.DemiBold : Font.Medium
+                                  color: railItem.sel ? Theme.surfaceFg : Theme.surfaceVariantFg }
+                        }
                     }
-                    onClicked: sw.page = modelData.id
                 }
             }
         }
@@ -67,13 +85,12 @@ ApplicationWindow {
         default property alias rows: body.data
         Layout.fillWidth: true
         spacing: 6
-        Txt { text: parent.title; font.weight: Font.DemiBold; color: Theme.textDim; font.pixelSize: 12; visible: text !== ""; Layout.leftMargin: 4 }
+        Txt { text: parent.title; font.weight: Font.DemiBold; color: Theme.primary; font.pixelSize: 14; visible: text !== ""; Layout.leftMargin: 8 }
         Rectangle {
             Layout.fillWidth: true
-            implicitHeight: body.implicitHeight + 8
-            radius: 10
-            color: Theme.card
-            border.color: Theme.separator
+            implicitHeight: body.implicitHeight + 16
+            radius: Theme.shapeXL - 4
+            color: Theme.surfaceContainerLow
             ColumnLayout { id: body; anchors.fill: parent; anchors.margins: 4; spacing: 0 }
         }
     }
@@ -142,12 +159,44 @@ ApplicationWindow {
             }
         }
     }
+    component SiteList: ColumnLayout {
+        id: sl
+        property string key
+        property string empty
+        property bool canAdd: false
+        readonly property var items: sw.s[key] || []
+        Layout.fillWidth: true
+        spacing: 6
+        Flow {
+            Layout.fillWidth: true
+            spacing: 8
+            Repeater {
+                model: sl.items
+                delegate: Rectangle {
+                    required property string modelData
+                    required property int index
+                    height: 32; width: chipText.implicitWidth + 44; radius: Theme.shapeS
+                    color: "transparent"; border.color: Theme.outline; border.width: 1
+                    Txt { id: chipText; x: 12; anchors.verticalCenter: parent.verticalCenter; text: modelData; font.pixelSize: 13 }
+                    IconButton { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; implicitWidth: 28; implicitHeight: 28; glyph: "close"; iconSize: 14
+                        onClicked: { var l = sl.items.slice(); l.splice(index, 1); sw.set(sl.key, l) } }
+                }
+            }
+        }
+        Txt { visible: sl.items.length === 0; text: sl.empty; color: Theme.textFaint; font.pixelSize: 12 }
+        RowLayout {
+            visible: sl.canAdd
+            MTextField { id: siteInput; Layout.preferredWidth: 240; placeholder: "example.com"; onAccepted: addBtn.clicked() }
+            PushButton { id: addBtn; text: qsTr("Add"); enabled: siteInput.text.trim().indexOf(".") > 0
+                onClicked: { var l = sl.items.slice(); var h = siteInput.text.trim().toLowerCase().replace(/^https?:\/\//, "").split("/")[0]; if (l.indexOf(h) < 0) l.push(h); sw.set(sl.key, l); siteInput.text = "" } }
+        }
+    }
     component Divider: Rectangle { Layout.fillWidth: true; Layout.leftMargin: 12; Layout.rightMargin: 12; height: 1; color: Theme.separator }
 
     // ── Pages ────────────────────────────────────────────────────────
     ScrollView {
         id: scroll
-        anchors.fill: parent
+        anchors.top: parent.top; anchors.bottom: parent.bottom; anchors.right: parent.right; anchors.left: rail.right
         contentWidth: availableWidth
         clip: true
 
@@ -168,11 +217,16 @@ ApplicationWindow {
             Layout.fillWidth: true
             Layout.maximumWidth: 600
             Layout.alignment: Qt.AlignHCenter
-            Layout.topMargin: 22
-            Layout.bottomMargin: 30
-            Layout.leftMargin: 24
-            Layout.rightMargin: 24
-            spacing: 20
+            Layout.topMargin: 28
+            Layout.bottomMargin: 36
+            Layout.leftMargin: 28
+            Layout.rightMargin: 28
+            spacing: 24
+            Txt {
+                text: { for (var i = 0; i < sw.pages.length; i++) if (sw.pages[i].id === sw.page) return sw.pages[i].title; return "" }
+                font.family: Theme.displayFont; font.pixelSize: Theme.headlineSize + 4
+                color: Theme.surfaceFg
+            }
         }
     }
 
@@ -190,6 +244,8 @@ ApplicationWindow {
             Section {
                 title: qsTr("Downloads")
                 TextRow { label: qsTr("Save downloaded files to"); key: "downloadDir" }
+                Divider {}
+                SwitchRow { label: qsTr("Ask where to save each file"); key: "askWhereToSave" }
             }
             Section {
                 title: qsTr("Default Browser")
@@ -299,6 +355,12 @@ ApplicationWindow {
                         }
                     }
                 }
+            }
+            Section {
+                title: qsTr("Websites")
+                SwitchRow { label: qsTr("Use dark themes on websites"); hint: qsTr("When OyNIx is dark, sites that offer a dark theme show it (prefers-color-scheme)."); key: "darkWebsites" }
+                Divider {}
+                SwitchRow { label: qsTr("Darken all websites"); hint: qsTr("When OyNIx is dark, automatically darken sites that have no dark theme. Can be changed per site in Website settings."); key: "forceDarkWebsites" }
             }
             Section {
                 title: qsTr("Toolbar")
@@ -439,15 +501,92 @@ ApplicationWindow {
             }
             Section {
                 title: qsTr("Content Blocker")
-                SwitchRow { label: qsTr("Block trackers and ads"); hint: qsTr("%1 rules active · %2 custom filter lists").arg(report.rules).arg(report.lists); key: "contentBlocker" }
+                SwitchRow {
+                    label: qsTr("Block trackers and ads")
+                    hint: report.loading ? qsTr("Loading filter lists…")
+                          : qsTr("%1 network rules · %2 element-hiding rules · %3 lists").arg(Number(report.rules).toLocaleString(Qt.locale(), "f", 0)).arg(Number(report.cosmetic).toLocaleString(Qt.locale(), "f", 0)).arg(report.lists)
+                    key: "contentBlocker"
+                }
                 Divider {}
                 SwitchRow { label: qsTr("Block trackers"); key: "blockTrackers" }
                 Divider {}
                 SwitchRow { label: qsTr("Block ads"); key: "blockAds" }
                 Divider {}
+                SwitchRow { label: qsTr("Hide blocked page elements"); hint: qsTr("Applies the lists’ element-hiding rules, removing empty ad slots, banners and widgets."); key: "cosmeticFiltering" }
+            }
+            Section {
+                id: listsSection
+                title: qsTr("Filter Lists")
+                property var lists: { Core.settingsJson; listsRefresh.tick; return JSON.parse(Core.filterLists()) }
+                Timer { id: listsRefresh; property int tick: 0; interval: 1000; repeat: true; running: sw.visible && (sw.app.filterUpdating || report.loading); onTriggered: tick++ }
+                Repeater {
+                    model: [
+                        { id: "ads", t: qsTr("Ads") }, { id: "privacy", t: qsTr("Privacy") },
+                        { id: "annoyances", t: qsTr("Annoyances") }, { id: "cookies", t: qsTr("Cookie Notices") },
+                        { id: "social", t: qsTr("Social Widgets") }, { id: "security", t: qsTr("Security") },
+                        { id: "custom", t: qsTr("Custom") }
+                    ]
+                    delegate: ColumnLayout {
+                        id: group
+                        required property var modelData
+                        readonly property var items: listsSection.lists.filter(function (l) { return l.category === group.modelData.id })
+                        visible: items.length > 0
+                        Layout.fillWidth: true
+                        spacing: 0
+                        Txt { text: group.modelData.t; color: Theme.textDim; font.pixelSize: 11; font.weight: Font.DemiBold; Layout.leftMargin: 12; Layout.topMargin: 8 }
+                        Repeater {
+                            model: group.items
+                            delegate: Row_ {
+                                required property var modelData
+                                label: modelData.name
+                                hint: (modelData.error ? "⚠ " + modelData.error + " · " : "")
+                                      + (modelData.updated ? qsTr("%1 rules · updated %2").arg(Number(modelData.rules).toLocaleString(Qt.locale(), "f", 0)).arg(new Date(modelData.updated * 1000).toLocaleDateString(Qt.locale(), Locale.ShortFormat))
+                                                           : (modelData.enabled ? qsTr("Not downloaded yet") : modelData.description))
+                                IconButton {
+                                    visible: modelData.category === "custom"
+                                    glyph: "trash"; tip: qsTr("Remove")
+                                    onClicked: Core.removeFilterList(modelData.id)
+                                }
+                                Toggle {
+                                    checked: modelData.enabled
+                                    onToggled: {
+                                        Core.setFilterListEnabled(modelData.id, checked)
+                                        if (checked && !modelData.downloaded) sw.app.updateFilterLists(false)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Divider {}
                 Row_ {
-                    label: qsTr("Custom filter lists")
-                    hint: qsTr("Drop EasyList / uBlock / hosts-format .txt files into the filters folder, then reload.")
+                    label: qsTr("Add a list by URL")
+                    hint: qsTr("Any Adblock Plus, uBlock Origin or hosts-format list.")
+                    Rectangle {
+                        Layout.preferredWidth: 220; implicitHeight: 28; radius: 6; color: Theme.field; border.color: Theme.separator
+                        TextInput {
+                            id: listUrl
+                            anchors.fill: parent; anchors.margins: 6
+                            color: Theme.text; font.family: Theme.font; font.pixelSize: 12; clip: true
+                            Txt { visible: !listUrl.text; text: "https://…"; color: Theme.textFaint; font.pixelSize: 12 }
+                        }
+                    }
+                    PushButton {
+                        text: qsTr("Add")
+                        enabled: /^https?:\/\/./.test(listUrl.text.trim())
+                        onClicked: { if (Core.addFilterListUrl(listUrl.text.trim())) { listUrl.text = ""; sw.app.updateFilterLists(false) } }
+                    }
+                }
+                Divider {}
+                Row_ {
+                    label: sw.app.filterUpdating ? sw.app.filterStatus : qsTr("Update lists")
+                    hint: qsTr("Lists refresh automatically every %1 days.").arg(sw.s.filterUpdateDays || 4)
+                    PushButton { text: qsTr("Update Now"); enabled: !sw.app.filterUpdating; onClicked: sw.app.updateFilterLists(true) }
+                }
+                Divider {}
+                Row_ {
+                    label: qsTr("Local filter files")
+                    hint: qsTr(".txt files in this folder are loaded as extra lists.")
                     PushButton { text: qsTr("Open Folder"); onClicked: Core.openExternally(Core.configPath("filters")) }
                     PushButton { text: qsTr("Reload"); onClicked: Core.reloadFilterLists() }
                 }
@@ -511,6 +650,52 @@ ApplicationWindow {
     Component {
         id: extensionsPage
         Page {
+            Section {
+                title: qsTr("Built-in")
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.margins: 12
+                    spacing: 12
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 14
+                        MShape { size: 48; shape: "cookie9"; color: Theme.primaryContainer
+                            Icon { anchors.centerIn: parent; name: "sparkles"; size: 24; color: Theme.primaryContainerFg } }
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Txt { text: qsTr("Claude for OyNIx"); font.pixelSize: 16; font.weight: Font.DemiBold }
+                            Txt { Layout.fillWidth: true; wrapMode: Text.WordWrap; elide: Text.ElideNone; color: Theme.textDim; font.pixelSize: 12
+                                text: qsTr("Lets Claude read pages, click, type, navigate and manage tabs — from Claude Desktop or Claude Code with your Claude account (MCP), or from the Claude panel with an API key. Never active in private windows.") }
+                        }
+                        Toggle { checked: Core.agentEnabled; onToggled: Core.setSetting("agentEnabled", JSON.stringify(checked)) }
+                    }
+                    ColumnLayout {
+                        visible: Core.agentEnabled
+                        Layout.fillWidth: true
+                        spacing: 10
+                        Txt { text: qsTr("Site access"); font.weight: Font.DemiBold }
+                        Segmented {
+                            Layout.fillWidth: true
+                            options: [{ v: "ask", t: qsTr("Ask before using a new site") }, { v: "auto", t: qsTr("Act on all sites except blocked") }]
+                            value: Core.agentMode
+                            onPicked: function (v) { Core.setSetting("agentMode", JSON.stringify(v)) }
+                        }
+                        Txt { text: qsTr("Allowed sites"); font.weight: Font.DemiBold; Layout.topMargin: 6 }
+                        SiteList { key: "agentAllowedSites"; empty: qsTr("Sites you allow with “Always allow” appear here.") }
+                        Txt { text: qsTr("Blocked sites"); font.weight: Font.DemiBold; Layout.topMargin: 6 }
+                        SiteList { key: "agentBlockedSites"; empty: qsTr("Claude can never use blocked sites, for example your bank."); canAdd: true }
+                        RowLayout {
+                            Layout.topMargin: 6
+                            spacing: 8
+                            PushButton { text: qsTr("Open Claude Panel"); primary: true
+                                onClicked: { var w = sw.app.windows[sw.app.windows.length - 1]; if (w) { w.sidebarOpen = true; w.raise(); w.requestActivate() } } }
+                            Txt { color: Theme.textDim; font.pixelSize: 12
+                                text: sw.app.agentBridge.listening ? qsTr("MCP endpoint ready · %1 connected").arg(sw.app.agentBridge.connections) : qsTr("MCP endpoint off") }
+                        }
+                    }
+                }
+            }
             Section {
                 title: qsTr("Install")
                 Row_ {

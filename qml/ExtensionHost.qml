@@ -258,11 +258,82 @@ QtObject {
             } else if (op === "window" || op === "windows") {
                 var mk = function (w2) { return { id: w2.windowId, focused: w2.active, incognito: w2.privateMode, type: "normal", state: "normal", alwaysOnTop: false, width: w2.width, height: w2.height } }
                 value = op === "window" ? (focusedWindow() ? mk(focusedWindow()) : null) : app.windows.filter(function (w3) { return !w3.privateMode }).map(mk)
+            } else if (op === "exec" || op === "css" || op === "uncss") {
+                var et = args.tabId === null || args.tabId === undefined
+                         ? (function () { var f = focusedWindow(); return f ? { win: f, index: f.currentIndex } : null })() : findTab(args.tabId)
+                if (!et) throw "No tab with id: " + args.tabId
+                var it2 = et.win.tabItem(et.index)
+                if (!it2 || !it2.view) throw "The tab has no web content"
+                var world = args.world === "MAIN" ? WebEngineScript.MainWorld : WebEngineScript.ApplicationWorld
+                var code
+                if (op === "exec") code = args.code
+                else {
+                    var key = JSON.stringify("oynix-ext-css-" + ext + "-" + host.hash(args.css))
+                    code = op === "css"
+                        ? "(function(){var k=" + key + ";for(var e of document.querySelectorAll('style'))if(e.dataset.oy===k)return;var s=document.createElement('style');s.dataset.oy=k;s.textContent=" + JSON.stringify(args.css) + ";(document.head||document.documentElement).appendChild(s)})()"
+                        : "(function(){document.querySelectorAll('style').forEach(function(s){if(s.dataset.oy===" + key + ")s.remove()})})()"
+                    world = WebEngineScript.ApplicationWorld
+                }
+                it2.view.runJavaScript(code, world, function (r) {
+                    var v; try { v = JSON.parse(JSON.stringify(r === undefined ? null : r)) } catch (e) { v = null }
+                    app.extBridge.tabsReply(id, JSON.stringify({ value: v }))
+                })
+                return
+            } else if (op === "menus") {
+                var all = Object.assign({}, menus)
+                var mine = (all[args.ext] || []).slice()
+                if (args.op === "create") mine.push(Object.assign({ contexts: ["page"] }, args.props, { ext: args.ext, extName: args.extName }))
+                else if (args.op === "update") mine = mine.map(function (m) { return m.id === args.id ? Object.assign({}, m, args.props) : m })
+                else if (args.op === "remove") mine = mine.filter(function (m) { return m.id !== args.id })
+                else if (args.op === "removeAll") mine = []
+                all[args.ext] = mine
+                menus = all
+            } else if (op === "notify") {
+                Core.notify(args.title || "", args.message || "")
             } else {
                 throw "Unsupported tabs operation: " + op
             }
         } catch (e) { error = String(e) }
         app.extBridge.tabsReply(id, JSON.stringify(error ? { error: error } : { value: value === undefined ? null : value }))
+    }
+
+    // Context-menu items registered by extensions: extId -> [{id, title, contexts, …}]
+    property var menus: ({})
+
+    function hash(s) { var h = 0; s = String(s); for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h.toString(36) }
+
+    // Items applicable to a context-menu request in a web view.
+    function menuItemsFor(req) {
+        var ctxs = ["all", "page"]
+        if (req.selectedText) ctxs.push("selection")
+        if (req.linkUrl && req.linkUrl.toString()) ctxs.push("link")
+        if (req.mediaType === 1) ctxs.push("image")
+        if (req.mediaType === 2) ctxs.push("video")
+        if (req.mediaType === 3) ctxs.push("audio")
+        if (req.isContentEditable) ctxs.push("editable")
+        var out = []
+        for (var ext in menus) {
+            if (!isLoadedWeb(ext)) continue
+            var list = menus[ext]
+            for (var i = 0; i < list.length; i++) {
+                var m = list[i]
+                if (m.visible === false || m.type === "separator") continue
+                var c = m.contexts || ["page"]
+                var ok = c.some(function (x) { return x === "all" || ctxs.indexOf(x) >= 0 && (x !== "page" || ctxs.length === 2) })
+                if (ok) out.push(m)
+            }
+        }
+        return out
+    }
+
+    function isLoadedWeb(webId) { for (var k in infos) if (infos[k].id === webId) return true; return false }
+
+    function menuClicked(item, req, tab) {
+        var info = { menuItemId: item.id, parentMenuItemId: item.parentId, editable: !!req.isContentEditable,
+                     pageUrl: tab ? tab.url : "", selectionText: req.selectedText || undefined,
+                     linkUrl: req.linkUrl && req.linkUrl.toString() ? req.linkUrl.toString() : undefined,
+                     srcUrl: req.mediaUrl && req.mediaUrl.toString() ? req.mediaUrl.toString() : undefined }
+        app.extBridge.dispatch("contextMenus.onClicked", JSON.stringify([item.ext, info, tab]))
     }
 
     function tabEvent(name, args) {

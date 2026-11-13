@@ -2,13 +2,13 @@
 
 A fast, private desktop web browser written in **Rust** and **QML**. The interface is drawn by Qt Quick on **Vulkan 1.3 / 1.2**, with **OpenGL ES** as the fallback.
 
-OyNIx's interaction design follows modern macOS-style browsers: quiet chrome, a centred address field showing just the domain, a tab overview, vertical tabs and a focus mode. It ships with tracker and ad blocking switched on and sends no telemetry.
+The interface follows **Material 3 Expressive**: dynamic colour generated from your accent colour, the M3 shape and type scales, shape-morphing controls and spring motion. It ships with tracker and ad blocking switched on and sends no telemetry. **Claude for OyNIx** lets Claude (from Claude Desktop or Claude Code with your Claude account, or from a built-in panel) read pages and act in the browser, under your site permissions.
 
-![Vertical tabs, dark theme](docs/screenshot-dark-vertical.png)
+![Start page and Claude panel](docs/screenshot-start-claude.png)
 
-| Tab overview | Reader View |
+| Claude asks before using a site | Tab hover preview |
 |---|---|
-| ![Tab overview](docs/screenshot-overview.png) | ![Reader](docs/screenshot-reader.png) |
+| ![Permission prompt](docs/screenshot-claude-permission.png) | ![Tab preview](docs/screenshot-tab-preview.png) |
 
 ## Features
 
@@ -17,24 +17,30 @@ OyNIx's interaction design follows modern macOS-style browsers: quiet chrome, a 
 | **Tabs** | Three layouts: *Standard* (tab bar under the toolbar), *Compact* (tabs inside the toolbar), *Vertical* (sidebar). Pinned tabs, drag to reorder, mute, duplicate, move to a new window. Reopen closed tabs. |
 | **Tab overview** | `Ctrl+Shift+\`: a searchable grid of live tab previews. |
 | **Memory** | Inactive tabs are unloaded after a configurable time. Restored sessions load lazily, so only the visible tab loads. Low Power Mode freezes background tabs and turns off animations. |
-| **Privacy** | Native content blocker (built-in tracker and ad rules plus your own EasyList, uBlock or hosts lists), per-site report, tracking-parameter stripping, third-party cookie blocking, fingerprinting protection, Global Privacy Control, optional Do Not Track. Privacy Report on the Start Page. |
+| **Privacy** | Built-in content blocker with downloadable, auto-updating filter lists (EasyList, EasyPrivacy, uBlock filters, Peter Lowe, AdGuard, Fanboy annoyances, cookie notices, social widgets, malware), custom list URLs and local files. Network blocking and element hiding, a per-site report and per-site allowlist. Tracking-parameter stripping, third-party cookie blocking, fingerprinting protection, Global Privacy Control, optional Do Not Track. |
+| **Dark mode for websites** | When OyNIx is dark, sites get their own dark theme (`prefers-color-scheme`). *Darken all websites* also darkens sites without one, and Website settings can switch this per site. |
 | **Address field** | Shows the domain when idle. Suggestions from bookmarks, history and your search engine, plus 25 built-in `!bang` shortcuts (`!w`, `!gh`, `!yt`, `!mdn`…). |
 | **Reading** | Reader View (`Ctrl+Shift+R`), Reading List, Focus Mode (`Ctrl+Shift+F`, hover the top edge to reveal the toolbar). |
 | **Library** | Sidebar with Bookmarks, Reading List and History. Favorites bar. HTML bookmark import and export. |
 | **Start Page** | Native and instant: Favorites, Frequently Visited, Privacy Report, Reading List. |
 | **Website settings** | Per-site zoom, JavaScript, content blocker, pop-ups and reader default. |
 | **Profiles** | Fully isolated profiles (`--profile work`), each running as its own app. Private windows. |
+| **Claude for OyNIx** | Built-in extension: Claude can navigate, read pages, find elements, click, type, press keys, scroll, fill forms, take screenshots, manage tabs, and read console and network logs, using real mouse and keyboard input. Per-site permission prompts, allowed and blocked site lists, a visible "Claude is working · Stop" indicator and an activity log. Works with Claude Desktop / Claude Code over MCP, or from the sidebar panel with an API key. |
 | **Extensions** | Chrome and Firefox WebExtensions (`.crx`, `.xpi`, `.zip` or unpacked folder; Manifest V2 and V3) plus lightweight **OyNIx extensions** (`oynix.json` + `content.js` + `content.css`). Toolbar buttons with popups and badges, options pages, per-extension enable/disable. |
 | **Power users** | Developer Tools, user scripts (`*.user.js` with Greasemonkey metadata) and user styles (`*.user.css`), custom user agent, Print to PDF, view source. |
-| **Windows** | Frameless window with built-in close/minimise/zoom controls (left or right), or the system title bar. Light, dark or auto theme with eight accent colours. |
+| **Design** | Material 3 Expressive: colour roles generated from any accent colour (light and dark), pill-shaped controls that morph when pressed, the M3 switch, segmented buttons, navigation rail in Settings, expressive shapes on the Start Page, a wavy loading indicator. Frameless window with M3 window buttons (left or right), or the system title bar. |
+| **Downloads** | Pause, resume, cancel, open and show in folder; optional "Ask where to save each file". |
 
 ## Architecture
 
 ```
 src/
   main.rs            CLI, GPU selection, Qt/WebEngine start-up
+  mcp.rs             `oynix --mcp`: MCP server on stdio for Claude Desktop / Claude Code
   gpu.rs             Vulkan 1.2/1.3 device probe (ash) → Vulkan | GLES | GL | software
   core/              Pure Rust, no Qt types
+    agent.rs           Claude for OyNIx: tool catalogue, page helper, network log
+    material.rs        Material 3 colour scheme generation (tonal palettes → roles)
     omnibox.rs         input → URL, search engines, !bangs, tracking-param stripping
     blocker.rs         network content blocker + statistics
     library.rs         history, bookmarks, reading list, closed tabs
@@ -42,6 +48,7 @@ src/
     scripts.rs         injected JS: reader view, GPC, anti-fingerprinting
     paths.rs           XDG paths per profile
   bridge/
+    agentbridge.rs     agent socket server + tool-call routing to QML
     core.rs            CXX-Qt QML singleton `Core` (properties + invokables)
     native.rs          cxx bridge to cpp/native.cpp
 cpp/native.cpp       graphics API, WebEngine init, request interceptor, cookie filter
@@ -123,7 +130,7 @@ oynix --list-extensions
 
 `manifest_version` must be 2 or 3. Higher numbers don't exist yet; they're accepted and loaded as MV3 with a warning.
 
-Qt WebEngine 6.11 loads extensions and serves their pages, but doesn't run content scripts or provide `chrome.*` APIs. OyNIx supplies those itself:
+Qt WebEngine 6.11 loads extensions and serves their pages, but doesn't run content scripts or provide `chrome.*` APIs. OyNIx supplies those itself (it also marks each extension's own files as accessible to its pages, which Qt otherwise refuses to serve):
 
 - **Content scripts** are injected by OyNIx, with match patterns, `run_at`, `all_frames` and CSS.
 - **Background** scripts and service workers run in a hidden extension page.
@@ -131,12 +138,44 @@ Qt WebEngine 6.11 loads extensions and serves their pages, but doesn't run conte
   - `runtime`: id, getURL, getManifest, sendMessage, onMessage, onInstalled, onStartup, openOptionsPage, lastError
   - `storage`: local, sync, session, onChanged (persisted per profile)
   - `i18n`
-  - `tabs`: query, get, create, update, remove, reload, duplicate, sendMessage and the created/updated/activated/removed events
+  - `tabs`: query, get, create, update, remove, reload, duplicate, sendMessage, connect, executeScript, insertCSS, removeCSS and the created/updated/activated/removed events
+  - `scripting`: executeScript (`func` + `args`, or `files`; isolated or main world), insertCSS, removeCSS
+  - `runtime.connect` / `onConnect` ports in both directions
+  - `contextMenus` / `menus`: items appear in the page context menu, with `onClicked` and `onclick`
+  - `notifications`: shown as desktop notifications
   - `windows.getCurrent` and `windows.getAll`
   - `action` / `browserAction`: badge and title, onClicked
   - `alarms` and `permissions`
 
-**Not supported:** `webRequest` blocking, `declarativeNetRequest`, `scripting.executeScript`, `tabs.executeScript`, long-lived `runtime.connect` ports, devtools panels, native messaging and Firefox `sidebar_action`. Calling these throws or does nothing. Extensions built mainly on them, such as network-filtering ad blockers, won't work fully; OyNIx's built-in blocker covers that need. Extensions don't run in private windows.
+**Not supported:** `webRequest` blocking, `declarativeNetRequest`, `scripting.registerContentScripts`, devtools panels, native messaging, `commands` keyboard shortcuts and Firefox `sidebar_action`. Context-menu items are not persisted across restarts (extensions normally recreate them at startup). Calling these throws or does nothing. Extensions built mainly on them, such as network-filtering ad blockers, won't work fully; OyNIx's built-in blocker covers that need. Extensions don't run in private windows.
+
+## Claude for OyNIx
+
+Turn it on in **Settings › Extensions › Claude for OyNIx** (it is off by default).
+
+**With your Claude account (Claude Desktop / Claude Code).** OyNIx includes an MCP server. Add it once:
+
+```bash
+claude mcp add oynix -- oynix --mcp                  # Claude Code
+```
+
+```json
+{ "mcpServers": { "oynix": { "command": "/usr/bin/oynix", "args": ["--mcp"] } } }
+```
+
+The second snippet goes in Claude Desktop's `claude_desktop_config.json`. The Claude panel's Setup page shows both with the right paths for your install and profile. `oynix --mcp` relays tool calls to the running browser over a Unix socket only your user can open (`~/.local/share/oynix/<profile>/agent.sock`), and starts OyNIx if it isn't running. OyNIx doesn't use your claude.ai login itself; Claude runs in the Claude app, under your plan.
+
+**In the browser with an API key.** The sidebar's Claude panel chats with the Claude API directly (default model Claude Opus 5.5; Sonnet 5.5 and Haiku 5.5 are selectable). Add the key in the panel's Setup page; it is stored in `~/.config/oynix/<profile>/claude-api-key` with 0600 permissions, or read from `ANTHROPIC_API_KEY`. Usage is billed to that API account. Refusals fall back to another model automatically on Opus and Sonnet (server-side fallback), and old tool results are cleared server-side to keep long sessions within context.
+
+**Tools:** `tabs_list`, `tab_open`, `tab_switch`, `tab_close`, `navigate`, `page_info`, `read_page` (an outline with element refs), `find`, `get_text`, `screenshot`, `click`, `hover`, `type_text`, `press_key`, `scroll`, `form_input`, `wait`, `javascript`, `console_logs`, `network_requests`, `history_search`, `bookmarks`. Clicks, typing (including any Unicode), key presses and scrolling are delivered as real input events, so sites react as they would to a person.
+
+**Safety:**
+- **Site permission:** the first time Claude touches a site, OyNIx asks: *Allow for this task*, *Always allow on this site* or *Don't allow*. Unanswered prompts deny after two minutes. You can also let Claude act on every site except blocked ones.
+- **Blocked sites:** sites on the blocked list, such as your bank, are never available to Claude.
+- **Visible indicator:** while Claude works, the tab glows and a "Claude is working · Stop" chip is shown. Stop blocks every further action until you resume.
+- **Private windows:** never visible or controllable.
+- **Untrusted content:** the system prompt tells Claude to treat page content as untrusted and to ask before purchases, sending messages, deleting data or entering credentials.
+- **Activity log:** every action is listed in the panel.
 
 ## Usage
 
@@ -164,6 +203,29 @@ oynix --wayland | --x11
 | Switch tab | `Ctrl+Tab`, `Ctrl+Shift+Tab`, `Ctrl+1…9` |
 | Downloads / Settings | `Ctrl+J` / `Ctrl+,` |
 | Developer Tools | `F12` (enable under Settings › Advanced) |
+
+## Content blocker
+
+Settings › Privacy › **Filter Lists** chooses the subscriptions. Enabled lists download on first launch and refresh every few days (*Update Now* forces a refresh):
+
+| Category | Lists (default on in **bold**) |
+|----------|--------------------------------|
+| Ads | **EasyList**, **uBlock filters**, AdGuard Base |
+| Privacy | **EasyPrivacy**, **uBlock filters – Privacy**, **Peter Lowe’s list**, AdGuard Tracking Protection |
+| Annoyances | Fanboy’s Annoyance List |
+| Cookie notices | EasyList Cookie List |
+| Social widgets | Fanboy’s Social Blocking List |
+| Security | Online Malicious URL Blocklist (URLhaus) |
+
+Lists are fetched from their maintainers and stored in `~/.local/share/oynix/<profile>/filter-lists/`; OyNIx doesn't bundle them. You can also add any list by URL, or drop `.txt` files into `~/.config/oynix/<profile>/filters/`.
+
+The engine understands the common Adblock Plus / uBlock Origin syntax:
+- **Network rules:** `||host^`, anchors, wildcards and `^` separators.
+- **Options:** `$third-party` / `1p` / `3p`, resource types, `domain=`, `important`.
+- **Exceptions:** `@@`, `$document`, `$elemhide`, `$generichide`.
+- **Element hiding:** `##`, `domain##` and `#@#`.
+
+Rules that need features OyNIx doesn't implement are skipped: scriptlets (`##+js`), procedural selectors (`:has-text` and similar), `$redirect`, `$csp`, `$removeparam` and regex rules. With the default lists that's about 110,000 network and 66,000 element-hiding rules, parsed in the background in about 0.2 s; a request check takes about 1.5 µs.
 
 ## Files
 

@@ -55,6 +55,31 @@ pub struct Settings {
     pub strip_tracking_params: bool,
     pub https_upgrade: bool,
     pub fingerprint_protection: bool,
+    /// Hide page elements using the lists' cosmetic (`##`) rules.
+    pub cosmetic_filtering: bool,
+    /// Subscription id -> enabled (absent = catalogue default).
+    pub filter_lists: BTreeMap<String, bool>,
+    /// User-added filter list URLs.
+    pub custom_filter_urls: Vec<String>,
+    /// Refresh subscribed lists when older than this many days.
+    pub filter_update_days: i32,
+    /// Darken websites that have no dark theme of their own (when OyNIx is dark).
+    pub force_dark_websites: bool,
+    /// Tell websites to use their dark theme when OyNIx is dark.
+    pub dark_websites: bool,
+
+    // ── Claude for OyNIx ──────────────────────────────────────────
+    /// Allow Claude (MCP clients and the built-in panel) to control the browser.
+    pub agent_enabled: bool,
+    /// "ask": ask before Claude uses a site not in the allowed list;
+    /// "auto": act on any site except blocked ones.
+    pub agent_mode: String,
+    pub agent_allowed_sites: Vec<String>,
+    pub agent_blocked_sites: Vec<String>,
+    /// Model for the built-in Claude panel.
+    pub agent_model: String,
+    /// "low" | "medium" | "high" | "xhigh" | "max"
+    pub agent_effort: String,
 
     // ── Advanced ──────────────────────────────────────────────────
     pub javascript: bool,
@@ -82,7 +107,7 @@ impl Default for Settings {
             show_favorites_bar: false,
             show_status_bar: false,
             use_system_title_bar: false,
-            window_controls_side: "left".into(),
+            window_controls_side: "right".into(),
             show_full_url: false,
             default_zoom: 1.0,
             on_launch: "restore".into(),
@@ -107,6 +132,18 @@ impl Default for Settings {
             strip_tracking_params: true,
             https_upgrade: true,
             fingerprint_protection: true,
+            cosmetic_filtering: true,
+            filter_lists: BTreeMap::new(),
+            custom_filter_urls: Vec::new(),
+            filter_update_days: 4,
+            force_dark_websites: false,
+            dark_websites: true,
+            agent_enabled: false,
+            agent_mode: "ask".into(),
+            agent_allowed_sites: Vec::new(),
+            agent_blocked_sites: Vec::new(),
+            agent_model: "claude-opus-5-5".into(),
+            agent_effort: "high".into(),
             javascript: true,
             autoplay_media: false,
             smooth_scrolling: true,

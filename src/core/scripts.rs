@@ -105,3 +105,32 @@ pub const ANTI_FINGERPRINT: &str = r#"
   } catch (e) {}
 })();
 "#;
+
+/// Cosmetic filtering: a function taking an array of CSS selectors and
+/// hiding matching elements through one stylesheet. Selectors are inserted
+/// in chunks; a chunk with an invalid selector falls back to one-by-one so a
+/// single bad rule cannot disable the rest.
+pub const COSMETIC: &str = r#"function (sel) {
+  if (window.__oynixCosmetic) return;
+  window.__oynixCosmetic = true;
+  function apply() {
+    var root = document.documentElement;
+    if (!root) return false;
+    var st = document.createElement('style');
+    st.setAttribute('data-oynix', 'cosmetic');
+    root.appendChild(st);
+    var sheet = st.sheet;
+    if (!sheet) return true;
+    var add = function (s) { sheet.insertRule(s + '{display:none!important}', sheet.cssRules.length); };
+    for (var i = 0; i < sel.length; i += 200) {
+      var chunk = sel.slice(i, i + 200);
+      try { add(chunk.join(',')); }
+      catch (e) { for (var j = 0; j < chunk.length; j++) { try { add(chunk[j]); } catch (e2) {} } }
+    }
+    return true;
+  }
+  if (!apply()) {
+    var mo = new MutationObserver(function () { if (apply()) mo.disconnect(); });
+    mo.observe(document, { childList: true });
+  }
+}"#;

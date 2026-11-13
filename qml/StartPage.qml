@@ -11,7 +11,7 @@ Rectangle {
     color: Theme.window
 
     gradient: Gradient {
-        GradientStop { position: 0; color: Core.startPageBackground === "plain" ? Theme.window : (Theme.dark ? "#202024" : "#f7f8fb") }
+        GradientStop { position: 0; color: Core.startPageBackground === "plain" ? Theme.surface : Theme.surfaceContainerLow }
         GradientStop { position: 1; color: Theme.window }
     }
 
@@ -32,7 +32,13 @@ Rectangle {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 14
-                Txt { text: qsTr("Favorites"); font.pixelSize: 17; font.weight: Font.Bold }
+                Txt {
+                    text: { var h = new Date().getHours(); return h < 5 ? qsTr("Good night") : h < 12 ? qsTr("Good morning") : h < 18 ? qsTr("Good afternoon") : qsTr("Good evening") }
+                    font.family: Theme.displayFont; font.pixelSize: Theme.displaySize; font.weight: Font.Normal
+                    color: Theme.surfaceFg
+                    Layout.bottomMargin: 18
+                }
+                Txt { text: qsTr("Favorites"); font.pixelSize: 22; font.family: Theme.displayFont; color: Theme.surfaceFg }
                 Flow {
                     Layout.fillWidth: true
                     spacing: 18
@@ -48,7 +54,7 @@ Rectangle {
                 Layout.fillWidth: true
                 spacing: 14
                 visible: Core.startPageShowRecent && freq.count > 0 && !page.win.privateMode
-                Txt { text: qsTr("Frequently Visited"); font.pixelSize: 17; font.weight: Font.Bold }
+                Txt { text: qsTr("Frequently Visited"); font.pixelSize: 22; font.family: Theme.displayFont }
                 Flow {
                     Layout.fillWidth: true
                     spacing: 18
@@ -64,27 +70,26 @@ Rectangle {
             Rectangle {
                 Layout.fillWidth: true
                 visible: Core.startPageShowPrivacyReport
-                implicitHeight: 96
-                radius: 14
-                color: Theme.card
-                border.color: Theme.separator
+                implicitHeight: 112
+                radius: Theme.shapeXL
+                color: Theme.primaryContainer
                 RowLayout {
                     anchors.fill: parent
                     anchors.margins: 20
                     spacing: 18
-                    Rectangle {
-                        width: 52; height: 52; radius: 14
-                        color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.14)
-                        Icon { anchors.centerIn: parent; name: "shieldCheck"; size: 28; color: Theme.accent }
+                    MShape {
+                        size: 64; shape: "softBurst"; color: Theme.primary
+                        Icon { anchors.centerIn: parent; name: "shieldCheck"; size: 30; color: Theme.primaryFg }
                     }
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 4
-                        Txt { text: qsTr("Privacy Report"); font.pixelSize: 15; font.weight: Font.DemiBold }
+                        Txt { text: qsTr("Privacy Report"); font.pixelSize: 18; font.weight: Font.DemiBold; color: Theme.primaryContainerFg }
                         Txt {
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
-                            color: Theme.textDim
+                            color: Theme.primaryContainerFg
+                            opacity: 0.85
                             text: Core.contentBlocker
                                   ? qsTr("OyNIx has blocked %1 trackers and %2 ads. Nothing you do is sent to us — there is no telemetry.").arg(Math.round(Core.totalTrackers).toLocaleString()).arg(Math.round(Core.totalAds).toLocaleString())
                                   : qsTr("Content blocking is turned off. Turn it on in Settings › Privacy.")
@@ -92,8 +97,8 @@ Rectangle {
                     }
                     Txt {
                         text: Math.round(Core.totalBlocked).toLocaleString(Qt.locale(), "f", 0)
-                        font.pixelSize: 34; font.weight: Font.Bold
-                        color: Theme.accent
+                        font.pixelSize: 48; font.family: Theme.displayFont
+                        color: Theme.primaryContainerFg
                     }
                 }
                 TapHandler { onTapped: page.win.openPrivacyReport() }
@@ -104,16 +109,17 @@ Rectangle {
                 Layout.fillWidth: true
                 spacing: 10
                 visible: Core.startPageShowReadingList && readRep.count > 0
-                Txt { text: qsTr("Reading List"); font.pixelSize: 17; font.weight: Font.Bold }
+                Txt { text: qsTr("Reading List"); font.pixelSize: 22; font.family: Theme.displayFont }
                 Repeater {
                     id: readRep
                     model: { Core.readingRevision; return JSON.parse(Core.readingList()).filter(function (r) { return !r.read }).slice(0, 5) }
                     delegate: Rectangle {
                         required property var modelData
                         Layout.fillWidth: true
-                        implicitHeight: 48
-                        radius: 10
-                        color: rh.hovered ? Theme.hover : Theme.card
+                        implicitHeight: 56
+                        radius: rh.hovered ? Theme.shapeXL : Theme.shapeL
+                        color: rh.hovered ? Theme.surfaceContainerHigh : Theme.surfaceContainerLow
+                        Behavior on radius { SpringAnimation { spring: Theme.springFast; damping: Theme.damping } }
                         HoverHandler { id: rh }
                         TapHandler { onTapped: { Core.markRead(modelData.url, true); page.win.navigate(modelData.url) } }
                         RowLayout {
@@ -141,39 +147,45 @@ Rectangle {
         }
     }
 
+    // Favorite tile on a Material 3 Expressive shape; the shape is picked
+    // from the site name so each site keeps its own silhouette.
     component Tile: AbstractButton {
         id: tile
         property var item
         property bool removable: false
-        width: 84
-        height: 98
+        readonly property var shapes: ["cookie9", "flower", "clover4", "cookie6", "softBurst", "circle", "cookie4", "pentagon"]
+        readonly property string shapeName: { var h = 0, s = tile.item.host || tile.item.url || ""; for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return shapes[h % shapes.length] }
+        width: 96
+        height: 112
         hoverEnabled: true
         onClicked: page.win.navigate(item.url)
         contentItem: Column {
             spacing: 8
-            Rectangle {
+            MShape {
                 anchors.horizontalCenter: parent.horizontalCenter
-                width: 64; height: 64; radius: 16
-                color: tile.hovered ? Theme.tabHover : Theme.card
-                border.color: Theme.separator
-                scale: tile.pressed ? 0.95 : 1
-                Behavior on scale { NumberAnimation { duration: 90 } }
-                Favicon { anchors.centerIn: parent; size: 30; url: tile.item.url; title: tile.item.title }
+                size: 72
+                shape: tile.hovered ? "circle" : tile.shapeName
+                color: tile.hovered ? Theme.secondaryContainer : Theme.surfaceContainerHigh
+                rotation: tile.hovered ? 20 : 0
+                scale: tile.pressed ? 0.92 : 1
+                Behavior on scale { SpringAnimation { spring: Theme.springFast; damping: Theme.damping } }
+                Behavior on rotation { SpringAnimation { spring: Theme.springDefault; damping: Theme.damping } }
+                Favicon { anchors.centerIn: parent; size: 32; url: tile.item.url; title: tile.item.title; rotation: -parent.rotation }
             }
             Txt {
                 width: parent.width
                 horizontalAlignment: Text.AlignHCenter
                 text: tile.item.title || tile.item.host
                 font.pixelSize: 12
-                color: Theme.textDim
+                color: Theme.surfaceVariantFg
             }
         }
         IconButton {
             visible: tile.removable && tile.hovered
-            x: 2; y: -4
-            implicitWidth: 20; implicitHeight: 20; round: true
-            glyph: "close"; iconSize: 9
-            background: Rectangle { radius: 10; color: Theme.popover; border.color: Theme.separator }
+            x: 4; y: -2
+            implicitWidth: 24; implicitHeight: 24
+            glyph: "close"; iconSize: 12
+            tonal: true
             onClicked: Core.removeBookmark(tile.item.id)
         }
     }

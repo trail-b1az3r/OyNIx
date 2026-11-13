@@ -112,7 +112,8 @@ fn main() {
         .qt_module("WebEngineCore")
         .qt_module("WebEngineQuick")
         .qt_module("WebChannel")
-        .files(["src/bridge/core.rs", "src/bridge/extbridge.rs", "src/bridge/native.rs"])
+        .qt_module("Network")
+        .files(["src/bridge/agentbridge.rs", "src/bridge/core.rs", "src/bridge/extbridge.rs", "src/bridge/native.rs"])
         .cpp_file("cpp/native.cpp")
         .qrc_resources(resources.iter().map(|p| p.to_string_lossy().into_owned()).collect::<Vec<_>>())
         .qrc_resources(QResources::new().resource(

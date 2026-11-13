@@ -3,6 +3,7 @@ import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import QtQuick.Window
 import QtWebEngine
+import QtQuick.Dialogs
 import OyNIx
 
 ApplicationWindow {
@@ -26,7 +27,7 @@ ApplicationWindow {
     property bool overviewOpen: false
     property bool contentFullScreen: false
     property int uidCounter: 0
-    readonly property int windowId: app.nextWindowId()
+    property int windowId: 0
     property var permission: null
 
     readonly property bool chromeVisible: !contentFullScreen && (!focusMode || peek)
@@ -39,6 +40,20 @@ ApplicationWindow {
     minimumHeight: 380
     visible: true
     color: Theme.window
+    // Theme Qt's own popups (tooltips, file dialogs) with the M3 scheme.
+    palette.window: Theme.surfaceContainer
+    palette.windowText: Theme.surfaceFg
+    palette.base: Theme.surfaceContainerLowest
+    palette.alternateBase: Theme.surfaceContainerLow
+    palette.text: Theme.surfaceFg
+    palette.button: Theme.secondaryContainer
+    palette.buttonText: Theme.secondaryContainerFg
+    palette.highlight: Theme.primary
+    palette.highlightedText: Theme.primaryFg
+    palette.toolTipBase: Theme.inverseSurface
+    palette.toolTipText: Theme.inverseOnSurface
+    palette.placeholderText: Theme.surfaceVariantFg
+    palette.mid: Theme.outlineVariant
     title: (currentTab && currentTab.model.title ? currentTab.model.title + " — " : "") + (privateMode ? qsTr("OyNIx Private") : "OyNIx")
     flags: Core.useSystemTitleBar ? Qt.Window : (Qt.Window | Qt.FramelessWindowHint)
 
@@ -263,6 +278,7 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
+        windowId = app.nextWindowId()
         if (initialTabs && initialTabs.length) {
             for (var i = 0; i < initialTabs.length; i++) {
                 var t = initialTabs[i]
@@ -274,6 +290,30 @@ ApplicationWindow {
             openTab(newTabUrl(), {})
             if (newTabUrl() === "oynix://start") Qt.callLater(addressField.focusField)
         }
+    }
+
+    // "Ask where to save each file"
+    FileDialog {
+        id: downloadDialog
+        property var download: null
+        property var done: null
+        title: qsTr("Save File")
+        fileMode: FileDialog.SaveFile
+        onAccepted: {
+            console.log("OyNIx: save download to", selectedFile)
+            var p = Core.localPath(selectedFile.toString())
+            var slash = p.lastIndexOf("/")
+            download.downloadDirectory = p.substring(0, slash)
+            download.downloadFileName = p.substring(slash + 1)
+            var cb = done; done = null; cb(true)
+        }
+        onRejected: { console.log("OyNIx: download save cancelled"); var cb = done; done = null; if (cb) cb(false) }
+    }
+    function askDownloadLocation(download, cb) {
+        downloadDialog.download = download
+        downloadDialog.done = cb
+        downloadDialog.selectedFile = "file://" + download.downloadDirectory + "/" + download.downloadFileName
+        downloadDialog.open()
     }
 
     // Hidden helper for clipboard writes.
@@ -426,6 +466,16 @@ ApplicationWindow {
                 Item { Layout.fillWidth: !win.compactTabs; visible: !win.compactTabs }
 
                 IconButton {
+                    id: claudeBtn
+                    visible: Core.agentEnabled && !win.privateMode
+                    glyph: "sparkles"; tip: qsTr("Claude")
+                    checked: win.sidebarOpen && sidebar.panel === "claude"
+                    onClicked: {
+                        if (win.sidebarOpen && sidebar.panel === "claude") win.sidebarOpen = false
+                        else { win.sidebarOpen = true; sidebar.panel = "claude" }
+                    }
+                }
+                IconButton {
                     id: shieldBtn
                     glyph: "shield"
                     tip: qsTr("Privacy Report for This Site")
@@ -540,7 +590,6 @@ ApplicationWindow {
                     window: win
                     visible: !Core.useSystemTitleBar && Core.windowControlsSide === "right"
                     Layout.leftMargin: 10
-                    layoutDirection: Qt.RightToLeft
                 }
             }
         }
@@ -709,6 +758,95 @@ ApplicationWindow {
                     z: 20
                 }
 
+                // ── Claude is working: glow border + status chip ──
+                readonly property bool agentHere: win.app.agent.working && win.currentTab !== null && win.currentTab.model.uid === win.app.agent.activeTabUid
+                Rectangle {
+                    id: agentGlow
+                    anchors.fill: parent
+                    z: 40
+                    color: "transparent"
+                    radius: 0
+                    border.width: 3
+                    border.color: Theme.primary
+                    visible: parent.agentHere
+                    opacity: 0.6 + 0.4 * Math.sin(glowPhase.p)
+                    QtObject { id: glowPhase; property real p: 0 }
+                    NumberAnimation { target: glowPhase; property: "p"; from: 0; to: Math.PI * 2; duration: 1800; loops: Animation.Infinite; running: agentGlow.visible }
+                }
+                Rectangle {
+                    z: 41
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.top: parent.top
+                    anchors.topMargin: 10
+                    visible: parent.agentHere || (win.app.agent.stopped && win.app.agent.lastActivity > 0 && Date.now() - win.app.agent.lastActivity < 60000)
+                    height: 40
+                    width: chipRow.implicitWidth + 16
+                    radius: 20
+                    color: Theme.inverseSurface
+                    Row {
+                        id: chipRow
+                        anchors.centerIn: parent
+                        spacing: 10
+                        LoadingShape { visible: !win.app.agent.stopped; size: 20; color: Theme.inversePrimary; anchors.verticalCenter: parent.verticalCenter }
+                        Txt {
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: Theme.inverseOnSurface
+                            text: win.app.agent.stopped ? qsTr("Claude stopped") : (win.app.agent.currentAction ? qsTr("Claude: %1").arg(win.app.agent.currentAction) : qsTr("Claude is using this tab"))
+                            width: Math.min(implicitWidth, 360)
+                        }
+                        PushButton {
+                            anchors.verticalCenter: parent.verticalCenter
+                            implicitHeight: 30
+                            text: win.app.agent.stopped ? qsTr("Resume") : qsTr("Stop")
+                            primary: true
+                            onClicked: win.app.agent.stopped ? win.app.agent.resume() : win.app.agent.stop()
+                        }
+                    }
+                }
+
+                // ── Permission request for Claude ──
+                Rectangle {
+                    z: 50
+                    anchors.fill: parent
+                    visible: win.app.agent.prompt !== null && win.app.agent.prompt.win === win
+                    color: Theme.alpha("#000000", 0.32)
+                    MouseArea { anchors.fill: parent }
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: Math.min(440, parent.width - 48)
+                        height: permCol.implicitHeight + 48
+                        radius: Theme.shapeXL
+                        color: Theme.surfaceContainerHigh
+                        ColumnLayout {
+                            id: permCol
+                            anchors.fill: parent
+                            anchors.margins: 24
+                            spacing: 14
+                            MShape { Layout.alignment: Qt.AlignHCenter; shape: "cookie9"; size: 56; color: Theme.primaryContainer
+                                Icon { anchors.centerIn: parent; name: "sparkles"; size: 26; color: Theme.primaryContainerFg } }
+                            Txt {
+                                Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; elide: Text.ElideNone
+                                font.pixelSize: 22; font.family: Theme.displayFont
+                                text: win.app.agent.prompt ? qsTr("Allow Claude to use %1?").arg(win.app.agent.prompt.host) : ""
+                            }
+                            Txt {
+                                Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; elide: Text.ElideNone
+                                color: Theme.surfaceVariantFg
+                                text: win.app.agent.prompt ? qsTr("%1 wants to %2. Claude will be able to read this site and act on it for you.")
+                                      .arg(win.app.agent.prompt.source === "mcp" ? qsTr("Claude (from the Claude app)") : qsTr("Claude"))
+                                      .arg(win.app.agent.prompt.detail) : ""
+                            }
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 8
+                                PushButton { Layout.fillWidth: true; primary: true; text: qsTr("Allow for this task"); onClicked: win.app.agent.prompt.answer("task") }
+                                PushButton { Layout.fillWidth: true; text: qsTr("Always allow on this site"); onClicked: win.app.agent.prompt.answer("always") }
+                                PushButton { Layout.fillWidth: true; textOnly: true; text: qsTr("Don’t allow"); onClicked: win.app.agent.prompt.answer("deny") }
+                            }
+                        }
+                    }
+                }
+
                 // Toast
                 Rectangle {
                     id: toast
@@ -773,15 +911,18 @@ ApplicationWindow {
         width: Math.max(220, Math.min(800, (popupView.contentsSize.width || 360) + 2))
         height: Math.max(60, Math.min(600, (popupView.contentsSize.height || 420) + 2))
         onClosed: url = ""
-        contentItem: Item {
+        contentItem: Rectangle {
             clip: true
+            radius: Theme.shapeL
+            color: "white"
             WebEngineView {
                 id: popupView
                 anchors.fill: parent
                 anchors.margins: 1
                 profile: win.app.defaultProfile
                 url: extPopup.url
-                backgroundColor: "transparent"
+                // Extension popups are designed for a white canvas (as in Chrome).
+                backgroundColor: "white"
                 webChannel: win.app.extChannel
                 webChannelWorld: WebEngineScript.MainWorld
                 settings.showScrollBars: false
@@ -943,6 +1084,23 @@ ApplicationWindow {
             MenuRow { visible: !ctxMenu.hasLink && !ctxMenu.hasImage && !ctxMenu.hasSelection && !ctxMenu.editable; text: qsTr("Reload"); glyph: "reload"; onClicked: ctxMenu.act(WebEngineView.Reload) }
             MenuRow { visible: !ctxMenu.hasLink && !ctxMenu.hasImage && !ctxMenu.editable; text: qsTr("Show Reader"); glyph: "reader"; onClicked: { ctxMenu.close(); win.currentTab.toggleReader() } }
             MenuRow { visible: !ctxMenu.hasLink && !ctxMenu.hasImage && !ctxMenu.editable; text: qsTr("View Page Source"); glyph: "code"; onClicked: { ctxMenu.close(); win.openTab("view-source:" + win.currentTab.model.url, { afterCurrent: true }) } }
+            // Extension context-menu items
+            Rectangle { visible: ctxExtRep.count > 0; Layout.fillWidth: true; height: 1; color: Theme.separator; Layout.topMargin: 4; Layout.bottomMargin: 4 }
+            Repeater {
+                id: ctxExtRep
+                model: ctxMenu.req && !win.privateMode ? win.app.extensionHost.menuItemsFor(ctxMenu.req) : []
+                delegate: MenuRow {
+                    required property var modelData
+                    glyph: "puzzle"
+                    text: String(modelData.title || "").replace("%s", ctxMenu.req ? ctxMenu.req.selectedText.substring(0, 30) : "")
+                    enabled: modelData.enabled !== false
+                    onClicked: {
+                        var r = ctxMenu.req
+                        ctxMenu.close()
+                        win.app.extensionHost.menuClicked(modelData, r, win.app.extensionHost.tabInfo(win, win.currentIndex))
+                    }
+                }
+            }
             Rectangle { visible: Core.developerMode; Layout.fillWidth: true; height: 1; color: Theme.separator; Layout.topMargin: 4; Layout.bottomMargin: 4 }
             MenuRow { visible: Core.developerMode; text: qsTr("Inspect Element"); glyph: "code"; onClicked: { ctxMenu.close(); win.app.openDevTools(ctxMenu.view); ctxMenu.view.triggerWebAction(WebEngineView.InspectElement) } }
         }
