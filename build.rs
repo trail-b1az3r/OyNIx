@@ -45,6 +45,7 @@ fn qmake_query(qmake: &Path, key: &str) -> String {
 
 fn main() {
     println!("cargo::rerun-if-env-changed=QMAKE");
+    println!("cargo::rerun-if-env-changed=OYNIX_VERSION");
     println!("cargo::rerun-if-changed=.qt");
     let qmake = select_qmake();
     let qmake = std::fs::canonicalize(&qmake).unwrap_or(qmake);

@@ -5,24 +5,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 VERSION="${1:-$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)}"
 VERSION="${VERSION#v}"
+export OYNIX_VERSION="$VERSION"
 ARCH="$(dpkg --print-architecture)"
-QMAKE="${QMAKE:-$(ls -d .qt/*/gcc_64/bin/qmake 2>/dev/null | sort -V | tail -1)}"
-[ -x "$QMAKE" ] || { echo "No Qt found: run scripts/fetch-qt.sh or set QMAKE"; exit 1; }
-QMAKE="$(realpath "$QMAKE")"
-
-# The binary finds its bundled Qt relative to itself.
-OYNIX_RPATH='$ORIGIN/qt/lib' QMAKE="$QMAKE" cargo build --release
 ROOT="target/deb/oynix_${VERSION}_${ARCH}"
-rm -rf "$ROOT"
-APP="$ROOT/usr/lib/oynix"
-install -Dm755 target/release/oynix "$APP/oynix"
-EXTRA_ELF="$APP/oynix" scripts/bundle-qt.sh "$QMAKE" "$APP/qt"
-mkdir -p "$ROOT/usr/bin"
-ln -s ../lib/oynix/oynix "$ROOT/usr/bin/oynix"
-install -Dm644 packaging/oynix.desktop "$ROOT/usr/share/applications/oynix.desktop"
-install -Dm644 assets/icon.svg "$ROOT/usr/share/icons/hicolor/scalable/apps/oynix.svg"
-for s in 48 64 128 256; do install -Dm644 "assets/icon-$s.png" "$ROOT/usr/share/icons/hicolor/${s}x${s}/apps/oynix.png"; done
-install -Dm644 LICENSE "$ROOT/usr/share/doc/oynix/copyright"
+scripts/stage.sh "$ROOT" usr/share/doc/oynix/copyright
 SIZE=$(du -sk "$ROOT/usr" | cut -f1)
 mkdir -p "$ROOT/DEBIAN"
 cat > "$ROOT/DEBIAN/control" <<CTRL

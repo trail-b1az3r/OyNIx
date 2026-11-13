@@ -77,11 +77,31 @@ cargo build --release
 
 To use a different Qt (for example a distribution's Qt 6.10+), point `QMAKE` at it: `QMAKE=/usr/bin/qmake6 cargo build --release`. If the Qt it finds is older than 6.10, the build stops and tells you how to fix it.
 
-Install for the current user, or build a Debian package. Both bundle the Qt runtime under `lib/oynix/qt`, so they don't depend on (or conflict with) the system Qt:
+Install for the current user, or build packages. All of them bundle the Qt runtime under `lib/oynix/qt`, so they don't depend on (or conflict with) the system Qt:
 
 ```bash
-./scripts/install.sh            # → ~/.local/bin/oynix + desktop entry + icons
-./scripts/build-deb.sh          # → target/deb/oynix_<version>_<arch>.deb  (~115 MB)
+./scripts/install.sh                 # → ~/.local/bin/oynix + desktop entry + icons
+./scripts/build-deb.sh [version]     # → target/deb/oynix_<version>_amd64.deb          (Debian/Ubuntu/Mint)
+./scripts/build-pkg.sh [version]     # → target/pkg/oynix-<version>-1-x86_64.pkg.tar.zst (Arch/Manjaro)
+```
+
+`build-pkg.sh` works on any distribution (it needs only `bsdtar` and `zstd`). On Arch you can also build from source with makepkg: `cd packaging/arch && makepkg -si`.
+
+Install the packages with `sudo apt install ./oynix_*.deb` or `sudo pacman -U oynix-*.pkg.tar.zst`.
+
+### Releases
+
+A version you supply is baked into the binary (`oynix --version`, Settings › About) and the package metadata. Leave it out and the version from `Cargo.toml` is used.
+
+**From GitHub:** open *Actions › Build › Run workflow*, enter a version such as `5.1.0` (optionally tick *pre-release* or *draft*), and run it. The workflow tests the code, builds the .deb and the pacman package, then publishes the release `v5.1.0` with both files and a `SHA256SUMS`. Pushing a tag such as `v5.1.0` does the same. Runs without a version only build the packages and attach them as workflow artifacts.
+
+**From your machine** (needs the GitHub CLI, `gh auth login`):
+
+```bash
+./scripts/release.sh 5.1.0             # build both packages and publish v5.1.0
+./scripts/release.sh 5.2.0-beta.1      # versions containing '-' are published as pre-releases
+./scripts/release.sh 5.1.0 --draft     # create a draft release
+./scripts/release.sh 5.1.0 --dry-run   # build only and show what would be published
 ```
 
 Run the unit tests (omnibox, blocker, library, settings, extensions) with `cargo test`.

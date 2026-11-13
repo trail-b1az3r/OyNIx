@@ -4,7 +4,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 QT_VERSION="${QT_VERSION:-6.11.3}"
-command -v aqt >/dev/null 2>&1 || python3 -m aqt --help >/dev/null 2>&1 || python3 -m pip install --user aqtinstall
-python3 -m aqt install-qt linux desktop "$QT_VERSION" linux_gcc_64 \
+PY=python3; command -v python >/dev/null && [ -n "${VIRTUAL_ENV:-}" ] && PY=python
+$PY -m aqt --help >/dev/null 2>&1 || $PY -m pip install --user aqtinstall
+$PY -m aqt install-qt linux desktop "$QT_VERSION" linux_gcc_64 \
   -m qtwebengine qtwebchannel qtpositioning qtshadertools qtpdf -O .qt
 echo "Qt $QT_VERSION installed to .qt/$QT_VERSION/gcc_64"

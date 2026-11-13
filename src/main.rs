@@ -24,6 +24,13 @@ use bridge::native;
 use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QUrl};
 use std::sync::OnceLock;
 
+/// Release version: `OYNIX_VERSION` at build time (set by the packaging
+/// scripts / CI when a version is given), else the Cargo version.
+pub const VERSION: &str = match option_env!("OYNIX_VERSION") {
+    Some(v) => v,
+    None => env!("CARGO_PKG_VERSION"),
+};
+
 pub struct LaunchEnv {
     pub graphics: String,
     pub qt_version: String,
@@ -84,7 +91,7 @@ fn parse_args() -> Args {
                 std::process::exit(0);
             }
             "-V" | "--version" => {
-                println!("OyNIx {}", env!("CARGO_PKG_VERSION"));
+                println!("OyNIx {VERSION}");
                 std::process::exit(0);
             }
             "--profile" => a.profile = it.next().unwrap_or_else(|| "default".into()),

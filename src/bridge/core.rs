@@ -332,7 +332,7 @@ impl Default for CoreRust {
             total_ads: 0.0,
             total_trackers: 0.0,
             profile: q(paths::profile()),
-            version: q(env!("CARGO_PKG_VERSION")),
+            version: q(crate::VERSION),
             graphics: q(&env.graphics),
             qt_version: q(&env.qt_version),
             start_url: q(&env.start_url),

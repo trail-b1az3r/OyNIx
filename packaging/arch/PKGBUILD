@@ -1,0 +1,36 @@
+# Arch Linux package for OyNIx, built from source with makepkg.
+#   cd packaging/arch && makepkg -si
+# Downloads Qt 6.11 (with WebEngine) via aqtinstall and bundles it under
+# /usr/lib/oynix/qt, so the system Qt version does not matter.
+pkgname=oynix
+pkgver=5.0.0
+pkgrel=1
+pkgdesc="Fast, private web browser (Rust + QML, Qt 6.11) with Chrome/Firefox extension support"
+arch=('x86_64')
+url="https://github.com/trail-b1az3r/OyNIx"
+license=('MIT')
+depends=(glibc gcc-libs libglvnd vulkan-icd-loader libxkbcommon libxkbcommon-x11 xcb-util-cursor
+         xcb-util-wm xcb-util-keysyms xcb-util-image xcb-util-renderutil nss libxcomposite
+         libxdamage libxrandr libxtst fontconfig dbus alsa-lib)
+makedepends=(git rust python python-pip libarchive zstd)
+optdepends=('vulkan-radeon: Vulkan on AMD' 'vulkan-intel: Vulkan on Intel' 'nvidia-utils: Vulkan on NVIDIA')
+options=(!strip !debug)
+source=("$pkgname::git+$url.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "$pkgname"
+  grep -m1 '^version' Cargo.toml | cut -d'"' -f2 | tr '-' '_'
+}
+
+prepare() {
+  cd "$pkgname"
+  python -m venv "$srcdir/venv"
+  "$srcdir/venv/bin/pip" install -q aqtinstall
+  PATH="$srcdir/venv/bin:$PATH" ./scripts/fetch-qt.sh
+}
+
+package() {
+  cd "$pkgname"
+  ./scripts/stage.sh "$pkgdir" usr/share/licenses/oynix/LICENSE
+}
