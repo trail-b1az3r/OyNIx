@@ -1,9 +1,9 @@
+
 name: Build
 
 # Every push / PR builds the .deb and the pacman package as artifacts.
 # A GitHub release is published when:
-#   • you run this workflow manually (Actions › Build › Run workflow) and
-#     enter a version, e.g. 5.1.0  → release "v5.1.0" at the selected commit;
+#   • you run this workflow manually and enter a version;
 #   • or you push a tag like v5.1.0.
 
 on:
@@ -39,6 +39,7 @@ jobs:
     outputs:
       version: ${{ steps.ver.outputs.version }}
       release: ${{ steps.ver.outputs.release }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -56,7 +57,8 @@ jobs:
             V="$CARGO_VERSION"; RELEASE=false
           fi
           if ! [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+.][0-9A-Za-z.-]+)?$ ]]; then
-            echo "::error::Version '$V' is not like 1.2.3 or 1.2.3-beta.1"; exit 1
+            echo "::error::Version '$V' is not like 1.2.3 or 1.2.3-beta.1"
+            exit 1
           fi
           echo "version=$V" >> "$GITHUB_OUTPUT"
           echo "release=$RELEASE" >> "$GITHUB_OUTPUT"
@@ -86,8 +88,23 @@ jobs:
       - name: Test
         run: QMAKE="$QT_ROOT_DIR/bin/qmake" cargo test --locked
 
+      # Remove the bundled binary from the source staging directory.
+      # Adjust this path if your packaging script stages files elsewhere.
+      - name: Remove bundled Oynix binary
+        run: |
+          if [ -f usr/bin/oynix ]; then
+            rm -f usr/bin/oynix
+            echo "Removed usr/bin/oynix"
+          else
+            echo "usr/bin/oynix not found in source root; checking package staging."
+          fi
+
       - name: Build .deb (Debian / Ubuntu / Mint)
         run: QMAKE="$QT_ROOT_DIR/bin/qmake" ./scripts/build-deb.sh "${{ steps.ver.outputs.version }}"
+
+      - name: Remove Oynix binary from Debian package
+        run: |
+          rm -f "target/deb/oynix_${{ steps.ver.outputs.version }}_amd64/usr/bin/oynix"
 
       - name: Build .pkg.tar.zst (Arch / Manjaro / EndeavourOS)
         run: QMAKE="$QT_ROOT_DIR/bin/qmake" ./scripts/build-pkg.sh "${{ steps.ver.outputs.version }}"
@@ -109,6 +126,7 @@ jobs:
     needs: build
     if: needs.build.outputs.release == 'true'
     runs-on: ubuntu-24.04
+
     steps:
       - uses: actions/download-artifact@v4
         with:
