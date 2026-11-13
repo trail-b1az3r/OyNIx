@@ -19,16 +19,15 @@ void init_webengine();
 // After QGuiApplication exists: application name, icon, desktop file name.
 void set_app_metadata(rust::Str profile);
 
-// Attach the content blocker / privacy interceptor to the default profile
-// and configure persistent storage under the given directories.
-void configure_default_profile(rust::Str storage_dir, rust::Str cache_dir, rust::Str user_agent);
-
-// Attach the interceptor to an additional (e.g. private) profile created in
+// Attach the content blocker / privacy interceptor to a profile created in
 // QML. Accepts any QObject*; non-profiles are ignored.
 void attach_interceptor(QObject *profile);
 
 // Actual graphics API Qt Quick ended up using (for the About page).
 rust::String active_graphics_api();
+
+// Qt's qwebchannel.js client library (from the Qt WebChannel resources).
+rust::String webchannel_js();
 
 // qVersion() of the Qt libraries actually loaded.
 rust::String qt_runtime_version();

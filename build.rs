@@ -15,7 +15,64 @@ fn collect(dir: &Path, ext: &str, out: &mut Vec<PathBuf>) {
     }
 }
 
+/// Minimum Qt: 6.10 (Qt WebEngine extension manager).
+const MIN_QT: (u32, u32) = (6, 10);
+
+/// Pick the Qt installation: $QMAKE, else a Qt fetched into ./.qt by
+/// scripts/fetch-qt.sh (newest version wins), else the system qmake6.
+fn select_qmake() -> PathBuf {
+    if let Ok(q) = std::env::var("QMAKE") {
+        return PathBuf::from(q);
+    }
+    let mut local: Vec<PathBuf> = std::fs::read_dir(".qt")
+        .map(|rd| rd.flatten().map(|e| e.path().join("gcc_64/bin/qmake")).filter(|p| p.exists()).collect())
+        .unwrap_or_default();
+    local.sort();
+    if let Some(q) = local.pop() {
+        return q;
+    }
+    PathBuf::from("qmake6")
+}
+
+fn qmake_query(qmake: &Path, key: &str) -> String {
+    std::process::Command::new(qmake)
+        .args(["-query", key])
+        .output()
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default()
+}
+
 fn main() {
+    println!("cargo::rerun-if-env-changed=QMAKE");
+    println!("cargo::rerun-if-env-changed=OYNIX_VERSION");
+    println!("cargo::rerun-if-changed=.qt");
+    let qmake = select_qmake();
+    let qmake = std::fs::canonicalize(&qmake).unwrap_or(qmake);
+    let version = qmake_query(&qmake, "QT_VERSION");
+    let mut parts = version.split('.').map(|p| p.parse::<u32>().unwrap_or(0));
+    let (maj, min) = (parts.next().unwrap_or(0), parts.next().unwrap_or(0));
+    if (maj, min) < MIN_QT {
+        panic!(
+            "OyNIx needs Qt >= {}.{} (found '{}' via {}).\n\
+             Run ./scripts/fetch-qt.sh to download Qt 6.11 into ./.qt, or set QMAKE=/path/to/qmake.",
+            MIN_QT.0, MIN_QT.1, version, qmake.display()
+        );
+    }
+    // cxx-qt-build reads QMAKE from the environment of this process.
+    std::env::set_var("QMAKE", &qmake);
+    // Run against the same Qt we linked, wherever it lives.
+    // OYNIX_RPATH overrides the runtime library path (packaging uses
+    // `$ORIGIN/qt/lib` for a relocatable bundle).
+    println!("cargo::rerun-if-env-changed=OYNIX_RPATH");
+    let libs = qmake_query(&qmake, "QT_INSTALL_LIBS");
+    if let Ok(rp) = std::env::var("OYNIX_RPATH") {
+        println!("cargo::rustc-link-arg=-Wl,-rpath,{rp}");
+    } else if !libs.is_empty() && !libs.starts_with("/usr/lib") {
+        println!("cargo::rustc-link-arg=-Wl,-rpath,{libs}");
+    }
+    println!("cargo::rustc-env=OYNIX_QT_BUILD_VERSION={version}");
+
     let mut qml = Vec::new();
     collect(Path::new("qml"), "qml", &mut qml);
     let qml_files: Vec<QmlFile> = qml
@@ -54,7 +111,8 @@ fn main() {
         .qt_module("Quick")
         .qt_module("WebEngineCore")
         .qt_module("WebEngineQuick")
-        .files(["src/bridge/core.rs", "src/bridge/native.rs"])
+        .qt_module("WebChannel")
+        .files(["src/bridge/core.rs", "src/bridge/extbridge.rs", "src/bridge/native.rs"])
         .cpp_file("cpp/native.cpp")
         .qrc_resources(resources.iter().map(|p| p.to_string_lossy().into_owned()).collect::<Vec<_>>())
         .qrc_resources(QResources::new().resource(

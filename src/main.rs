@@ -13,6 +13,7 @@
 
 mod bridge {
     pub mod core;
+    pub mod extbridge;
     pub mod native;
 }
 mod core;
@@ -22,6 +23,13 @@ use bridge::native;
 
 use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QUrl};
 use std::sync::OnceLock;
+
+/// Release version: `OYNIX_VERSION` at build time (set by the packaging
+/// scripts / CI when a version is given), else the Cargo version.
+pub const VERSION: &str = match option_env!("OYNIX_VERSION") {
+    Some(v) => v,
+    None => env!("CARGO_PKG_VERSION"),
+};
 
 pub struct LaunchEnv {
     pub graphics: String,
@@ -54,6 +62,10 @@ OPTIONS:
     --private            Open a private window (nothing is written to disk)
     --gpu <BACKEND>      vulkan | gles | opengl | software   (default: auto)
     --wayland | --x11    Force the windowing platform
+    --install-extension <PATH>
+                         Install a .crx / .xpi / .zip / folder (Chrome, Firefox
+                         or OyNIx format) into the profile and exit
+    --list-extensions    Print installed extensions and exit
     --list-profiles      Print existing profiles and exit
     --gpu-info           Print the detected Vulkan device and exit
     -h, --help           Show this help
@@ -61,6 +73,8 @@ OPTIONS:
 ";
 
 struct Args {
+    install: Vec<String>,
+    list_extensions: bool,
     profile: String,
     private: bool,
     gpu: Option<String>,
@@ -68,7 +82,7 @@ struct Args {
 }
 
 fn parse_args() -> Args {
-    let mut a = Args { profile: "default".into(), private: false, gpu: None, url: String::new() };
+    let mut a = Args { install: vec![], list_extensions: false, profile: "default".into(), private: false, gpu: None, url: String::new() };
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
         match arg.as_str() {
@@ -77,11 +91,13 @@ fn parse_args() -> Args {
                 std::process::exit(0);
             }
             "-V" | "--version" => {
-                println!("OyNIx {}", env!("CARGO_PKG_VERSION"));
+                println!("OyNIx {VERSION}");
                 std::process::exit(0);
             }
             "--profile" => a.profile = it.next().unwrap_or_else(|| "default".into()),
             "--private" | "--incognito" => a.private = true,
+            "--install-extension" => a.install.extend(it.next()),
+            "--list-extensions" => a.list_extensions = true,
             "--gpu" => a.gpu = it.next(),
             "--wayland" => std::env::set_var("QT_QPA_PLATFORM", "wayland;xcb"),
             "--x11" => std::env::set_var("QT_QPA_PLATFORM", "xcb"),
@@ -112,6 +128,31 @@ fn main() {
     let args = parse_args();
     core::paths::set_profile(&args.profile);
 
+    if !args.install.is_empty() || args.list_extensions {
+        let mut list = core::extensions::load();
+        let mut failed = false;
+        for p in &args.install {
+            match core::extensions::install(std::path::Path::new(p), &mut list) {
+                Ok(e) => {
+                    println!("installed {} {} ({}{})", e.name, e.version, e.kind, if e.manifest_version > 0 { format!(", MV{}", e.manifest_version) } else { String::new() });
+                    for w in &e.warnings {
+                        println!("  warning: {w}");
+                    }
+                }
+                Err(err) => {
+                    eprintln!("{p}: {err}");
+                    failed = true;
+                }
+            }
+        }
+        if args.list_extensions {
+            for e in &list {
+                println!("{:<28} {:<8} {:<8} {}  {}", e.id, e.version, e.kind, if e.enabled { "on " } else { "off" }, e.path);
+            }
+        }
+        std::process::exit(if failed { 1 } else { 0 });
+    }
+
     let requested = args
         .gpu
         .clone()
@@ -139,9 +180,6 @@ fn main() {
     let settings = core::settings::Settings::load();
     bridge::core::apply_privacy(&settings);
 
-    let wdir = core::paths::data_dir().join("webengine");
-    let cdir = core::paths::cache_dir().join("webengine");
-    native::ffi::configure_default_profile(&wdir.to_string_lossy(), &cdir.to_string_lossy(), &settings.user_agent);
 
     let start_url = if args.url.is_empty() {
         String::new()

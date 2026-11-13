@@ -6,3 +6,5 @@
 .idea/
 .DS_Store
 .qmlls.ini
+/.qt
+/dist/
