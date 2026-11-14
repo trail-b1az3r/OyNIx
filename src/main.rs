@@ -16,6 +16,7 @@ mod bridge {
     pub mod core;
     pub mod extbridge;
     pub mod native;
+    pub mod usbbridge;
 }
 mod core;
 mod gpu;

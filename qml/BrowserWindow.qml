@@ -313,6 +313,16 @@ ApplicationWindow {
 
     // "Install this extension?" (downloads of .xpi / .crx files)
     property var installAsk: null
+
+    // WebUSB device chooser: {origin, devices:[{key,name,ids,paired}], cb}
+    property var usbAsk: null
+    property string usbPick: ""
+    function askUsbDevice(origin, devices, cb) {
+        if (usbAsk) usbAsk.cb("")
+        usbPick = devices.length ? devices[0].key : ""
+        usbAsk = { origin: origin, devices: devices, cb: cb }
+    }
+    function answerUsb(key) { var a = usbAsk; usbAsk = null; if (a) a.cb(key) }
     function askInstallExtension(name, source, cb) { installAsk = { name: name, source: source, cb: cb } }
 
     // "Ask where to save each file"
@@ -877,13 +887,87 @@ ApplicationWindow {
                     }
                 }
 
+                // ── WebUSB device chooser ──
+                Rectangle {
+                    z: 50
+                    anchors.fill: parent
+                    visible: win.usbAsk !== null
+                    onVisibleChanged: if (visible) forceActiveFocus()
+                    color: Theme.alpha("#000000", 0.32)
+                    MouseArea { anchors.fill: parent }
+                    Keys.onEscapePressed: win.answerUsb("")
+                    Keys.onReturnPressed: if (win.usbPick) win.answerUsb(win.usbPick)
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: Math.min(460, parent.width - 48)
+                        height: usbCol.implicitHeight + 48
+                        radius: Theme.shapeXL
+                        color: Theme.surfaceContainerHigh
+                        ColumnLayout {
+                            id: usbCol
+                            anchors.fill: parent
+                            anchors.margins: 24
+                            spacing: 14
+                            MShape { Layout.alignment: Qt.AlignHCenter; shape: "cookie9"; size: 56; color: Theme.tertiaryContainer
+                                Icon { anchors.centerIn: parent; name: "usb"; size: 26; color: Theme.tertiaryContainerFg } }
+                            Txt {
+                                Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; elide: Text.ElideNone
+                                font.pixelSize: 20; font.family: Theme.displayFont
+                                text: win.usbAsk ? qsTr("%1 wants to connect to a USB device").arg(Core.hostOf(win.usbAsk.origin)) : ""
+                            }
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: Math.min(240, Math.max(64, usbList.contentHeight + 8))
+                                radius: Theme.shapeL
+                                color: Theme.surfaceContainerLow
+                                ListView {
+                                    id: usbList
+                                    anchors.fill: parent; anchors.margins: 4
+                                    clip: true
+                                    model: win.usbAsk ? win.usbAsk.devices : []
+                                    delegate: Rectangle {
+                                        required property var modelData
+                                        width: usbList.width; height: 52
+                                        radius: Theme.shapeM
+                                        color: win.usbPick === modelData.key ? Theme.secondaryContainer : (devHover.hovered ? Theme.alpha(Theme.text, 0.06) : "transparent")
+                                        HoverHandler { id: devHover }
+                                        TapHandler { onTapped: win.usbPick = modelData.key; onDoubleTapped: win.answerUsb(modelData.key) }
+                                        ColumnLayout {
+                                            anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 14
+                                            spacing: 0
+                                            Item { Layout.fillHeight: true }
+                                            Txt { Layout.fillWidth: true; text: modelData.name; font.weight: Font.Medium }
+                                            Txt { Layout.fillWidth: true; text: modelData.ids + (modelData.paired ? " · " + qsTr("allowed before") : ""); color: Theme.textDim; font.pixelSize: 12 }
+                                            Item { Layout.fillHeight: true }
+                                        }
+                                    }
+                                }
+                                Txt {
+                                    anchors.centerIn: parent
+                                    visible: usbList.count === 0
+                                    text: qsTr("No compatible devices found")
+                                    color: Theme.textDim
+                                }
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Item { Layout.fillWidth: true }
+                                PushButton { textOnly: true; text: qsTr("Cancel"); onClicked: win.answerUsb("") }
+                                PushButton { primary: true; text: qsTr("Connect"); enabled: win.usbPick !== ""; onClicked: win.answerUsb(win.usbPick) }
+                            }
+                        }
+                    }
+                }
+
                 // ── Install extension prompt ──
                 Rectangle {
                     z: 50
                     anchors.fill: parent
                     visible: win.installAsk !== null
+                    onVisibleChanged: if (visible) forceActiveFocus()
                     color: Theme.alpha("#000000", 0.32)
                     MouseArea { anchors.fill: parent }
+                    Keys.onEscapePressed: { var a = win.installAsk; win.installAsk = null; a.cb(false) }
                     Rectangle {
                         anchors.centerIn: parent
                         width: Math.min(420, parent.width - 48)

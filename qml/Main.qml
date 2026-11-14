@@ -125,7 +125,26 @@ QtObject {
 
     // WebChannel endpoint used by the extension runtime in pages.
     property ExtBridge extBridge: ExtBridge { WebChannel.id: "oynixExtensions" }
-    property WebChannel extChannel: WebChannel { registeredObjects: [app.extBridge] }
+    property WebChannel extChannel: WebChannel { registeredObjects: [app.extBridge, app.usb] }
+
+    // WebUSB: device chooser and connect/disconnect detection.
+    property UsbBridge usb: UsbBridge { WebChannel.id: "oynixUsb" }
+    property int usbGrants: 0
+    function refreshUsbGrants() { usbGrants = JSON.parse(usb.permissions()).length }
+    property Connections usbEvents: Connections {
+        target: app.usb
+        function onChooserRequested(id, origin, devices) {
+            var w = app.activeWindow()
+            if (!w) { app.usb.choose(id, ""); return }
+            w.askUsbDevice(origin, JSON.parse(devices), function (key) { app.usb.choose(id, key || "") })
+        }
+        function onPermissionsChanged() { app.refreshUsbGrants() }
+    }
+    property Timer usbPoll: Timer {
+        interval: 2000; repeat: true
+        running: app.usbGrants > 0 && JSON.parse(Core.settingsJson).webusb === true
+        onTriggered: app.usb.poll()
+    }
 
     // Tab and window ids are global so extensions can address them.
     property int lastTabId: 0
@@ -323,5 +342,5 @@ QtObject {
         shutdown()
     }
 
-    Component.onCompleted: { setupProfile(); restore() }
+    Component.onCompleted: { setupProfile(); restore(); refreshUsbGrants() }
 }

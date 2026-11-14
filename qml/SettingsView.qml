@@ -634,6 +634,27 @@ Rectangle {
                 SwitchRow { label: qsTr("Smooth scrolling"); key: "smoothScrolling" }
             }
             Section {
+                id: usbSection
+                title: qsTr("USB Devices")
+                property var grants: { sw.app ? sw.app.usbGrants : 0; return sw.app ? JSON.parse(sw.app.usb.permissions()) : [] }
+                SwitchRow { label: qsTr("Let websites ask to connect to USB devices"); hint: qsTr("WebUSB, used by device flashers, hardware wallets and microcontroller IDEs. Only secure sites can ask, and only after you click something."); key: "webusb" }
+                Repeater {
+                    model: usbSection.grants
+                    delegate: ColumnLayout {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        spacing: 0
+                        Divider {}
+                        Row_ {
+                            label: modelData.name
+                            hint: Core.hostOf(modelData.origin) + " · " + modelData.key
+                            IconButton { glyph: "trash"; onClicked: sw.app.usb.revoke(modelData.origin, modelData.key) }
+                        }
+                    }
+                }
+                Txt { visible: usbSection.grants.length === 0; text: qsTr("No website has access to a USB device."); color: Theme.textDim; Layout.margins: 12; font.pixelSize: 12 }
+            }
+            Section {
                 title: qsTr("Customised websites")
                 Repeater {
                     model: Object.keys(sw.s.sites || {})

@@ -1043,6 +1043,11 @@ impl qobject::Core {
         if st.fingerprint_protection {
             v.push(json!({ "name": "oynix-fp", "source": scripts::ANTI_FINGERPRINT, "main": true }));
         }
+        if st.webusb {
+            v.push(json!({ "name": "oynix-webusb", "source": scripts::WEBUSB_MAIN, "main": true, "allFrames": false }));
+            let relay = format!("{}\n{}", crate::bridge::native::ffi::webchannel_js(), scripts::WEBUSB_RELAY);
+            v.push(json!({ "name": "oynix-webusb-relay", "source": relay, "main": false, "start": true, "allFrames": false }));
+        }
         v.push(json!({ "name": "oynix-amo-install", "source": scripts::AMO_INSTALL, "main": false, "greasemonkey": true }));
         for e in self.extensions.iter().filter(|e| e.enabled && e.kind == "oynix") {
             if let Some(src) = extensions::oynix_script(e) {

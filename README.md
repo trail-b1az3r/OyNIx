@@ -1,3 +1,5 @@
+<img src="assets/icon.svg" width="96" alt="OyNIx icon">
+
 # OyNIx
 
 A fast, private desktop web browser written in **Rust** and **QML**. The interface is drawn by Qt Quick on **Vulkan 1.3 / 1.2**, with **OpenGL ES** as the fallback.
@@ -18,8 +20,10 @@ The interface follows **Material 3 Expressive**: dynamic colour generated from y
 | **Tab overview** | `Ctrl+Shift+\`: a searchable grid of live tab previews. |
 | **Memory** | Inactive tabs are unloaded after a configurable time. Restored sessions load lazily, so only the visible tab loads. Low Power Mode freezes background tabs and turns off animations. |
 | **Privacy** | Built-in content blocker with downloadable, auto-updating filter lists (EasyList, EasyPrivacy, uBlock filters, Peter Lowe, AdGuard, Fanboy annoyances, cookie notices, social widgets, malware), custom list URLs and local files. Network blocking and element hiding, a per-site report and per-site allowlist. Tracking-parameter stripping, third-party cookie blocking, fingerprinting protection, Global Privacy Control, optional Do Not Track. |
-| **Dark mode for websites** | When OyNIx is dark, sites get their own dark theme (`prefers-color-scheme`). *Darken all websites* also darkens sites without one, and Website settings can switch this per site. |
-| **Address field** | Shows the domain when idle. Suggestions from bookmarks, history and your search engine, plus 25 built-in `!bang` shortcuts (`!w`, `!gh`, `!yt`, `!mdn`…). |
+| **Dark mode for websites** | *Settings › Appearance › Website appearance*: **Match OyNIx** (default), **Always dark** or **Always light**. In dark mode, sites with their own dark theme use it (`prefers-color-scheme`), and every other site is darkened automatically. Website settings can turn darkening off for a single site. |
+| **Address field** | Shows the domain when idle. Clean suggestions: typing `goo` completes inline to `google.com`, and suggestions show `google.com` rather than `https://www.google.com/`. Tracking parameters are removed from typed URLs. Suggestions come from bookmarks, history and your search engine, plus 25 built-in `!bang` shortcuts (`!w`, `!gh`, `!yt`, `!mdn`…). |
+| **History** | Full history page (`Ctrl+H`, or `oynix://history`) grouped by day, with search, open in a new tab, and remove an entry or a whole site. *Clear Browsing Data* for the last hour, day, week, month or all time (history, cookies, cache). Right-click or long-press Back/Forward for the tab's history. Single-page apps that change the address without reloading are recorded too. |
+| **WebUSB** | `navigator.usb` for secure sites (device flashers, hardware wallets, microcontroller IDEs). A device chooser asks which device to share, permissions are kept per site and can be removed in *Settings › Websites*. Control, bulk and interrupt transfers; interfaces with protected classes (HID, storage, audio, video…) cannot be claimed, as in other browsers. |
 | **Reading** | Reader View (`Ctrl+Shift+R`), Reading List, Focus Mode (`Ctrl+Shift+F`, hover the top edge to reveal the toolbar). |
 | **Library** | Sidebar with Bookmarks, Reading List and History. Favorites bar. HTML bookmark import and export. |
 | **Start Page** | Native and instant: Favorites, Frequently Visited, Privacy Report, Reading List. |
@@ -30,6 +34,7 @@ The interface follows **Material 3 Expressive**: dynamic colour generated from y
 | **Power users** | Developer Tools, user scripts (`*.user.js` with Greasemonkey metadata) and user styles (`*.user.css`), custom user agent, Print to PDF, view source. |
 | **Design** | Material 3 Expressive: colour roles generated from any accent colour (light and dark), pill-shaped controls that morph when pressed, the M3 switch, segmented buttons, navigation rail in Settings, expressive shapes on the Start Page, a wavy loading indicator. Frameless window with M3 window buttons (left or right), or the system title bar. |
 | **Downloads** | Pause, resume, cancel, open and show in folder; optional "Ask where to save each file". |
+| **Settings** | Open in a tab (default) or in their own window: *Settings › Appearance › Open settings in*. |
 
 ## Architecture
 
@@ -128,6 +133,10 @@ oynix --list-extensions
 | **Firefox** | `.xpi`, `.zip`, folder; MV2 and MV3 | Rewrites the manifest for Chromium: removes Gecko-only keys, moves MV3 host permissions, turns `background.scripts` into a service worker, maps `menus` to `contextMenus`. `browser.*` works with promises. |
 | **OyNIx** | folder or `.zip` with `oynix.json`, `content.js`, `content.css` (all required) | Injects the CSS and JS on pages matching `matches`, at `run_at`, in an isolated (default) or the main world. **New Extension** in Settings creates a ready-to-edit template. |
 
+### From addons.mozilla.org
+
+Browse [addons.mozilla.org](https://addons.mozilla.org) in OyNIx and click the **Add to OyNIx** button on an add-on's page (AMO hides its own install button from browsers other than Firefox). OyNIx downloads the add-on's current `.xpi`, asks *Add “name”?*, and installs it. Opening any `.xpi` or `.crx` link works the same way.
+
 `manifest_version` must be 2 or 3. Higher numbers don't exist yet; they're accepted and loaded as MV3 with a warning.
 
 Qt WebEngine 6.10–6.12 loads extensions and serves their pages, but doesn't run content scripts or provide `chrome.*` APIs. OyNIx supplies those itself (it also marks each extension's own files as accessible to its pages, which Qt otherwise refuses to serve):
@@ -195,7 +204,8 @@ oynix --wayland | --x11
 | Close tab / reopen closed tab | `Ctrl+W` / `Ctrl+Shift+T` |
 | Address field | `Ctrl+L`, `Ctrl+K`, `F6` |
 | Show all tabs | `Ctrl+Shift+\` |
-| Sidebar / Bookmarks / History | `Ctrl+Shift+L` / `Ctrl+B` / `Ctrl+H` |
+| Sidebar / Bookmarks | `Ctrl+Shift+L` / `Ctrl+B` |
+| History page / History in sidebar | `Ctrl+H` / `Ctrl+Shift+H` |
 | Reader View / Focus Mode | `Ctrl+Shift+R` / `Ctrl+Shift+F` |
 | Find / next / previous | `Ctrl+F` / `Ctrl+G` / `Ctrl+Shift+G` |
 | Bookmark / add to Reading List | `Ctrl+D` / `Ctrl+Shift+D` |
@@ -227,6 +237,29 @@ The engine understands the common Adblock Plus / uBlock Origin syntax:
 
 Rules that need features OyNIx doesn't implement are skipped: scriptlets (`##+js`), procedural selectors (`:has-text` and similar), `$redirect`, `$csp`, `$removeparam` and regex rules. With the default lists that's about 110,000 network and 66,000 element-hiding rules, parsed in the background in about 0.2 s; a request check takes about 1.5 µs.
 
+### Settings in a window on Hyprland
+
+With *Open settings in › A separate window*, the settings window is a dialog of the browser window, so Hyprland floats it by default. To tile it instead, or to size it, use its title:
+
+```ini
+windowrulev2 = tile, title:^(OyNIx Settings)$
+# or, to keep it floating at a fixed size:
+windowrulev2 = float, title:^(OyNIx Settings)$
+windowrulev2 = size 980 700, title:^(OyNIx Settings)$
+```
+
+### WebUSB permissions on Linux
+
+Websites can only use devices your user may open. Most distributions give the logged-in user access to some devices only, so add a udev rule for the device (find its IDs with `lsusb`, e.g. `2341:8036`):
+
+```bash
+echo 'SUBSYSTEM=="usb", ATTR{idVendor}=="2341", ATTR{idProduct}=="8036", TAG+="uaccess"' | \
+  sudo tee /etc/udev/rules.d/70-oynix-webusb.rules
+sudo udevadm control --reload && sudo udevadm trigger
+```
+
+OyNIx ships its own libusb, so no extra package is needed. In containers without `/dev/bus/usb` WebUSB simply finds no devices.
+
 ## Files
 
 | Path | Contents |
@@ -234,7 +267,7 @@ Rules that need features OyNIx doesn't implement are skipped: scriptlets (`##+js
 | `~/.config/oynix/<profile>/settings.json` | preferences and per-site settings |
 | `~/.config/oynix/<profile>/filters/*.txt` | extra blocklists (Adblock Plus / uBlock / hosts syntax) |
 | `~/.config/oynix/<profile>/userscripts/` | `*.user.js`, `*.user.css` |
-| `~/.local/share/oynix/<profile>/` | history, bookmarks, reading list, session, cookies |
+| `~/.local/share/oynix/<profile>/` | history, bookmarks, reading list, session, cookies, `usb-permissions.json` |
 | `~/.local/share/oynix/<profile>/extensions/` | installed extensions (+ `extensions.json` registry, `extension-storage/`) |
 | `~/.cache/oynix/<profile>/` | HTTP cache |
 

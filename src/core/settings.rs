@@ -72,6 +72,8 @@ pub struct Settings {
     /// Website appearance: "auto" (dark when OyNIx is dark: the site's own
     /// dark theme, otherwise automatic darkening), "dark" or "light".
     pub website_appearance: String,
+    /// Let secure websites ask for access to USB devices (WebUSB).
+    pub webusb: bool,
 
     // ── Claude for OyNIx ──────────────────────────────────────────
     /// Allow Claude (MCP clients and the built-in panel) to control the browser.
@@ -145,6 +147,7 @@ impl Default for Settings {
             force_dark_websites: false,
             dark_websites: true,
             website_appearance: "auto".into(),
+            webusb: true,
             agent_enabled: false,
             agent_mode: "ask".into(),
             agent_allowed_sites: Vec::new(),

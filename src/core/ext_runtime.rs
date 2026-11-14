@@ -28,7 +28,10 @@ pub const RUNTIME: &str = r#"
     if (!ready) ready = new Promise(function (resolve) {
       (function connect() {
         if (typeof qt === 'undefined' || !qt.webChannelTransport || typeof QWebChannel === 'undefined') { setTimeout(connect, 25); return; }
-        new QWebChannel(qt.webChannelTransport, function (ch) {
+        // One QWebChannel per world: a second client on the same transport
+        // would take over its message handler (WebUSB shares this one).
+        if (!g.__oynixChannel) g.__oynixChannel = new Promise(function (r) { new QWebChannel(qt.webChannelTransport, r); });
+        g.__oynixChannel.then(function (ch) {
           bridge = ch.objects.oynixExtensions;
           bridge.message.connect(function (ext, target, payload) { var p = JSON.parse(payload); runtimes.forEach(function (r) { r._deliver(ext, target, p); }); });
           bridge.replied.connect(function (ext, id, resp) { runtimes.forEach(function (r) { r._reply(ext, id, resp); }); });

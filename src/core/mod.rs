@@ -11,3 +11,4 @@ pub mod omnibox;
 pub mod paths;
 pub mod scripts;
 pub mod settings;
+pub mod usb;
