@@ -1,0 +1,9 @@
+{
+  "name": "Scraper",
+  "version": "1.0.1",
+  "description": "Collects a page’s text, images, links and tables, and reads text that isn’t really text (scans, canvas, pictures of words) with on-device OCR.",
+  "matches": ["*://*/*", "file:///*"],
+  "run_at": "document_idle",
+  "world": "isolated",
+  "permissions": ["ocr"]
+}

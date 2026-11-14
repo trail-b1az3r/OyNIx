@@ -80,6 +80,8 @@ pub struct Settings {
     pub update_download: bool,
     /// "stable" or "beta" (includes pre-releases).
     pub update_channel: String,
+    /// Extension id whose theme.json styles the browser ("" = OyNIx's own style).
+    pub browser_style: String,
 
     // ── Claude for OyNIx ──────────────────────────────────────────
     /// Allow Claude (MCP clients and the built-in panel) to control the browser.
@@ -157,6 +159,7 @@ impl Default for Settings {
             update_check: true,
             update_download: true,
             update_channel: "stable".into(),
+            browser_style: String::new(),
             agent_enabled: false,
             agent_mode: "ask".into(),
             agent_allowed_sites: Vec::new(),

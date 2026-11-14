@@ -18,6 +18,7 @@ mod bridge {
     pub mod native;
     pub mod panel;
     pub mod updater;
+    pub mod ocrbridge;
     pub mod usbbridge;
 }
 mod core;
@@ -184,6 +185,7 @@ fn main() {
 
     if !args.install.is_empty() || args.list_extensions {
         let mut list = core::extensions::load();
+        core::builtin::sync(&mut list);
         let mut failed = false;
         for p in &args.install {
             match core::extensions::install(std::path::Path::new(p), &mut list) {

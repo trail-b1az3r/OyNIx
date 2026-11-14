@@ -16,3 +16,5 @@ pub mod watchdog;
 pub mod tscompile;
 pub mod qmlcheck;
 pub mod updater;
+pub mod ocr;
+pub mod builtin;

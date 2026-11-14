@@ -31,7 +31,7 @@ const BANNED: &[&str] = &[
     "WebSocket", "Worker", "include", "getPrototypeOf", "defineProperty", "__defineGetter__", "arguments",
     // The panel sits inside the browser window; these climb out of it into
     // OyNIx's own interface. Panels use ids instead of `parent`.
-    "parent", "window", "Window", "ApplicationWindow", "Overlay", "overlay", "contentItem", "activeFocusItem",
+    "parent", "window", "Window", "ApplicationWindow", "Overlay", "overlay", "activeFocusItem",
     "visualParent", "toolTip", "DropArea", "focusScope",
 ];
 

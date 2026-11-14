@@ -13,7 +13,16 @@ QtObject {
     readonly property bool systemDark: (0.299 * sys.window.r + 0.587 * sys.window.g + 0.114 * sys.window.b) < 0.5
     readonly property bool dark: Core.theme === "dark" || (Core.theme === "auto" && systemDark)
 
-    readonly property var scheme: JSON.parse(Core.materialScheme(Core.accent, dark))
+    // A browser style from an extension's theme.json: its accent, colour
+    // role overrides for light and dark, fonts and corner scale.
+    readonly property var custom: { Core.settingsJson; Core.extensionsRevision; return JSON.parse(Core.browserStyleJson()) }
+    readonly property var scheme: {
+        var s = JSON.parse(Core.materialScheme(custom.accent || Core.accent, dark))
+        var o = dark ? custom.dark : custom.light
+        if (o) for (var k in o) s[k] = o[k]
+        return s
+    }
+    readonly property real cornerScale: custom.corners !== undefined ? custom.corners : 1
     function role(n) { return scheme[n] || "#ff00ff" }
     function alpha(c, a) { return Qt.rgba(c.r, c.g, c.b, a) }
 
@@ -79,11 +88,11 @@ QtObject {
     readonly property color purple: tertiary
 
     // ── Shape scale ──
-    readonly property int shapeXS: 4
-    readonly property int shapeS: 8
-    readonly property int shapeM: 12
-    readonly property int shapeL: 16
-    readonly property int shapeXL: 28
+    readonly property int shapeXS: Math.round(4 * cornerScale)
+    readonly property int shapeS: Math.round(8 * cornerScale)
+    readonly property int shapeM: Math.round(12 * cornerScale)
+    readonly property int shapeL: Math.round(16 * cornerScale)
+    readonly property int shapeXL: Math.round(28 * cornerScale)
     readonly property int radius: shapeM
     readonly property int radiusLarge: shapeXL
 
@@ -93,8 +102,8 @@ QtObject {
     readonly property int sidebarWidth: 300
 
     // ── Type scale (Roboto Flex / Google Sans Flex when installed) ──
-    readonly property string font: "Roboto Flex, Google Sans Flex, Google Sans Text, Roboto, Inter, Noto Sans, Cantarell, sans-serif"
-    readonly property string displayFont: "Google Sans Flex, Roboto Flex, Google Sans, Roboto, Inter, Noto Sans, sans-serif"
+    readonly property string font: (custom.font ? custom.font + ", " : "") + "Roboto Flex, Google Sans Flex, Google Sans Text, Roboto, Inter, Noto Sans, Cantarell, sans-serif"
+    readonly property string displayFont: (custom.displayFont ? custom.displayFont + ", " : "") + "Google Sans Flex, Roboto Flex, Google Sans, Roboto, Inter, Noto Sans, sans-serif"
     readonly property int fontSize: 14
     readonly property int smallFont: 12
     readonly property int titleSize: 16

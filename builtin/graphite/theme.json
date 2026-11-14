@@ -1,0 +1,36 @@
+{
+  "accent": "#5f6670",
+  "light": {
+    "surface": "#f7f7f6",
+    "surfaceContainerLowest": "#ffffff",
+    "surfaceContainerLow": "#f1f1f0",
+    "surfaceContainer": "#ebebea",
+    "surfaceContainerHigh": "#e4e4e3",
+    "surfaceContainerHighest": "#dddddc",
+    "primary": "#2c2f33",
+    "onPrimary": "#ffffff",
+    "primaryContainer": "#dfe2e6",
+    "onPrimaryContainer": "#16191c",
+    "secondaryContainer": "#e3e4e6",
+    "onSecondaryContainer": "#1b1d20",
+    "tertiaryContainer": "#ede6dc",
+    "onTertiaryContainer": "#2a2218"
+  },
+  "dark": {
+    "surface": "#141516",
+    "surfaceContainerLowest": "#0e0f10",
+    "surfaceContainerLow": "#1a1b1c",
+    "surfaceContainer": "#1f2021",
+    "surfaceContainerHigh": "#292a2b",
+    "surfaceContainerHighest": "#333435",
+    "primary": "#d6d9dd",
+    "onPrimary": "#1b1d20",
+    "primaryContainer": "#3a3d41",
+    "onPrimaryContainer": "#e6e8eb",
+    "secondaryContainer": "#36383b",
+    "onSecondaryContainer": "#e3e4e6",
+    "tertiaryContainer": "#463e33",
+    "onTertiaryContainer": "#efe6da"
+  },
+  "corners": 0.45
+}

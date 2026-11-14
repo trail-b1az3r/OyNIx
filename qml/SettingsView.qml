@@ -353,6 +353,15 @@ Rectangle {
                 }
             }
             Section {
+                title: qsTr("Browser Style")
+                ChoiceRow {
+                    label: qsTr("Style")
+                    hint: qsTr("Extensions can restyle OyNIx with a theme.json: colours, fonts and corners. Graphite comes with OyNIx.")
+                    key: "browserStyle"
+                    options: { Core.extensionsRevision; return [{ v: "", t: qsTr("OyNIx (default)") }].concat(JSON.parse(Core.browserStyles()).map(function (x) { return { v: x.id, t: x.name } })) }
+                }
+            }
+            Section {
                 title: qsTr("Websites")
                 ChoiceRow {
                     label: qsTr("Website appearance")
@@ -800,7 +809,7 @@ Rectangle {
                                 RowLayout {
                                     spacing: 6
                                     Txt { text: ext.modelData.name; font.weight: Font.DemiBold; Layout.maximumWidth: 240 }
-                                    Txt { text: ext.modelData.version; color: Theme.textDim; font.pixelSize: 11 }
+                                    Txt { text: ext.modelData.version + (ext.modelData.builtin ? " · " + qsTr("Built in") : "") + (ext.modelData.hasTheme ? " · " + qsTr("Browser style") : "") + ((ext.modelData.permissions || []).indexOf("ocr") >= 0 ? " · " + qsTr("Reads text from page screenshots") : ""); color: Theme.textDim; font.pixelSize: 11 }
                                     Rectangle {
                                         implicitWidth: kindText.implicitWidth + 12; implicitHeight: 18; radius: 9
                                         color: ext.modelData.kind === "firefox" ? "#33ff9f0a" : ext.modelData.kind === "oynix" ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.2) : "#330a84ff"
@@ -833,7 +842,7 @@ Rectangle {
                                 onClicked: sw.installExt(ext.modelData.path)
                             }
                             IconButton { glyph: "folder"; tip: qsTr("Show Files"); onClicked: Core.openExternally(ext.modelData.path) }
-                            IconButton { glyph: "trash"; tip: qsTr("Remove"); onClicked: ext.host.remove(ext.modelData.id) }
+                            IconButton { visible: !ext.modelData.builtin; glyph: "trash"; tip: qsTr("Remove"); onClicked: ext.host.remove(ext.modelData.id) }
                             Toggle { checked: ext.modelData.enabled; onToggled: ext.host.setEnabled(ext.modelData.id, checked) }
                         }
                     }

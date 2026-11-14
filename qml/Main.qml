@@ -129,6 +129,7 @@ QtObject {
     property Connections oynixOpen: Connections {
         target: app.extBridge
         function onMessage(ext, target, payload) {
+            if (target === "oynix:ocr") { try { app.handleOcr(ext, JSON.parse(payload)) } catch (e) {} return }
             if (target !== "oynix:open") return
             var e = JSON.parse(Core.extensions()).filter(function (x) { return x.id === ext && x.kind === "oynix" && x.enabled && (x.hasPanel || x.hasPage) })[0]
             var w = app.activeWindow()
@@ -148,6 +149,37 @@ QtObject {
         else if (windows.length) windows[0].openTab(u, {})
     }
     property int usbGrants: 0
+
+    // ── OCR for extensions (oynix.ocr) ──
+    // Only the tab you're looking at can be read, only for extensions that
+    // declared the "ocr" permission, and only the page that asked.
+    property OcrService ocr: OcrService {}
+    property var ocrRequests: ({})
+    function answerOcr(ext, req, text, error) {
+        extBridge.post(ext, "content", JSON.stringify({ __oynix: "ocr", req: req, text: text || "", error: error || "" }))
+    }
+    function handleOcr(ext, r) {
+        if (!Core.extensionHasPermission(ext, "ocr")) return answerOcr(ext, r.req, "", "This extension didn’t ask for the ocr permission")
+        var w = activeWindow(), tab = w ? w.currentTab : null, v = tab ? tab.view : null
+        if (!v || v.url.toString() !== r.url || w.privateMode)
+            return answerOcr(ext, r.req, "", "OCR only reads the tab you’re looking at")
+        var z = v.zoomFactor, scale = 2
+        var path = Core.configPath("cache") + "/ocr-" + String(r.req).replace(/[^a-z0-9]/gi, "") + ".png"
+        v.grabToImage(function (res) {
+            if (!res.saveToFile(path)) return app.answerOcr(ext, r.req, "", "Couldn’t capture the page")
+            var m = Object.assign({}, app.ocrRequests); m[r.req] = ext; app.ocrRequests = m
+            app.ocr.recognize(path, r.x * z * scale, r.y * z * scale, r.width * z * scale, r.height * z * scale, r.req)
+        }, Qt.size(v.width * scale, v.height * scale))
+    }
+    property Connections ocrEvents: Connections {
+        target: app.ocr
+        function onFinished(req, text, error) {
+            var ext = app.ocrRequests[req]
+            if (!ext) return
+            var m = Object.assign({}, app.ocrRequests); delete m[req]; app.ocrRequests = m
+            app.answerOcr(ext, req, text, error)
+        }
+    }
     // host|error type pairs the user chose to visit despite a certificate error (this session only)
     property var certAllowed: ({})
     function refreshUsbGrants() { usbGrants = JSON.parse(usb.permissions()).length }

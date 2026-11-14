@@ -28,6 +28,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SITE = ROOT / "site"
 GALLERY = ROOT / "gallery"
+BUILTIN = ROOT / "builtin"
 REPO = "https://github.com/trail-b1az3r/OyNIx"
 
 
@@ -289,12 +290,13 @@ def build_gallery(site):
     out = site.out / "extensions"
     (out / "packages").mkdir(parents=True, exist_ok=True)
     items = []
-    for d in sorted(p for p in GALLERY.iterdir() if p.is_dir()):
+    dirs = [(p, True) for p in sorted(BUILTIN.iterdir()) if p.is_dir()] + [(p, False) for p in sorted(GALLERY.iterdir()) if p.is_dir()]
+    for d, builtin in dirs:
         meta = json.loads((d / "oynix.json").read_text())
         for f in ("code.ts", "content.css"):
             if not (d / f).exists():
                 sys.exit(f"{d.name}: {f} is missing")
-        allowed = {"oynix.json", "code.ts", "content.css", "graphics.qt", "extra.html", "extra.jsonl", "icon.png", "icon.svg"}
+        allowed = {"oynix.json", "code.ts", "content.css", "graphics.qt", "extra.html", "extra.jsonl", "theme.json", "icon.png", "icon.svg"}
         extra_files = sorted(f.name for f in d.iterdir() if f.is_file() and f.name not in allowed)
         if extra_files:
             sys.exit(f"{d.name}: unexpected files {extra_files} (allowed: {sorted(allowed)})")
@@ -306,6 +308,9 @@ def build_gallery(site):
                     except ValueError as e:
                         sys.exit(f"{d.name}: extra.jsonl:{n}: {e}")
         g = meta.get("gallery", {})
+        if builtin:
+            g = {"category": "Built in", "author": "OyNIx", "shape": {"scraper": "burst", "graphite": "cookie4"}.get(d.name, "flower"),
+                 "summary": "Comes with OyNIx.", "about": meta.get("description", "") + "\n\nThis extension comes with OyNIx: find it in Settings › Extensions, where you can turn it off. The download here is the same package, for reading or for other OyNIx installs."}
         file = f'{meta["name"].replace(" ", "-")}-{meta["version"]}.oynix'
         pkg = out / "packages" / file
         zip_dir(d, pkg)
@@ -319,7 +324,8 @@ def build_gallery(site):
             "world": meta.get("world", "isolated"),
             "package": f"packages/{file}", "size": len(data), "sha256": hashlib.sha256(data).hexdigest(),
             "ts": (d / "code.ts").read_text(), "css": (d / "content.css").read_text(),
-            "extras": {f: (d / f).read_text() for f in ("graphics.qt", "extra.html", "extra.jsonl") if (d / f).exists()},
+            "extras": {f: (d / f).read_text() for f in ("graphics.qt", "extra.html", "extra.jsonl", "theme.json") if (d / f).exists()},
+            "permissions": meta.get("permissions", []),
         })
 
     tones = [("var(--primary-container)", "var(--on-primary-container)"), ("var(--tertiary-container)", "var(--on-tertiary-container)"),
@@ -377,7 +383,10 @@ def build_gallery(site):
         ts_lines = it["ts"].count("\n") + 1
         extras_html = "".join(f'<details class="source"><summary>{html.escape(f)}</summary><pre><code>{html.escape(t)}</code></pre></details>' for f, t in it["extras"].items())
         panel = "graphics.qt (panel)" if "graphics.qt" in it["extras"] else ("extra.html (page)" if "extra.html" in it["extras"] else "None")
+        abilities = ", ".join(filter(None, ["Reads text from screenshots of the page (OCR)" if "ocr" in it["permissions"] else "", "Restyles the browser" if "theme.json" in it["extras"] else ""])) or "None"
         all_sites = any(m in ("*://*/*", "<all_urls>") for m in it["matches"])
+        if not it["matches"]:
+            matches = "No pages"
         body = f'''<div class="wrap ext-page">
   <article>
     <div class="ext-hero">
@@ -405,6 +414,7 @@ def build_gallery(site):
       <dt>Starts</dt><dd>{when}</dd>
       <dt>Network</dt><dd>None</dd>
       <dt>Toolbar</dt><dd>{panel}</dd>
+      <dt>Extra abilities</dt><dd>{abilities}</dd>
       <dt>Size</dt><dd>{it["size"]:,} bytes</dd>
       <dt>SHA-256</dt><dd><code style="font-size:11px">{it["sha256"]}</code></dd>
     </dl>

@@ -240,7 +240,8 @@ pub fn pick_latest(releases: &Value, include_prerelease: bool) -> Option<Release
         .max_by(|a, b| a.version.cmp(&b.version))
 }
 
-fn agent() -> ureq::Agent {
+/// HTTPS client with the system's certificates and proxy settings.
+pub fn agent() -> ureq::Agent {
     ureq::Agent::config_builder()
         .tls_config(ureq::tls::TlsConfig::builder().root_certs(ureq::tls::RootCerts::PlatformVerifier).build())
         .user_agent(format!("OyNIx/{} (updater)", crate::VERSION))
