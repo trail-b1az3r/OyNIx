@@ -19,6 +19,8 @@ pub mod ffi {
         fn set_app_metadata(profile: &str);
         unsafe fn attach_interceptor(profile: *mut QObject);
         unsafe fn clear_cookies(profile: *mut QObject);
+        unsafe fn load_panel(host: *mut QObject, qml_path: &str, ext_dir: &str, api: *mut QObject) -> String;
+        unsafe fn unload_panel(host: *mut QObject);
         fn active_graphics_api() -> String;
         fn qt_runtime_version() -> String;
         fn webchannel_js() -> String;

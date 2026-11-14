@@ -120,9 +120,14 @@ fn wayland_session() -> bool {
     platform.starts_with("wayland") || std::env::var_os("WAYLAND_DISPLAY").is_some()
 }
 
-/// Pick a backend. An explicit request wins; otherwise use Vulkan when a
-/// real (non-CPU) 1.2+ device exists, else OpenGL ES on Wayland/EGL, else
-/// desktop OpenGL (GLX on X11 cannot hand Chromium a GLES context).
+/// Pick a backend. An explicit request wins. On Wayland the default is
+/// OpenGL ES (EGL): with Vulkan's FIFO presentation, a present waits for the
+/// compositor's frame callback, which compositors such as Hyprland withhold
+/// while the window isn't visible (another workspace, behind a fullscreen
+/// window), so the render thread and then the whole UI froze. Qt's EGL path
+/// waits for frame callbacks with a timeout instead. Elsewhere use Vulkan
+/// when a real (non-CPU) 1.2+ device exists, else desktop OpenGL (GLX on
+/// X11 cannot hand Chromium a GLES context).
 pub fn select(requested: Option<Backend>) -> Selection {
     match requested {
         Some(Backend::Vulkan) => match probe_vulkan() {
@@ -133,9 +138,9 @@ pub fn select(requested: Option<Backend>) -> Selection {
             }
         },
         Some(b) => Selection { backend: b, detail: b.name().to_string() },
+        None if wayland_session() => Selection { backend: Backend::Gles, detail: "OpenGL ES (EGL) · Wayland default".into() },
         None => match probe_vulkan() {
             Some(v) if !v.driver_is_cpu => Selection { backend: Backend::Vulkan, detail: format!("Vulkan {} · {}", v.version(), v.device) },
-            _ if wayland_session() => Selection { backend: Backend::Gles, detail: "OpenGL ES (EGL)".into() },
             _ => Selection { backend: Backend::OpenGl, detail: "OpenGL".into() },
         },
     }

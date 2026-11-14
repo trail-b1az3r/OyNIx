@@ -206,7 +206,7 @@ ApplicationWindow {
 
     function navigate(text) {
         var u = Core.resolveInput(text)
-        if (u.indexOf("oynix://settings") === 0) { app.openSettings(""); return }
+        if (u.indexOf("oynix://settings") === 0) { app.openSettings(u.replace(/^oynix:\/\/settings\/?/, "")); return }
         if (u.indexOf("oynix://privacy") === 0) { openPrivacyReport(); return }
         if (!currentTab) { openTab(u, {}); return }
         currentTab.load(u)
@@ -238,7 +238,14 @@ ApplicationWindow {
 
     // Open an internal page (history, settings…) or switch to it if open.
     function openInternal(u) {
-        for (var i = 0; i < tabModel.count; i++) if ((tabModel.get(i).url || "").indexOf(u) === 0) { activate(i); return }
+        // One tab per internal page; settings sub-pages share the Settings tab.
+        var base = u.indexOf("oynix://settings") === 0 ? "oynix://settings" : u
+        for (var i = 0; i < tabModel.count; i++) {
+            if ((tabModel.get(i).url || "").indexOf(base) !== 0) continue
+            activate(i)
+            if (tabModel.get(i).url !== u && u.replace(/\/$/, "") !== base) tabItem(i).load(u)
+            return
+        }
         var cur = currentTab
         if (cur && (cur.model.url === "oynix://start" || cur.model.url === "about:blank")) cur.load(u)
         else openTab(u, { afterCurrent: true })
@@ -567,7 +574,12 @@ ApplicationWindow {
                         var host = win.app.extensionHost
                         host.revision; Core.extensionsRevision
                         if (win.privateMode || !host.supported) return []
-                        return JSON.parse(Core.extensions()).filter(function (e) { return e.enabled && e.kind !== "oynix" && host.isLoaded(e.id) })
+                        return JSON.parse(Core.extensions()).filter(function (e) {
+                            if (!e.enabled) return false
+                            // OyNIx extensions get a button when they have a panel or page.
+                            if (e.kind === "oynix") return e.hasPanel || e.hasPage
+                            return host.isLoaded(e.id)
+                        })
                     }
                     delegate: AbstractButton {
                         id: extBtn
@@ -598,6 +610,7 @@ ApplicationWindow {
                         ToolTip.visible: hovered; ToolTip.delay: 600
                         ToolTip.text: { var b = win.app.extensionHost.badgeFor(modelData); return b && b.title ? b.title : modelData.name }
                         onClicked: {
+                            if (modelData.kind === "oynix") { win.openOynixPanel(modelData, extBtn); return }
                             var u = win.app.extensionHost.popupUrl(modelData.id)
                             if (!u) {
                                 // No popup: the extension handles clicks itself.
@@ -899,6 +912,82 @@ ApplicationWindow {
                     }
                 }
 
+                // ── Update banner ──
+                // Shown once an update is ready to install (or, for copies
+                // OyNIx can't update itself, when one is available).
+                Rectangle {
+                    id: updateBanner
+                    readonly property var u: win.app.updater
+                    readonly property var rel: u.release ? JSON.parse(u.release) : null
+                    property string dismissed: ""
+                    readonly property bool wanted: rel !== null && dismissed !== rel.version && !win.privateMode
+                        && (u.state === "ready" || u.state === "installing" || u.state === "installed" || (u.state === "available" && u.kind === "manual"))
+                    z: 40
+                    visible: wanted && win.active
+                    anchors.right: parent.right; anchors.bottom: parent.bottom
+                    anchors.margins: 16
+                    width: Math.min(420, parent.width - 32)
+                    height: bannerCol.implicitHeight + 32
+                    radius: Theme.shapeXL
+                    color: Theme.primaryContainer
+                    ColumnLayout {
+                        id: bannerCol
+                        anchors.fill: parent; anchors.margins: 16
+                        spacing: 10
+                        RowLayout {
+                            spacing: 14
+                            MShape { size: 44; shape: "softBurst"; color: Theme.primary
+                                Icon { anchors.centerIn: parent; name: updateBanner.u.state === "installed" ? "check" : "download"; size: 20; color: Theme.primaryFg } }
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 2
+                                Txt {
+                                    Layout.fillWidth: true; color: Theme.primaryContainerFg; font.weight: Font.DemiBold
+                                    text: !updateBanner.rel ? "" : updateBanner.u.state === "installed" ? qsTr("OyNIx %1 is installed").arg(updateBanner.rel.version)
+                                        : qsTr("OyNIx %1 is available").arg(updateBanner.rel.version)
+                                }
+                                Txt {
+                                    Layout.fillWidth: true; wrapMode: Text.WordWrap; elide: Text.ElideNone
+                                    color: Theme.primaryContainerFg; opacity: 0.85; font.pixelSize: 12
+                                    text: updateBanner.u.error !== "" ? updateBanner.u.error
+                                        : updateBanner.u.state === "installed" ? qsTr("Restart to start using it. Your tabs will come back.")
+                                        : updateBanner.u.state === "installing" ? qsTr("Installing… your system may ask for your password.")
+                                        : updateBanner.u.kind === "manual" ? qsTr("This copy wasn’t installed from a package, so update it the way you installed it.")
+                                        : qsTr("Downloaded and checked. Installing asks for your password and takes a few seconds.")
+                                }
+                            }
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 6
+                            Item { Layout.fillWidth: true }
+                            PushButton {
+                                textOnly: true; text: qsTr("Later")
+                                visible: updateBanner.u.state !== "installing"
+                                onClicked: updateBanner.dismissed = updateBanner.rel.version
+                            }
+                            PushButton {
+                                textOnly: true; text: qsTr("What’s New")
+                                visible: updateBanner.u.state !== "installed"
+                                onClicked: win.app.openSettings("about")
+                            }
+                            PushButton {
+                                primary: true
+                                enabled: updateBanner.u.state !== "installing"
+                                text: updateBanner.u.state === "installed" ? qsTr("Restart")
+                                    : updateBanner.u.kind === "manual" ? qsTr("Release Page")
+                                    : updateBanner.u.state === "installing" ? qsTr("Installing…") : qsTr("Install")
+                                onClicked: {
+                                    var u = updateBanner.u
+                                    if (u.state === "installed") { if (!win.app.restartForUpdate()) win.toastMessage(qsTr("Couldn’t restart OyNIx; please start it again yourself.")) }
+                                    else if (u.kind === "manual") win.openTab(updateBanner.rel.page, {})
+                                    else u.install()
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // ── WebUSB device chooser ──
                 Rectangle {
                     z: 50
@@ -1066,6 +1155,101 @@ ApplicationWindow {
     DownloadsPopover {
         id: downloadsPopover; app: win.app; parent: win.contentItem
         x: win.width - width - 12; y: Theme.toolbarHeight + 4
+    }
+
+    // ── OyNIx extension panels: graphics.qt (restricted QML) or extra.html ──
+    function openOynixPanel(ext, anchor) {
+        oyPopup.close()
+        oyPopup.ext = ext
+        var a = anchor || extMenuBtn
+        var p = a.mapToItem(win.contentItem, a.width, a.height + 6)
+        oyPopup.anchorRight = p.x; oyPopup.y = p.y
+        oyPopup.open()
+    }
+    Popover {
+        id: oyPopup
+        parent: win.contentItem
+        property var ext: null
+        property real anchorRight: 0
+        property string error: ""
+        readonly property bool qml: ext !== null && ext.hasPanel
+        padding: 0
+        width: qml ? Math.max(240, Math.min(480, panelHost.implicitWidth || 320)) : 360
+        height: qml ? Math.max(80, Math.min(640, (panelHost.implicitHeight || 240) + (error ? 60 : 0))) : 460
+        x: Math.max(8, anchorRight - width)
+        ExtensionPanel {
+            id: panelApi
+            onPosted: function (payload) { if (oyPopup.ext) win.app.extBridge.post(oyPopup.ext.id, "content", payload) }
+            onCloseRequested: oyPopup.close()
+        }
+        Connections {
+            target: win.app.extBridge
+            function onMessage(ext, target, payload) {
+                if (oyPopup.opened && oyPopup.ext && ext === oyPopup.ext.id && target === "panel") panelApi.deliver(payload)
+            }
+        }
+        onOpened: {
+            error = ""
+            if (!qml) return
+            panelApi.id = ext.id
+            panelApi.data = Core.extensionData(ext.id)
+            error = Core.loadExtensionPanel(panelHost, ext.id, panelApi)
+        }
+        onClosed: {
+            Core.unloadExtensionPanel(panelHost)
+            panelHost.implicitWidth = 0; panelHost.implicitHeight = 0
+            ext = null
+        }
+        contentItem: Item {
+            clip: true
+            Item {
+                id: panelHost
+                visible: oyPopup.qml
+                anchors.fill: parent
+                // The panel's root item fills the popover.
+                onChildrenChanged: {
+                    for (var i = 0; i < children.length; i++) {
+                        children[i].width = Qt.binding(function () { return panelHost.width })
+                        children[i].height = Qt.binding(function () { return panelHost.height })
+                    }
+                }
+            }
+            Txt {
+                visible: oyPopup.error !== ""
+                anchors.fill: parent; anchors.margins: 16
+                wrapMode: Text.WordWrap; elide: Text.ElideNone
+                color: Theme.danger; font.pixelSize: 12
+                text: oyPopup.ext ? qsTr("%1 couldn’t show its panel:\n%2").arg(oyPopup.ext.name).arg(oyPopup.error) : ""
+            }
+            Loader {
+                anchors.fill: parent
+                active: oyPopup.opened && oyPopup.ext !== null && !oyPopup.qml
+                sourceComponent: WebEngineView {
+                    id: pageView
+                    profile: win.app.defaultProfile
+                    backgroundColor: Theme.surfaceContainer
+                    webChannel: win.app.extChannel
+                    webChannelWorld: WebEngineScript.MainWorld
+                    settings.localContentCanAccessRemoteUrls: false
+                    settings.localContentCanAccessFileUrls: false
+                    Component.onCompleted: {
+                        var sc = WebEngine.script()
+                        sc.name = "oynix-page-api"
+                        sc.sourceCode = Core.webchannelScript() + "\n" + Core.extensionPageApi(oyPopup.ext.id)
+                        sc.injectionPoint = WebEngineScript.DocumentCreation
+                        sc.worldId = WebEngineScript.MainWorld
+                        userScripts.insert(sc)
+                        url = Core.extensionPageUrl(oyPopup.ext.id)
+                    }
+                    // The page stays inside the extension; links open in tabs.
+                    onNavigationRequested: function (request) {
+                        var u = request.url.toString()
+                        if (request.isMainFrame && u.indexOf("file://") !== 0) { request.reject(); win.openTab(u, { afterCurrent: true }); oyPopup.close() }
+                    }
+                    onNewWindowRequested: function (request) { win.openTab(request.requestedUrl.toString(), { afterCurrent: true }); oyPopup.close() }
+                }
+            }
+        }
     }
 
     // Extension action popup: a small web view sized to the popup's content.

@@ -33,6 +33,15 @@ void set_color_scheme(int32_t scheme);
 // Delete every cookie of a profile (Clear Browsing Data).
 void clear_cookies(QObject *profile);
 
+// Load an OyNIx extension's graphics.qt into `host` (a QQuickItem) using a
+// separate, restricted QML engine: no network, no OyNIx module, no file,
+// settings or web modules, and only files from `ext_dir`. `api` is exposed
+// to the panel as `extension`. Returns "" or an error message.
+rust::String load_panel(QObject *host, rust::Str qml_path, rust::Str ext_dir, QObject *api);
+
+// Remove the panels load_panel put into `host`.
+void unload_panel(QObject *host);
+
 // Real input for the browser agent, delivered to a QQuickItem (the web view)
 // through its window, exactly like physical input. Coordinates are item-local.
 // mouse kind: 0 = move, 1 = click. button: 1 left, 2 right, 4 middle.

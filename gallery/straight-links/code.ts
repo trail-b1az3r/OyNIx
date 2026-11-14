@@ -1,6 +1,7 @@
 // Straight Links: unwrap known redirect URLs to their destination.
-// Each rule: [host test, path test, query parameter holding the target].
-var RULES = [
+// Each rule: [host test, path test, query parameters holding the target].
+type Rule = [host: RegExp, path: RegExp, params: string[]];
+const RULES: Rule[] = [
   [/(^|\.)google\.[a-z.]+$/, /^\/url$/, ['q', 'url']],
   [/(^|\.)bing\.com$/, /^\/ck\/a$/, ['u']],
   [/(^|\.)duckduckgo\.com$/, /^\/l\/$/, ['uddg']],
@@ -14,8 +15,8 @@ var RULES = [
   [/safelinks\.protection\.outlook\.com$/, /./, ['url']]
 ];
 
-function target(href) {
-  var u;
+function target(href: string): string | null {
+  let u: URL;
   try { u = new URL(href, location.href); } catch (e) { return null; }
   for (var i = 0; i < RULES.length; i++) {
     var r = RULES[i];
@@ -34,7 +35,7 @@ function target(href) {
   return null;
 }
 
-function fix(a) {
+function fix(a: HTMLAnchorElement): void {
   if (a.dataset.oynixStraight) return;
   a.dataset.oynixStraight = '1';
   a.removeAttribute('ping');
@@ -46,8 +47,8 @@ function fix(a) {
 // page are covered without scanning the whole document repeatedly.
 ['pointerover', 'focusin', 'mousedown', 'touchstart'].forEach(function (type) {
   document.addEventListener(type, function (e) {
-    var a = e.target.closest && e.target.closest('a[href]');
+    const a = (e.target as Element).closest?.<HTMLAnchorElement>('a[href]') ?? null;
     if (a) fix(a);
   }, { capture: true, passive: true });
 });
-document.querySelectorAll('a[href]').forEach(fix);
+document.querySelectorAll<HTMLAnchorElement>('a[href]').forEach(fix);

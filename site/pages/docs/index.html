@@ -16,6 +16,11 @@ sudo pacman -U oynix-{{version}}-1-x86_64.pkg.tar.zst</code></pre>
 <p>Each release also has a <code>SHA256SUMS</code> file. Put it next to the download and run <code>sha256sum -c SHA256SUMS --ignore-missing</code> to check the file arrived intact.</p>
 <p>To build it yourself instead, see <a href="{{root}}docs/reference/#building-from-source">Building from source</a>.</p>
 
+<h2>Updates</h2>
+<p>OyNIx updates itself. Once a day it checks for a new release; when there is one, it downloads the package in the background, checks it against the release’s published SHA-256, and offers to install it. Installing goes through your package manager (apt or pacman) and asks for your password, then <b>Restart</b> brings your tabs back in the new version.</p>
+<p><b>Settings › About › Updates</b> shows where things stand, the release notes, and a <b>Check Now</b> button. You can turn off the daily check or the background download there, or choose the beta channel to get pre-releases too. If you built OyNIx from source, it tells you about new versions but leaves updating to you.</p>
+<div class="note">{{shape:cookie9:warning}}<p>The password prompt comes from a polkit agent. Full desktops run one already; on a bare Hyprland or Sway setup, start one (for example <code>exec-once = systemctl --user start hyprpolkitagent</code>), or install updates from a terminal with the command OyNIx shows.</p></div>
+
 <h2>First run</h2>
 <p>OyNIx opens on the Start Page with a few favourites to get you going; hover a tile and press the small × to remove it. Content blocking is already on. The filter lists download in the background during the first minute, and the Privacy Report on the Start Page starts counting as soon as they arrive.</p>
 <p>Nothing else needs setting up. If you want to look around, Settings is <kbd>Ctrl</kbd><kbd>,</kbd>, and it opens in a tab.</p>

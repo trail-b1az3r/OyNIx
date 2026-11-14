@@ -3,18 +3,22 @@ title: Build an extension
 short: Build
 order: 4
 icon: code
-lede: An OyNIx extension is three files. This page is the whole specification.
-description: The OyNIx extension format: oynix.json, content.js and content.css, and how to publish to the Extension Gallery.
+lede: An OyNIx extension is three files in TypeScript, CSS and JSON, with an optional panel and data. This page is the whole specification.
+description: The OyNIx extension format: oynix.json, code.ts and content.css, the optional graphics.qt, extra.html and extra.jsonl, and publishing to the Extension Gallery.
 -->
-<h2>The three files</h2>
-<p>An extension is a folder (or a zip of one, named <code>.zip</code> or <code>.oynix</code>) containing exactly these files. All three must exist, even if one is empty.</p>
+<h2>The files</h2>
+<p>An extension is a folder, or a zip of one named <code>.oynix</code> (or <code>.zip</code>):</p>
 <table>
-  <tr><th>File</th><th>Contains</th></tr>
-  <tr><td><code>oynix.json</code></td><td>Name, version and where the extension runs</td></tr>
-  <tr><td><code>content.js</code></td><td>JavaScript run on matching pages</td></tr>
-  <tr><td><code>content.css</code></td><td>Styles added to matching pages</td></tr>
+  <tr><th>File</th><th></th><th>Contains</th></tr>
+  <tr><td><code>oynix.json</code></td><td>Required</td><td>Name, version and where the extension runs</td></tr>
+  <tr><td><code>code.ts</code></td><td>Required</td><td>TypeScript run on matching pages</td></tr>
+  <tr><td><code>content.css</code></td><td>Required</td><td>Styles added to matching pages (may be empty)</td></tr>
+  <tr><td><code>graphics.qt</code></td><td>Optional</td><td>A panel in the browser’s toolbar, written in QML</td></tr>
+  <tr><td><code>extra.html</code></td><td>Optional</td><td>A page in the toolbar instead, for when you’d rather write HTML</td></tr>
+  <tr><td><code>extra.jsonl</code></td><td>Optional</td><td>Data your code can read: one JSON value per line, up to 4 MB</td></tr>
+  <tr><td><code>icon.png</code> / <code>icon.svg</code></td><td>Optional</td><td>The toolbar and Settings icon</td></tr>
 </table>
-<p>The quickest start is <b>Settings › Extensions › New Extension</b>, which writes a working template into your extensions folder and installs it. Edit the files, then turn the extension off and on again to reload it.</p>
+<p>The quickest start is <b>Settings › Extensions › New Extension</b>, which writes a working template into your extensions folder and installs it. Edit the files, then turn the extension off and on again; OyNIx recompiles <code>code.ts</code> when it changes.</p>
 
 <h2>oynix.json</h2>
 <pre data-copy><code>{
@@ -28,25 +32,79 @@ description: The OyNIx extension format: oynix.json, content.js and content.css,
 }</code></pre>
 <table>
   <tr><th>Key</th><th>Meaning</th></tr>
-  <tr><td><code>name</code></td><td>Required. Shown in Settings and the install prompt.</td></tr>
+  <tr><td><code>name</code></td><td>Required. Shown in Settings, the toolbar and the install prompt.</td></tr>
   <tr><td><code>version</code></td><td>Any dotted version. Installing a newer one replaces the old.</td></tr>
   <tr><td><code>description</code></td><td>One sentence.</td></tr>
   <tr><td><code>matches</code></td><td>Pages to run on, as <a href="https://developer.chrome.com/docs/extensions/develop/concepts/match-patterns">match patterns</a>. <code>"*://*/*"</code> means every site.</td></tr>
   <tr><td><code>exclude</code></td><td>Pages to skip, in the same form.</td></tr>
   <tr><td><code>run_at</code></td><td><code>document_start</code> (before the page’s own scripts), <code>document_end</code> (default; the page is parsed) or <code>document_idle</code> (after it has loaded).</td></tr>
-  <tr><td><code>world</code></td><td><code>isolated</code> (default): your script sees the page’s DOM but not its JavaScript variables, and the page can’t see yours. <code>main</code>: runs alongside the page’s scripts, for when you must call or replace the page’s own functions.</td></tr>
+  <tr><td><code>world</code></td><td><code>isolated</code> (default): your code sees the page’s DOM but not its JavaScript variables, and the page can’t see yours. <code>main</code>: runs alongside the page’s scripts. Messaging with a panel only works in <code>isolated</code>.</td></tr>
 </table>
 
-<h2>content.js and content.css</h2>
-<p>The stylesheet is added first, then the script runs inside its own function, so top-level <code>var</code>s don’t leak. Write plain JavaScript; there’s no build step and no special API. In the isolated world you can use everything a page can, including <code>fetch</code> (subject to the site’s CORS rules) and <code>navigator.clipboard</code> during a key press.</p>
-<p>Keep it small and predictable. Prefer reacting to events over polling, don’t scan the whole document on every mutation, and stay out of the way when the user is typing in a field.</p>
+<h2>code.ts</h2>
+<p>Write TypeScript. OyNIx compiles it when the extension is installed, and again whenever the file changes, by removing the types and turning TypeScript-only syntax such as <code>enum</code> into JavaScript. It doesn’t type-check, so code with type errors still runs; use <code>tsc --noEmit</code> or your editor to check types. A syntax error stops the install and names the line.</p>
+<p>The stylesheet is added first, then your code runs in its own scope. Besides everything a page can use, it gets an <code>oynix</code> object. Paste this declaration at the top of <code>code.ts</code> for editor completion (it disappears when compiled):</p>
+<pre data-copy><code>declare const oynix: {
+  readonly id: string;
+  /** Records from extra.jsonl, one per line. */
+  readonly data: readonly unknown[];
+  /** Send a message to graphics.qt or extra.html. */
+  post(message: unknown): Promise&lt;void&gt;;
+  onMessage(listener: (message: unknown) =&gt; void): void;
+  /** Open this extension's panel. */
+  openPanel(): Promise&lt;void&gt;;
+};</code></pre>
+<div class="note">{{shape:cookie9:code}}<p><b>Only have JavaScript?</b> Install it anyway. A package with <code>content.js</code> and no <code>code.ts</code> is converted on install: JavaScript is valid TypeScript, so the file is renamed and gets a one-line note at the top.</p></div>
+
+<h2>graphics.qt: a panel</h2>
+<p>A <code>graphics.qt</code> file is a QML document. OyNIx adds a button for the extension to the toolbar, and clicking it shows the panel in a popover drawn the same way as the rest of the browser. It talks to <code>code.ts</code> through an <code>extension</code> object, passing JSON text:</p>
+<pre data-copy><code>import QtQuick
+import QtQuick.Controls.Basic
+
+Rectangle {
+    id: root
+    implicitWidth: 300; implicitHeight: 160
+    color: "#dde1ff"
+    Column {
+        anchors.centerIn: root
+        spacing: 10
+        Text { id: out; text: "Words in extra.jsonl: " + JSON.parse(extension.data).length }
+        Button { text: "Count this page"; onClicked: extension.post(JSON.stringify({ cmd: "count" })) }
+    }
+    Connections {
+        target: extension
+        function onMessage(json) { out.text = JSON.parse(json).words + " words" }
+    }
+}</code></pre>
+<p>And on the page side, in <code>code.ts</code>:</p>
+<pre data-copy><code>oynix.onMessage((m: any) =&gt; {
+  if (m.cmd === 'count') oynix.post({ words: document.body.innerText.split(/\s+/).length });
+});</code></pre>
+<p><code>extension</code> has <code>id</code>, <code>data</code> (the <code>extra.jsonl</code> records as JSON text), <code>post(json)</code>, the <code>message(json)</code> signal and <code>close()</code>.</p>
+<h3>What a panel can’t do</h3>
+<p>A panel runs in its own QML engine, cut off from the rest of OyNIx. OyNIx checks the file before running it, on install and again each time it opens, and refuses panels that break these rules:</p>
+<ul>
+  <li>Imports only from <code>QtQuick</code>, <code>QtQuick.Layouts</code>, <code>QtQuick.Controls</code>, <code>QtQuick.Controls.Basic</code>, <code>QtQuick.Shapes</code>, <code>QtQuick.Effects</code>, <code>QtQml</code> and <code>QtQml.Models</code>.</li>
+  <li>No network: requests fail, and <code>XMLHttpRequest</code> isn’t available.</li>
+  <li>No QML made at run time: no <code>Loader</code>, <code>Qt.createQmlObject</code> or <code>Qt.createComponent</code>.</li>
+  <li><code>parent</code> and <code>Window</code> aren’t available, because they lead out of the panel into the browser. Give items an <code>id</code> and refer to that instead; OyNIx sizes the root item to the popover.</li>
+  <li><code>this</code>, <code>eval</code>, <code>Function</code> and <code>constructor</code> aren’t available.</li>
+  <li>From <code>Qt</code>, only colours, geometry, fonts, enums such as <code>Qt.AlignLeft</code>, <code>Qt.binding</code>, <code>Qt.callLater</code> and the formatting functions.</li>
+</ul>
+<p>The error names the line and the word that broke a rule.</p>
+
+<h2>extra.html: a page</h2>
+<p>If you’d rather write HTML, include <code>extra.html</code> instead of <code>graphics.qt</code>. It opens in the same toolbar popover and gets the same <code>oynix</code> object as <code>code.ts</code>, with <code>post</code> going to <code>code.ts</code> and <code>onMessage</code> receiving from it. It can’t load anything from the network or from your files, so keep it to one file with its styles and scripts inline. Links in it open in a new tab.</p>
+
+<h2>extra.jsonl: data</h2>
+<p>Put word lists, rules or settings in <code>extra.jsonl</code>, one JSON value per line. Blank lines are skipped. The file is checked on install, and a malformed line stops the install with its line number. Your code sees the records as <code>oynix.data</code>, and a panel as <code>extension.data</code>. Because the data is sent to every page the extension runs on, keep it under 4 MB.</p>
 
 <h2>Packaging</h2>
-<p>Zip the three files with no enclosing folder and give the file a <code>.oynix</code> extension:</p>
-<pre data-copy><code>cd my-extension && zip ../my-extension-1.0.0.oynix oynix.json content.js content.css</code></pre>
+<p>Zip the files with no enclosing folder and give the file a <code>.oynix</code> extension:</p>
+<pre data-copy><code>cd my-extension && zip ../my-extension-1.0.0.oynix oynix.json code.ts content.css graphics.qt</code></pre>
 
 <h2>Publishing to the Gallery</h2>
-<p>The Gallery is built from the <a href="{{repo}}/tree/main/gallery"><code>gallery/</code></a> folder of the OyNIx repository. To add yours, open a pull request with a folder containing your three files. Add a <code>gallery</code> section to <code>oynix.json</code> for the listing:</p>
+<p>The Gallery is built from the <a href="{{repo}}/tree/main/gallery"><code>gallery/</code></a> folder of the OyNIx repository. To add yours, open a pull request with a folder containing your files. Add a <code>gallery</code> section to <code>oynix.json</code> for the listing:</p>
 <pre data-copy><code>"gallery": {
   "category": "Reading",
   "author": "Your name",
@@ -54,5 +112,5 @@ description: The OyNIx extension format: oynix.json, content.js and content.css,
   "summary": "A quiet clock for long articles.",
   "about": "A paragraph or two: what it does, where it runs, and what it leaves alone."
 }</code></pre>
-<p>Gallery extensions are reviewed by reading them, so they must be readable: no minified or obfuscated code, no remote scripts, no network requests that send page content anywhere, and no analytics. The listing page shows your code in full.</p>
+<p>Gallery extensions are reviewed by reading them, so they must be readable: no minified or obfuscated code, no remote scripts, no network requests that send page content anywhere, and no analytics. The listing page shows every file in full. Check yours with <code>tsc --noEmit --strict</code> before sending it.</p>
 <p><code>shape</code> picks the badge from the browser’s own set: <code>circle</code>, <code>cookie4</code>, <code>cookie6</code>, <code>cookie7</code>, <code>cookie9</code>, <code>cookie12</code>, <code>flower</code>, <code>clover4</code>, <code>clover8</code>, <code>sunny</code>, <code>burst</code>, <code>softBurst</code>, <code>pentagon</code> or <code>pill</code>.</p>

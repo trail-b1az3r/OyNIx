@@ -24,6 +24,9 @@ ash = { version = "0.38", default-features = false, features = ["loaded", "debug
 zip = { version = "2", default-features = false, features = ["deflate"] }
 aho-corasick = "1"
 rusb = { version = "0.9", features = ["vendored"] }
+oxc = { version = "0.158", features = ["transformer", "codegen", "semantic"] }
+ureq = { version = "3", default-features = false, features = ["rustls", "platform-verifier"] }
+sha2 = "0.11"
 
 [build-dependencies]
 cxx-qt-build = "0.10"

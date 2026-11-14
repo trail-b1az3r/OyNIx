@@ -37,6 +37,7 @@ NOW=$(date +%s)
   echo "provides = oynix"
   for d in "${DEPENDS[@]}"; do echo "depend = $d"; done
   echo "optdepend = mesa-vulkan-drivers: Vulkan rendering on Mesa GPUs"
+  echo "optdepend = polkit: install OyNIx updates from the browser"
 } > "$ROOT/.PKGINFO"
 {
   echo "format = 2"

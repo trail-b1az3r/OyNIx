@@ -72,6 +72,7 @@ pub mod qobject {
         #[qproperty(QString, qt_version, READ, CONSTANT)]
         #[qproperty(QString, start_url, READ, CONSTANT)]
         #[qproperty(bool, start_private, READ, CONSTANT)]
+        #[qproperty(bool, force_restore, READ, CONSTANT)]
         type Core = super::CoreRust;
     }
 
@@ -170,6 +171,10 @@ pub mod qobject {
         fn load_session(self: &Core) -> QString;
         #[qinvokable]
         fn flush(self: Pin<&mut Core>);
+        #[qinvokable]
+        fn heartbeat(self: &Core, active: bool);
+        #[qinvokable]
+        fn freeze_log(self: &Core) -> QString;
 
         // ── privacy ──
         #[qinvokable]
@@ -202,6 +207,18 @@ pub mod qobject {
         fn apply_color_scheme(self: &Core, dark: bool);
         #[qinvokable]
         unsafe fn clear_cookies(self: &Core, profile: *mut QObject);
+        #[qinvokable]
+        unsafe fn load_extension_panel(self: &Core, host: *mut QObject, id: &QString, api: *mut QObject) -> QString;
+        #[qinvokable]
+        unsafe fn unload_extension_panel(self: &Core, host: *mut QObject);
+        #[qinvokable]
+        fn extension_data(self: &Core, id: &QString) -> QString;
+        #[qinvokable]
+        fn extension_page_url(self: &Core, id: &QString) -> QString;
+        #[qinvokable]
+        fn extension_page_api(self: &Core, id: &QString) -> QString;
+        #[qinvokable]
+        fn webchannel_script(self: &Core) -> QString;
         #[qinvokable]
         fn blocker_generation(self: &Core) -> i32;
         #[qinvokable]
@@ -331,6 +348,7 @@ pub struct CoreRust {
     qt_version: QString,
     start_url: QString,
     start_private: bool,
+    force_restore: bool,
 
     settings: Settings,
     library: Library,
@@ -395,6 +413,7 @@ impl Default for CoreRust {
             qt_version: q(&env.qt_version),
             start_url: q(&env.start_url),
             start_private: env.private,
+            force_restore: env.restore,
             settings,
             library: Library::load(),
             extensions: extensions::load(),
@@ -828,6 +847,17 @@ impl qobject::Core {
         qs(std::fs::read_to_string(paths::data_dir().join("session.json")).unwrap_or_default())
     }
 
+    pub fn heartbeat(&self, active: bool) {
+        crate::core::watchdog::beat(active);
+    }
+
+    /// Recent UI freezes (newest last), for Settings › About.
+    pub fn freeze_log(&self) -> QString {
+        let t = std::fs::read_to_string(crate::core::watchdog::log_path()).unwrap_or_default();
+        let lines: Vec<&str> = t.lines().collect();
+        qs(lines[lines.len().saturating_sub(20)..].join("\n"))
+    }
+
     pub fn flush(mut self: Pin<&mut Self>) {
         self.as_mut().rust_mut().library.flush();
         blocker::save_stats();
@@ -974,6 +1004,61 @@ impl qobject::Core {
     /// Desktop notification (used by extensions' notifications API).
     pub fn notify(&self, title: &QString, body: &QString) {
         let _ = std::process::Command::new("notify-send").args(["-a", "OyNIx", &s(title), &s(body)]).spawn();
+    }
+
+    fn oynix_dir(&self, id: &QString) -> Option<std::path::PathBuf> {
+        let id = s(id);
+        self.extensions.iter().find(|e| e.id == id && e.kind == "oynix").map(|e| std::path::PathBuf::from(&e.path))
+    }
+
+    /// # Safety
+    /// `host` must be a live QQuickItem and `api` a live ExtensionPanel, both from QML.
+    pub unsafe fn load_extension_panel(&self, host: *mut cxx_qt::QObject, id: &QString, api: *mut cxx_qt::QObject) -> QString {
+        let Some(dir) = self.oynix_dir(id) else { return qs("extension not found") };
+        let qml = dir.join("graphics.qt");
+        // Checked again here: the files may have been edited since install.
+        match std::fs::read_to_string(&qml) {
+            Ok(src) => {
+                if let Err(e) = crate::core::qmlcheck::check(&src) {
+                    return qs(e);
+                }
+            }
+            Err(e) => return qs(format!("graphics.qt: {e}")),
+        }
+        let err = crate::bridge::native::ffi::load_panel(host, &qml.to_string_lossy(), &dir.to_string_lossy(), api);
+        qs(err)
+    }
+
+    /// # Safety
+    /// `host` must be a live QQuickItem from QML.
+    pub unsafe fn unload_extension_panel(&self, host: *mut cxx_qt::QObject) {
+        crate::bridge::native::ffi::unload_panel(host);
+    }
+
+    /// `extra.jsonl` records as a JSON array.
+    pub fn extension_data(&self, id: &QString) -> QString {
+        let data = self.oynix_dir(id).map(|d| extensions::read_data(&d).unwrap_or_default()).unwrap_or_default();
+        to_qjson(&Value::Array(data))
+    }
+
+    /// The `oynix` object for an extension's `extra.html`: its data and
+    /// messaging with the extension's code.ts.
+    pub fn extension_page_api(&self, id: &QString) -> QString {
+        let data = self.extension_data(id);
+        let id_js = serde_json::to_string(&s(id)).unwrap_or_default();
+        qs(extensions::PAGE_API.replace("__ID__", &id_js).replace("__DATA__", &String::from(&data)))
+    }
+
+    pub fn webchannel_script(&self) -> QString {
+        qs(crate::bridge::native::ffi::webchannel_js())
+    }
+
+    /// file:// URL of `extra.html`, or "".
+    pub fn extension_page_url(&self, id: &QString) -> QString {
+        match self.oynix_dir(id).map(|d| d.join("extra.html")) {
+            Some(p) if p.exists() => qs(format!("file://{}", p.to_string_lossy())),
+            _ => qs(""),
+        }
     }
 
     /// # Safety
