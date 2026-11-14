@@ -153,9 +153,8 @@ class Site:
 <meta property="og:description" content="{html.escape(description)}">
 <meta property="og:image" content="{root}assets/og.png">
 <link rel="icon" href="{root}assets/icon.svg" type="image/svg+xml">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wdth,wght,GRAD@8..144,25..151,100..1000,-50..150&family=Roboto+Mono:wght@400;500&display=swap">
+<link rel="preload" href="{root}assets/fonts/RobotoFlex-latin-100-1000.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="{root}assets/fonts.css">
 <link rel="stylesheet" href="{root}assets/site.css">
 <link rel="stylesheet" href="{root}assets/shapes.css">
 </head>
