@@ -47,6 +47,7 @@ pub mod qobject {
         #[qproperty(bool, low_power_mode)]
         #[qproperty(bool, dark_websites)]
         #[qproperty(bool, force_dark_websites)]
+        #[qproperty(QString, website_appearance)]
         #[qproperty(bool, cosmetic_filtering)]
         #[qproperty(bool, agent_enabled)]
         #[qproperty(QString, agent_mode)]
@@ -305,6 +306,7 @@ pub struct CoreRust {
     low_power_mode: bool,
     dark_websites: bool,
     force_dark_websites: bool,
+    website_appearance: QString,
     cosmetic_filtering: bool,
     agent_enabled: bool,
     agent_mode: QString,
@@ -370,6 +372,7 @@ impl Default for CoreRust {
             low_power_mode: false,
             dark_websites: true,
             force_dark_websites: false,
+            website_appearance: q("auto"),
             cosmetic_filtering: true,
             agent_enabled: false,
             agent_mode: q("ask"),
@@ -457,6 +460,7 @@ impl CoreRust {
         self.low_power_mode = st.low_power_mode;
         self.dark_websites = st.dark_websites;
         self.force_dark_websites = st.force_dark_websites;
+        self.website_appearance = qs(&st.website_appearance);
         self.cosmetic_filtering = st.cosmetic_filtering;
         self.agent_enabled = st.agent_enabled;
         self.agent_mode = qs(&st.agent_mode);
@@ -524,6 +528,7 @@ impl qobject::Core {
         self.as_mut().set_low_power_mode(st.low_power_mode);
         self.as_mut().set_dark_websites(st.dark_websites);
         self.as_mut().set_force_dark_websites(st.force_dark_websites);
+        self.as_mut().set_website_appearance(qs(&st.website_appearance));
         self.as_mut().set_cosmetic_filtering(st.cosmetic_filtering);
         self.as_mut().set_agent_enabled(st.agent_enabled);
         self.as_mut().set_agent_mode(qs(&st.agent_mode));
@@ -989,14 +994,12 @@ impl qobject::Core {
     /// OyNIx is dark; with theme "auto" the system setting is followed.
     pub fn apply_color_scheme(&self, dark: bool) {
         let st = &self.settings;
-        let scheme = if dark && !st.dark_websites {
-            1
-        } else if st.theme == "auto" {
-            0
-        } else if dark {
-            2
-        } else {
-            1
+        let scheme = match st.website_appearance.as_str() {
+            "dark" => 2,
+            "light" => 1,
+            _ if st.theme == "auto" => 0,
+            _ if dark => 2,
+            _ => 1,
         };
         crate::bridge::native::ffi::set_color_scheme(scheme);
     }
@@ -1040,6 +1043,7 @@ impl qobject::Core {
         if st.fingerprint_protection {
             v.push(json!({ "name": "oynix-fp", "source": scripts::ANTI_FINGERPRINT, "main": true }));
         }
+        v.push(json!({ "name": "oynix-amo-install", "source": scripts::AMO_INSTALL, "main": false, "greasemonkey": true }));
         for e in self.extensions.iter().filter(|e| e.enabled && e.kind == "oynix") {
             if let Some(src) = extensions::oynix_script(e) {
                 v.push(json!({ "name": format!("oynix-ext-{}", e.id), "source": src, "main": e.world == "main", "greasemonkey": true }));
@@ -1080,6 +1084,10 @@ impl qobject::Core {
         let p = to_path(&s(path_or_url));
         let mut list = self.extensions.clone();
         let r = extensions::install(&p, &mut list);
+        // Packages downloaded from the web are only needed until installed.
+        if p.is_file() && p.starts_with(paths::cache_dir().join("extension-downloads")) {
+            let _ = std::fs::remove_file(&p);
+        }
         self.as_mut().rust_mut().extensions = list;
         self.as_mut().bump_extensions();
         match r {

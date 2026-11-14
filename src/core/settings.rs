@@ -69,6 +69,9 @@ pub struct Settings {
     pub force_dark_websites: bool,
     /// Tell websites to use their dark theme when OyNIx is dark.
     pub dark_websites: bool,
+    /// Website appearance: "auto" (dark when OyNIx is dark: the site's own
+    /// dark theme, otherwise automatic darkening), "dark" or "light".
+    pub website_appearance: String,
 
     // ── Claude for OyNIx ──────────────────────────────────────────
     /// Allow Claude (MCP clients and the built-in panel) to control the browser.
@@ -141,6 +144,7 @@ impl Default for Settings {
             filter_update_days: 4,
             force_dark_websites: false,
             dark_websites: true,
+            website_appearance: "auto".into(),
             agent_enabled: false,
             agent_mode: "ask".into(),
             agent_allowed_sites: Vec::new(),

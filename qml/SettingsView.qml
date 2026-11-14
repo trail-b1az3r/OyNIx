@@ -354,9 +354,12 @@ Rectangle {
             }
             Section {
                 title: qsTr("Websites")
-                SwitchRow { label: qsTr("Use dark themes on websites"); hint: qsTr("When OyNIx is dark, sites that offer a dark theme show it (prefers-color-scheme)."); key: "darkWebsites" }
-                Divider {}
-                SwitchRow { label: qsTr("Darken all websites"); hint: qsTr("When OyNIx is dark, automatically darken sites that have no dark theme. Can be changed per site in Website settings."); key: "forceDarkWebsites" }
+                ChoiceRow {
+                    label: qsTr("Website appearance")
+                    hint: qsTr("Dark: sites use their own dark theme when they have one, and are darkened automatically otherwise. Change it per site in Website settings.")
+                    key: "websiteAppearance"
+                    options: [{ v: "auto", t: qsTr("Match OyNIx") }, { v: "dark", t: qsTr("Always dark") }, { v: "light", t: qsTr("Always light") }]
+                }
             }
             Section {
                 title: qsTr("Toolbar")

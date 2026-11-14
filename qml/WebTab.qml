@@ -181,10 +181,9 @@ Item {
             // prefers-color-scheme (set app-wide); this additionally darkens
             // sites that have none, when enabled globally or for the site.
             settings.forceDarkMode: {
-                if (!Theme.dark) return false
                 Core.settingsJson
                 var s = JSON.parse(Core.siteSettings(tab.host))
-                return s.forceDark !== undefined ? s.forceDark : Core.forceDarkWebsites
+                return s.forceDark !== undefined ? s.forceDark : tab.win.app.websitesDark
             }
 
             // Cosmetic filtering: element-hiding CSS for the host being

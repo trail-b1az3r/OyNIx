@@ -309,6 +309,12 @@ ApplicationWindow {
         }
     }
 
+    function toastMessage(t) { toast.show(t) }
+
+    // "Install this extension?" (downloads of .xpi / .crx files)
+    property var installAsk: null
+    function askInstallExtension(name, source, cb) { installAsk = { name: name, source: source, cb: cb } }
+
     // "Ask where to save each file"
     FileDialog {
         id: downloadDialog
@@ -866,6 +872,46 @@ ApplicationWindow {
                                 PushButton { Layout.fillWidth: true; primary: true; text: qsTr("Allow for this task"); onClicked: win.app.agent.prompt.answer("task") }
                                 PushButton { Layout.fillWidth: true; text: qsTr("Always allow on this site"); onClicked: win.app.agent.prompt.answer("always") }
                                 PushButton { Layout.fillWidth: true; textOnly: true; text: qsTr("Don’t allow"); onClicked: win.app.agent.prompt.answer("deny") }
+                            }
+                        }
+                    }
+                }
+
+                // ── Install extension prompt ──
+                Rectangle {
+                    z: 50
+                    anchors.fill: parent
+                    visible: win.installAsk !== null
+                    color: Theme.alpha("#000000", 0.32)
+                    MouseArea { anchors.fill: parent }
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: Math.min(420, parent.width - 48)
+                        height: instCol.implicitHeight + 48
+                        radius: Theme.shapeXL
+                        color: Theme.surfaceContainerHigh
+                        ColumnLayout {
+                            id: instCol
+                            anchors.fill: parent
+                            anchors.margins: 24
+                            spacing: 14
+                            MShape { Layout.alignment: Qt.AlignHCenter; shape: "flower"; size: 56; color: Theme.secondaryContainer
+                                Icon { anchors.centerIn: parent; name: "puzzle"; size: 26; color: Theme.secondaryContainerFg } }
+                            Txt {
+                                Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; elide: Text.ElideNone
+                                font.pixelSize: 22; font.family: Theme.displayFont
+                                text: win.installAsk ? qsTr("Add “%1”?").arg(win.installAsk.name) : ""
+                            }
+                            Txt {
+                                Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; elide: Text.ElideNone
+                                color: Theme.surfaceVariantFg
+                                text: win.installAsk ? qsTr("This extension comes from %1. Extensions can read and change data on websites you visit — only install ones you trust.").arg(win.installAsk.source) : ""
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Item { Layout.fillWidth: true }
+                                PushButton { textOnly: true; text: qsTr("Cancel"); onClicked: { var a = win.installAsk; win.installAsk = null; a.cb(false) } }
+                                PushButton { primary: true; text: qsTr("Add Extension"); onClicked: { var a = win.installAsk; win.installAsk = null; a.cb(true) } }
                             }
                         }
                     }

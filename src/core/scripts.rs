@@ -134,3 +134,57 @@ pub const COSMETIC: &str = r#"function (sel) {
     mo.observe(document, { childList: true });
   }
 }"#;
+
+/// addons.mozilla.org: AMO hides its install button from non-Firefox
+/// browsers, so OyNIx adds its own "Add to OyNIx" button on add-on pages.
+/// It asks AMO's public API for the add-on's current .xpi and navigates to
+/// it; OyNIx then recognises the download and offers to install it.
+pub const AMO_INSTALL: &str = r#"// ==UserScript==
+// @name oynix-amo-install
+// @match https://addons.mozilla.org/*
+// @run-at document-idle
+// ==/UserScript==
+(function () {
+  var BTN = 'oynix-amo-add';
+  function slug() {
+    var m = location.pathname.match(/\/addon\/([^\/?#]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+  function name(n) {
+    if (!n) return '';
+    if (typeof n === 'string') return n;
+    var lang = (document.documentElement.lang || 'en-US');
+    return n[lang] || n['en-US'] || n[Object.keys(n)[0]] || '';
+  }
+  function update() {
+    var s = slug(), old = document.getElementById(BTN);
+    if (!s) { if (old) old.remove(); return; }
+    if (old && old.dataset.slug === s) return;
+    if (old) old.remove();
+    var b = document.createElement('button');
+    b.id = BTN; b.dataset.slug = s;
+    b.textContent = 'Add to OyNIx';
+    b.style.cssText = 'position:fixed;right:24px;bottom:24px;z-index:2147483647;padding:14px 26px;border:0;border-radius:28px;' +
+      'background:#2463d8;color:#fff;font:600 16px system-ui,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.25);cursor:pointer';
+    b.addEventListener('click', function () {
+      b.disabled = true; b.textContent = 'Preparing…';
+      fetch('/api/v5/addons/addon/' + encodeURIComponent(s) + '/')
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function (d) {
+          var f = d.current_version && d.current_version.file;
+          if (!f || !f.url) throw new Error('No downloadable file for this add-on');
+          if (d.type && d.type !== 'extension') throw new Error('Only extensions can be installed (this is a ' + d.type + ')');
+          b.textContent = 'Downloading ' + name(d.name) + '…';
+          location.href = f.url;
+          setTimeout(function () { b.disabled = false; b.textContent = 'Add to OyNIx'; }, 4000);
+        })
+        .catch(function (e) { b.disabled = false; b.textContent = 'Add to OyNIx (' + e.message + ')'; });
+    });
+    (document.body || document.documentElement).appendChild(b);
+  }
+  update();
+  // AMO is a single-page app: follow client-side navigation.
+  var last = location.href;
+  setInterval(function () { if (location.href !== last) { last = location.href; update(); } }, 700);
+})();
+"#;

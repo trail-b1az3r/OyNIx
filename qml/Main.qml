@@ -37,11 +37,14 @@ QtObject {
 
     // Websites follow OyNIx's light/dark theme (prefers-color-scheme).
     property bool themeDark: Theme.dark
+    // Should websites be shown dark? (auto follows the OyNIx theme)
+    readonly property bool websitesDark: Core.websiteAppearance === "dark" || (Core.websiteAppearance !== "light" && Theme.dark)
     onThemeDarkChanged: Core.applyColorScheme(themeDark)
     property Connections schemeEvents: Connections {
         target: Core
         function onDarkWebsitesChanged() { Core.applyColorScheme(Theme.dark) }
         function onThemeChanged() { Core.applyColorScheme(Theme.dark) }
+        function onWebsiteAppearanceChanged() { Core.applyColorScheme(Theme.dark) }
     }
 
     // ── Content-blocker list updates ──
@@ -218,6 +221,7 @@ QtObject {
     function handleDownload(download) {
         if (download.state !== WebEngineDownloadRequest.DownloadRequested) return
         download.downloadDirectory = Core.downloadDir
+        if (isExtensionPackage(download)) { offerExtensionInstall(download); return }
         var ask = JSON.parse(Core.settingsJson).askWhereToSave
         var w = null
         for (var k = 0; k < windows.length; k++) if (windows[k].active) w = windows[k]
@@ -234,6 +238,42 @@ QtObject {
         download.accept()
         downloads = [download].concat(downloads)
         for (var i = 0; i < windows.length; i++) if (windows[i].active) windows[i].requestActivate()
+    }
+
+    // ── Extension packages (.xpi / .crx), e.g. from addons.mozilla.org ──
+    function isExtensionPackage(d) {
+        var n = String(d.downloadFileName || "").toLowerCase(), m = String(d.mimeType || "").toLowerCase()
+        return m === "application/x-xpinstall" || m === "application/x-chrome-extension" || /\.(xpi|crx)$/.test(n)
+    }
+
+    function activeWindow() {
+        for (var k = 0; k < windows.length; k++) if (windows[k].active) return windows[k]
+        return windows.length ? windows[windows.length - 1] : null
+    }
+
+    function offerExtensionInstall(download) {
+        var w = activeWindow()
+        var source = Core.hostOf(download.url.toString())
+        var name = String(download.downloadFileName).replace(/\.(xpi|crx)$/i, "").replace(/[-_]\d[\d.]*$/, "").replace(/[_-]+/g, " ")
+        var go = function (ok) {
+            if (!ok) { download.cancel(); return }
+            download.downloadDirectory = Core.configPath("cache") + "/extension-downloads"
+            download.accept()
+            var done = function () {
+                if (download.state !== WebEngineDownloadRequest.DownloadCompleted) {
+                    if (download.state === WebEngineDownloadRequest.DownloadInterrupted || download.state === WebEngineDownloadRequest.DownloadCancelled)
+                        w && w.toastMessage(qsTr("Extension download failed"))
+                    return
+                }
+                download.stateChanged.disconnect(done)
+                var r = app.extensionHost.install(download.downloadDirectory + "/" + download.downloadFileName)
+                if (w) w.toastMessage(r.ok ? qsTr("Added “%1”").arg(r.extension.name) : qsTr("Could not install: %1").arg(r.error))
+            }
+            download.stateChanged.connect(done)
+            done()
+        }
+        if (w) w.askInstallExtension(name, source, go)
+        else go(true)
     }
 
     function clearFinishedDownloads() {
