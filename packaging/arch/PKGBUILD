@@ -13,7 +13,7 @@ depends=(glibc gcc-libs libglvnd vulkan-icd-loader libxkbcommon libxkbcommon-x11
          xcb-util-wm xcb-util-keysyms xcb-util-image xcb-util-renderutil nss libxcomposite
          libxdamage libxrandr libxtst fontconfig dbus alsa-lib)
 makedepends=(git rust python python-pip libarchive zstd)
-optdepends=('vulkan-radeon: Vulkan on AMD' 'vulkan-intel: Vulkan on Intel' 'nvidia-utils: Vulkan on NVIDIA')
+optdepends=('vulkan-radeon: Vulkan on AMD' 'vulkan-intel: Vulkan on Intel' 'nvidia-utils: Vulkan on NVIDIA' 'polkit: install OyNIx updates from the browser')
 options=(!strip !debug)
 source=("$pkgname::git+$url.git")
 sha256sums=('SKIP')

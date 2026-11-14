@@ -17,6 +17,7 @@ mod bridge {
     pub mod extbridge;
     pub mod native;
     pub mod panel;
+    pub mod updater;
     pub mod usbbridge;
 }
 mod core;
@@ -41,6 +42,8 @@ pub struct LaunchEnv {
     pub start_url: String,
     pub private: bool,
     pub gpu_arg: Option<String>,
+    /// Restore the last session regardless of the startup setting (after an update).
+    pub restore: bool,
 }
 
 static LAUNCH: OnceLock<LaunchEnv> = OnceLock::new();
@@ -52,6 +55,7 @@ pub fn launch_env() -> &'static LaunchEnv {
         start_url: String::new(),
         private: false,
         gpu_arg: None,
+        restore: false,
     })
 }
 
@@ -72,6 +76,7 @@ OPTIONS:
     --list-extensions    Print installed extensions and exit
     --mcp                Run as an MCP server on stdio so Claude Desktop /
                          Claude Code can control the browser
+    --restore-session    Reopen the last session, whatever the startup setting
     --list-profiles      Print existing profiles and exit
     --gpu-info           Print the detected Vulkan device and exit
     -h, --help           Show this help
@@ -86,10 +91,12 @@ struct Args {
     private: bool,
     gpu: Option<String>,
     url: String,
+    restore: bool,
+    wait_pid: Option<u32>,
 }
 
 fn parse_args() -> Args {
-    let mut a = Args { mcp: false, install: vec![], list_extensions: false, profile: "default".into(), private: false, gpu: None, url: String::new() };
+    let mut a = Args { mcp: false, install: vec![], list_extensions: false, profile: "default".into(), private: false, gpu: None, url: String::new(), restore: false, wait_pid: None };
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
         match arg.as_str() {
@@ -107,6 +114,8 @@ fn parse_args() -> Args {
             "--list-extensions" => a.list_extensions = true,
             "--mcp" => a.mcp = true,
             "--gpu" => a.gpu = it.next(),
+            "--restore-session" => a.restore = true,
+            "--wait-for-pid" => a.wait_pid = it.next().and_then(|p| p.parse().ok()),
             "--wayland" => std::env::set_var("QT_QPA_PLATFORM", "wayland;xcb"),
             "--x11" => std::env::set_var("QT_QPA_PLATFORM", "xcb"),
             "--list-profiles" => {
@@ -198,6 +207,15 @@ fn main() {
         std::process::exit(if failed { 1 } else { 0 });
     }
 
+    // Restarting after an update: let the old process release the profile.
+    if let Some(pid) = args.wait_pid {
+        let proc_dir = std::path::PathBuf::from(format!("/proc/{pid}"));
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        while proc_dir.exists() && std::time::Instant::now() < until {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    }
+
     let requested = args
         .gpu
         .clone()
@@ -247,6 +265,7 @@ fn main() {
         start_url,
         private: args.private,
         gpu_arg: args.gpu.clone(),
+        restore: args.restore,
     });
 
     let mut engine = QQmlApplicationEngine::new();

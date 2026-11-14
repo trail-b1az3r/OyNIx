@@ -74,6 +74,12 @@ pub struct Settings {
     pub website_appearance: String,
     /// Let secure websites ask for access to USB devices (WebUSB).
     pub webusb: bool,
+    /// Look for a new OyNIx release once a day.
+    pub update_check: bool,
+    /// Download a found update in the background.
+    pub update_download: bool,
+    /// "stable" or "beta" (includes pre-releases).
+    pub update_channel: String,
 
     // ── Claude for OyNIx ──────────────────────────────────────────
     /// Allow Claude (MCP clients and the built-in panel) to control the browser.
@@ -148,6 +154,9 @@ impl Default for Settings {
             dark_websites: true,
             website_appearance: "auto".into(),
             webusb: true,
+            update_check: true,
+            update_download: true,
+            update_channel: "stable".into(),
             agent_enabled: false,
             agent_mode: "ask".into(),
             agent_allowed_sites: Vec::new(),

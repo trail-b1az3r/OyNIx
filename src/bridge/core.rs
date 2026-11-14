@@ -72,6 +72,7 @@ pub mod qobject {
         #[qproperty(QString, qt_version, READ, CONSTANT)]
         #[qproperty(QString, start_url, READ, CONSTANT)]
         #[qproperty(bool, start_private, READ, CONSTANT)]
+        #[qproperty(bool, force_restore, READ, CONSTANT)]
         type Core = super::CoreRust;
     }
 
@@ -347,6 +348,7 @@ pub struct CoreRust {
     qt_version: QString,
     start_url: QString,
     start_private: bool,
+    force_restore: bool,
 
     settings: Settings,
     library: Library,
@@ -411,6 +413,7 @@ impl Default for CoreRust {
             qt_version: q(&env.qt_version),
             start_url: q(&env.start_url),
             start_private: env.private,
+            force_restore: env.restore,
             settings,
             library: Library::load(),
             extensions: extensions::load(),

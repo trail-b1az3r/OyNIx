@@ -912,6 +912,82 @@ ApplicationWindow {
                     }
                 }
 
+                // ── Update banner ──
+                // Shown once an update is ready to install (or, for copies
+                // OyNIx can't update itself, when one is available).
+                Rectangle {
+                    id: updateBanner
+                    readonly property var u: win.app.updater
+                    readonly property var rel: u.release ? JSON.parse(u.release) : null
+                    property string dismissed: ""
+                    readonly property bool wanted: rel !== null && dismissed !== rel.version && !win.privateMode
+                        && (u.state === "ready" || u.state === "installing" || u.state === "installed" || (u.state === "available" && u.kind === "manual"))
+                    z: 40
+                    visible: wanted && win.active
+                    anchors.right: parent.right; anchors.bottom: parent.bottom
+                    anchors.margins: 16
+                    width: Math.min(420, parent.width - 32)
+                    height: bannerCol.implicitHeight + 32
+                    radius: Theme.shapeXL
+                    color: Theme.primaryContainer
+                    ColumnLayout {
+                        id: bannerCol
+                        anchors.fill: parent; anchors.margins: 16
+                        spacing: 10
+                        RowLayout {
+                            spacing: 14
+                            MShape { size: 44; shape: "softBurst"; color: Theme.primary
+                                Icon { anchors.centerIn: parent; name: updateBanner.u.state === "installed" ? "check" : "download"; size: 20; color: Theme.primaryFg } }
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 2
+                                Txt {
+                                    Layout.fillWidth: true; color: Theme.primaryContainerFg; font.weight: Font.DemiBold
+                                    text: !updateBanner.rel ? "" : updateBanner.u.state === "installed" ? qsTr("OyNIx %1 is installed").arg(updateBanner.rel.version)
+                                        : qsTr("OyNIx %1 is available").arg(updateBanner.rel.version)
+                                }
+                                Txt {
+                                    Layout.fillWidth: true; wrapMode: Text.WordWrap; elide: Text.ElideNone
+                                    color: Theme.primaryContainerFg; opacity: 0.85; font.pixelSize: 12
+                                    text: updateBanner.u.error !== "" ? updateBanner.u.error
+                                        : updateBanner.u.state === "installed" ? qsTr("Restart to start using it. Your tabs will come back.")
+                                        : updateBanner.u.state === "installing" ? qsTr("Installing… your system may ask for your password.")
+                                        : updateBanner.u.kind === "manual" ? qsTr("This copy wasn’t installed from a package, so update it the way you installed it.")
+                                        : qsTr("Downloaded and checked. Installing asks for your password and takes a few seconds.")
+                                }
+                            }
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 6
+                            Item { Layout.fillWidth: true }
+                            PushButton {
+                                textOnly: true; text: qsTr("Later")
+                                visible: updateBanner.u.state !== "installing"
+                                onClicked: updateBanner.dismissed = updateBanner.rel.version
+                            }
+                            PushButton {
+                                textOnly: true; text: qsTr("What’s New")
+                                visible: updateBanner.u.state !== "installed"
+                                onClicked: win.app.openSettings("about")
+                            }
+                            PushButton {
+                                primary: true
+                                enabled: updateBanner.u.state !== "installing"
+                                text: updateBanner.u.state === "installed" ? qsTr("Restart")
+                                    : updateBanner.u.kind === "manual" ? qsTr("Release Page")
+                                    : updateBanner.u.state === "installing" ? qsTr("Installing…") : qsTr("Install")
+                                onClicked: {
+                                    var u = updateBanner.u
+                                    if (u.state === "installed") { if (!win.app.restartForUpdate()) win.toastMessage(qsTr("Couldn’t restart OyNIx; please start it again yourself.")) }
+                                    else if (u.kind === "manual") win.openTab(updateBanner.rel.page, {})
+                                    else u.install()
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // ── WebUSB device chooser ──
                 Rectangle {
                     z: 50

@@ -245,7 +245,7 @@ QtObject {
 
     function restore() {
         if (Core.startUrl !== "") { newWindow({ tabs: [{ url: Core.startUrl }] }); return }
-        if (Core.onLaunch === "restore" && !Core.startPrivate) {
+        if ((Core.onLaunch === "restore" || Core.forceRestore) && !Core.startPrivate) {
             try {
                 var s = JSON.parse(Core.loadSession() || "{}")
                 if (s.windows && s.windows.length) {
@@ -358,6 +358,37 @@ QtObject {
         if (settingsWindow) settingsWindow.close()
         for (var i = 0; i < devToolsWindows.length; i++) devToolsWindows[i].close()
         Qt.quit()
+    }
+
+    // ── Updates (core/updater.rs) ──
+    property Updater updater: Updater {}
+    function updateSettings() { return JSON.parse(Core.settingsJson) }
+    function checkForUpdate(manual) {
+        updater.check(updateSettings().updateChannel === "beta", !manual)
+    }
+    // Look once a day, starting a minute after launch so it doesn't compete
+    // with restoring tabs. Private-only sessions don't check.
+    property Timer updateTimer: Timer {
+        interval: 60 * 1000; running: true; repeat: true
+        onTriggered: {
+            interval = 60 * 60 * 1000
+            if (Core.startPrivate || !app.updateSettings().updateCheck) return
+            if (app.updater.secondsSinceCheck() > 20 * 3600) app.checkForUpdate(false)
+        }
+    }
+    property Connections updateFlow: Connections {
+        target: app.updater
+        function onStateChanged() {
+            var u = app.updater
+            if (u.state === "available" && u.kind !== "manual" && app.updateSettings().updateDownload && JSON.parse(u.release).package)
+                u.download()
+        }
+    }
+    function restartForUpdate() {
+        saveSession()
+        if (!updater.relaunch()) return false
+        quit()
+        return true
     }
 
     function quit() {

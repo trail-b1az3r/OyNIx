@@ -15,3 +15,4 @@ pub mod usb;
 pub mod watchdog;
 pub mod tscompile;
 pub mod qmlcheck;
+pub mod updater;

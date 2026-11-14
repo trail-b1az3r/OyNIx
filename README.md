@@ -266,6 +266,12 @@ sudo udevadm control --reload && sudo udevadm trigger
 
 OyNIx ships its own libusb, so no extra package is needed. In containers without `/dev/bus/usb` WebUSB simply finds no devices.
 
+## Updates
+
+OyNIx checks GitHub for a new release once a day (Settings › About › Updates; switchable, with a beta channel). It downloads the package that matches how it was installed (`.deb` or pacman), verifies it against the release's `SHA256SUMS`, and installs it with `pkexec apt-get install` / `pkexec pacman -U` when you click **Install**; **Restart** reopens your tabs in the new version. Source builds are told about new versions but not changed. The release workflow already publishes the files the updater needs (both packages and `SHA256SUMS`).
+
+`OYNIX_UPDATE_URL` points the updater at another release feed (forks, testing); `OYNIX_UPDATE_DRY_RUN=1` prints the install command instead of running it.
+
 ## Website
 
 `site/` (pages and assets) and `gallery/` (extensions) build into a static site with `python3 scripts/build-site.py` (standard library only; output in `_site/`). The *Website* workflow publishes it to GitHub Pages on pushes to `main`; enable it once under **Settings › Pages › Source: GitHub Actions**.

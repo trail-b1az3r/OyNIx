@@ -955,6 +955,99 @@ Rectangle {
                 Row_ { label: qsTr("Configuration"); Txt { text: Core.configPath("config"); color: Theme.textDim; font.pixelSize: 12 } }
             }
             Section {
+                id: updSection
+                title: qsTr("Updates")
+                readonly property var u: sw.app.updater
+                readonly property var rel: u.release ? JSON.parse(u.release) : null
+                function size(b) { return b > 1048576 ? (b / 1048576).toFixed(0) + " MB" : Math.round(b / 1024) + " KB" }
+                Row_ {
+                    label: {
+                        var u = updSection.u, r = updSection.rel
+                        switch (u.state) {
+                        case "checking": return qsTr("Checking for updates…")
+                        case "current": return qsTr("OyNIx %1 is up to date").arg(u.currentVersion)
+                        case "available": return qsTr("OyNIx %1 is available").arg(r.version)
+                        case "downloading": return qsTr("Downloading OyNIx %1… %2%").arg(r.version).arg(Math.round(u.progress * 100))
+                        case "ready": return qsTr("OyNIx %1 is ready to install").arg(r.version)
+                        case "installing": return qsTr("Installing OyNIx %1…").arg(r.version)
+                        case "installed": return qsTr("OyNIx %1 is installed. Restart to use it.").arg(r.version)
+                        case "error": return qsTr("Couldn’t update")
+                        default: return qsTr("You have OyNIx %1").arg(u.currentVersion)
+                        }
+                    }
+                    hint: {
+                        var u = updSection.u, r = updSection.rel
+                        if (u.error) return u.error
+                        if (u.kind === "manual") return qsTr("This copy wasn’t installed from a .deb or pacman package, so OyNIx can tell you about new versions but can’t install them.")
+                        if (r && r.package && (u.state === "available" || u.state === "downloading")) return qsTr("%1 download, checked against its published SHA-256 before installing.").arg(updSection.size(r.package.size))
+                        if (u.state === "ready") return qsTr("Installing uses your package manager and asks for your password.")
+                        var s = u.secondsSinceCheck()
+                        return s > 1e15 ? qsTr("Not checked yet.") : qsTr("Last checked %1.").arg(s < 3600 ? qsTr("in the last hour") : s < 86400 ? qsTr("today") : qsTr("%1 days ago").arg(Math.floor(s / 86400)))
+                    }
+                    PushButton {
+                        visible: ["idle", "current", "error", "available"].indexOf(updSection.u.state) >= 0 && !(updSection.u.state === "available" && updSection.u.kind !== "manual")
+                        text: qsTr("Check Now")
+                        onClicked: sw.app.checkForUpdate(true)
+                    }
+                    PushButton {
+                        visible: updSection.u.state === "available" && updSection.u.kind !== "manual"
+                        primary: true; text: qsTr("Download")
+                        onClicked: updSection.u.download()
+                    }
+                    PushButton {
+                        visible: updSection.u.state === "downloading"
+                        text: qsTr("Cancel")
+                        onClicked: updSection.u.cancel()
+                    }
+                    PushButton {
+                        visible: updSection.u.state === "ready" || updSection.u.state === "installing"
+                        enabled: updSection.u.state === "ready"
+                        primary: true; text: updSection.u.state === "installing" ? qsTr("Installing…") : qsTr("Install")
+                        onClicked: updSection.u.install()
+                    }
+                    PushButton {
+                        visible: updSection.u.state === "installed"
+                        primary: true; text: qsTr("Restart")
+                        onClicked: sw.app.restartForUpdate()
+                    }
+                    PushButton {
+                        visible: updSection.u.kind === "manual" && updSection.rel !== null
+                        text: qsTr("Release Page")
+                        onClicked: sw.app.openInBrowser(updSection.rel.page)
+                    }
+                }
+                Rectangle {
+                    visible: updSection.u.state === "downloading"
+                    Layout.fillWidth: true; Layout.leftMargin: 12; Layout.rightMargin: 12
+                    implicitHeight: 6; radius: 3
+                    color: Theme.surfaceContainerHighest
+                    Rectangle { width: parent.width * updSection.u.progress; height: parent.height; radius: 3; color: Theme.primary
+                        Behavior on width { NumberAnimation { duration: 200 } } }
+                }
+                Txt {
+                    visible: updSection.u.manualCommand !== "" && updSection.u.error !== ""
+                    Layout.fillWidth: true; Layout.margins: 12
+                    wrapMode: Text.WrapAnywhere; elide: Text.ElideNone
+                    font.family: "monospace"; font.pixelSize: 11; textFormat: Text.PlainText
+                    text: qsTr("Or install it from a terminal:") + "\n" + updSection.u.manualCommand
+                }
+                Txt {
+                    visible: updSection.rel !== null && updSection.rel.notes !== ""
+                    Layout.fillWidth: true; Layout.leftMargin: 12; Layout.rightMargin: 12; Layout.bottomMargin: 8
+                    wrapMode: Text.WordWrap; elide: Text.ElideNone
+                    textFormat: Text.MarkdownText
+                    font.pixelSize: 12; color: Theme.textDim
+                    text: updSection.rel ? updSection.rel.notes.slice(0, 4000) : ""
+                    onLinkActivated: function (link) { if (/^https:\/\//.test(link)) sw.app.openInBrowser(link) }
+                }
+                Divider {}
+                SwitchRow { label: qsTr("Check for updates automatically"); hint: qsTr("Once a day, OyNIx asks GitHub for the newest release. Nothing about you is sent beyond what any web request carries."); key: "updateCheck" }
+                Divider {}
+                SwitchRow { label: qsTr("Download updates in the background"); hint: qsTr("Installing always waits for you."); key: "updateDownload" }
+                Divider {}
+                ChoiceRow { label: qsTr("Update channel"); key: "updateChannel"; options: [{ v: "stable", t: qsTr("Stable releases") }, { v: "beta", t: qsTr("Stable and beta releases") }] }
+            }
+            Section {
                 id: freezeSection
                 title: qsTr("Responsiveness")
                 property string log: sw.shown ? Core.freezeLog() : ""
