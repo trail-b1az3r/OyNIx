@@ -7,7 +7,8 @@ Sources
   site/pages/*.html        page bodies with a small header comment
   site/pages/docs/*.html   documentation chapters (order from the header)
   site/assets/             CSS, JS, screenshots (copied as they are)
-  gallery/<id>/            OyNIx extensions: oynix.json + content.js + content.css
+  gallery/<id>/            OyNIx extensions: oynix.json + code.ts + content.css,
+                           optionally graphics.qt, extra.html, extra.jsonl
   qml/Icon.qml, qml/MShape.qml   icon paths and shape geometry, so the site
                            uses exactly the browser's icons and shapes
 
@@ -290,9 +291,20 @@ def build_gallery(site):
     items = []
     for d in sorted(p for p in GALLERY.iterdir() if p.is_dir()):
         meta = json.loads((d / "oynix.json").read_text())
-        for f in ("content.js", "content.css"):
+        for f in ("code.ts", "content.css"):
             if not (d / f).exists():
                 sys.exit(f"{d.name}: {f} is missing")
+        allowed = {"oynix.json", "code.ts", "content.css", "graphics.qt", "extra.html", "extra.jsonl", "icon.png", "icon.svg"}
+        extra_files = sorted(f.name for f in d.iterdir() if f.is_file() and f.name not in allowed)
+        if extra_files:
+            sys.exit(f"{d.name}: unexpected files {extra_files} (allowed: {sorted(allowed)})")
+        if (d / "extra.jsonl").exists():
+            for n, line in enumerate((d / "extra.jsonl").read_text().splitlines(), 1):
+                if line.strip():
+                    try:
+                        json.loads(line)
+                    except ValueError as e:
+                        sys.exit(f"{d.name}: extra.jsonl:{n}: {e}")
         g = meta.get("gallery", {})
         file = f'{meta["name"].replace(" ", "-")}-{meta["version"]}.oynix'
         pkg = out / "packages" / file
@@ -306,7 +318,8 @@ def build_gallery(site):
             "matches": meta.get("matches", []), "run_at": meta.get("run_at", "document_end"),
             "world": meta.get("world", "isolated"),
             "package": f"packages/{file}", "size": len(data), "sha256": hashlib.sha256(data).hexdigest(),
-            "js": (d / "content.js").read_text(), "css": (d / "content.css").read_text(),
+            "ts": (d / "code.ts").read_text(), "css": (d / "content.css").read_text(),
+            "extras": {f: (d / f).read_text() for f in ("graphics.qt", "extra.html", "extra.jsonl") if (d / f).exists()},
         })
 
     tones = [("var(--primary-container)", "var(--on-primary-container)"), ("var(--tertiary-container)", "var(--on-tertiary-container)"),
@@ -317,7 +330,7 @@ def build_gallery(site):
         return f"--fill:{f};--ink:{k}"
 
     # Machine-readable index (for tools, and future in-browser updates).
-    index = [{k: v for k, v in it.items() if k not in ("js", "css", "about")} for it in items]
+    index = [{k: v for k, v in it.items() if k not in ("ts", "css", "about", "extras")} | {"files": ["oynix.json", "code.ts", "content.css", *it["extras"]]} for it in items]
     (out / "index.json").write_text(json.dumps({"version": 1, "extensions": index}, indent=2))
 
     cats = sorted({it["category"] for it in items})
@@ -334,7 +347,7 @@ def build_gallery(site):
     <div>
       <span class="eyebrow">Extension Gallery</span>
       <h1 style="font-size:clamp(40px,5.4vw,68px)">Small tools,<br>short enough to read.</h1>
-      <p class="lede" style="margin-top:22px">Every extension here is a few dozen lines of JavaScript and CSS that you can read on its own page before installing. They run only on the pages they say they run on, and never send anything anywhere.</p>
+      <p class="lede" style="margin-top:22px">Every extension here is a few dozen lines of TypeScript and CSS that you can read on its own page before installing. They run only on the pages they say they run on, and never send anything anywhere.</p>
     </div>
     <label class="search">{site.icon("search")}<input type="search" placeholder="Search extensions" aria-label="Search extensions"></label>
   </div>
@@ -349,7 +362,7 @@ def build_gallery(site):
     </div>
     <div class="chapter-text">
       <h2>Write your own</h2>
-      <p>An OyNIx extension is three files: <code>oynix.json</code>, <code>content.js</code> and <code>content.css</code>. Settings › Extensions › New Extension makes a template; when it works, send a pull request adding it to <a href="{REPO}/tree/main/gallery"><code>gallery/</code></a>.</p>
+      <p>An OyNIx extension is three files, <code>oynix.json</code>, <code>code.ts</code> and <code>content.css</code>, plus an optional panel or page and data. Settings › Extensions › New Extension makes a template; when it works, send a pull request adding it to <a href="{REPO}/tree/main/gallery"><code>gallery/</code></a>.</p>
       <a class="btn text" href="../docs/build-an-extension/">Build an extension {site.icon("chevronRight")}</a>
     </div>
   </div>
@@ -361,7 +374,9 @@ def build_gallery(site):
         about = "".join(f"<p>{html.escape(p)}</p>" for p in it["about"].split("\n\n") if p)
         matches = ", ".join(html.escape(m) for m in it["matches"]) or "—"
         when = {"document_start": "Before the page loads", "document_end": "When the page has loaded", "document_idle": "Once the page is idle"}.get(it["run_at"], it["run_at"])
-        js_lines = it["js"].count("\n") + 1
+        ts_lines = it["ts"].count("\n") + 1
+        extras_html = "".join(f'<details class="source"><summary>{html.escape(f)}</summary><pre><code>{html.escape(t)}</code></pre></details>' for f, t in it["extras"].items())
+        panel = "graphics.qt (panel)" if "graphics.qt" in it["extras"] else ("extra.html (page)" if "extra.html" in it["extras"] else "None")
         all_sites = any(m in ("*://*/*", "<all_urls>") for m in it["matches"])
         body = f'''<div class="wrap ext-page">
   <article>
@@ -373,8 +388,9 @@ def build_gallery(site):
       {about}
       <h2 style="font-size:26px;margin:44px 0 14px">Read the code</h2>
       <p>This is the whole extension. OyNIx shows it to the page exactly as written here.</p>
-      <details class="source" open><summary>content.js · {js_lines} lines</summary><pre><code>{html.escape(it["js"])}</code></pre></details>
+      <details class="source" open><summary>code.ts · {ts_lines} lines</summary><pre><code>{html.escape(it["ts"])}</code></pre></details>
       <details class="source"><summary>content.css</summary><pre><code>{html.escape(it["css"])}</code></pre></details>
+      {extras_html}
     </div>
   </article>
   <aside class="facts">
@@ -388,6 +404,7 @@ def build_gallery(site):
       <dt>Runs on</dt><dd>{"Every website" if all_sites else matches}</dd>
       <dt>Starts</dt><dd>{when}</dd>
       <dt>Network</dt><dd>None</dd>
+      <dt>Toolbar</dt><dd>{panel}</dd>
       <dt>Size</dt><dd>{it["size"]:,} bytes</dd>
       <dt>SHA-256</dt><dd><code style="font-size:11px">{it["sha256"]}</code></dd>
     </dl>

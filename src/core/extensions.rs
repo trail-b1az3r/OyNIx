@@ -9,9 +9,12 @@
 //!   Chromium: Gecko-only manifest keys are removed, MV3 event-page
 //!   `background.scripts` become a service worker, and a small `browser.*`
 //!   promise shim is added so `browser.tabs.query(...)` style code runs.
-//! * **OyNIx extensions** – the lightweight native format: a folder (or
-//!   `.zip`) holding exactly `oynix.json` + `content.js` + `content.css`.
-//!   OyNIx injects these itself on matching pages.
+//! * **OyNIx extensions** – the lightweight native format: a folder, `.zip`
+//!   or `.oynix` holding `oynix.json` + `code.ts` + `content.css`, plus
+//!   optional `graphics.qt` (a QML panel), `extra.html` (a page) and
+//!   `extra.jsonl` (data). `code.ts` is compiled to JavaScript on install; a
+//!   package with only `content.js` is converted to `code.ts` first.
+//!   OyNIx injects the result itself on matching pages.
 //!
 //! `manifest_version` values above 3 do not exist yet; they are accepted and
 //! treated as MV3 so forward-dated manifests still load, with a warning.
@@ -54,6 +57,12 @@ pub struct Entry {
     pub excludes: Vec<String>,
     pub run_at: String,
     pub world: String,
+    /// Has `graphics.qt` (a QML panel shown from the toolbar).
+    pub has_panel: bool,
+    /// Has `extra.html` (a page shown from the toolbar when there's no panel).
+    pub has_page: bool,
+    /// Number of records in `extra.jsonl`.
+    pub data_records: usize,
 }
 
 pub fn root() -> PathBuf {
@@ -579,18 +588,98 @@ pub fn content_scripts(e: &Entry) -> Vec<Value> {
 
 // ── OyNIx native format ───────────────────────────────────────────────
 
-/// Validate an OyNIx extension folder (`oynix.json` + `content.js` + `content.css`).
+/// Largest `extra.jsonl` OyNIx accepts (it's injected into every matching page).
+const MAX_DATA_BYTES: u64 = 4 << 20;
+
+const CONVERTED_HEADER: &str = "// Converted from content.js by OyNIx. JavaScript is valid TypeScript,\n// so nothing else changed; add types whenever you like.\n\n";
+
+/// Make sure a folder has `code.ts`, converting a lone `content.js`.
+/// Returns a warning when something was converted or ignored.
+fn ensure_code_ts(dir: &Path) -> Result<Option<String>, String> {
+    let ts = dir.join("code.ts");
+    let js = dir.join("content.js");
+    if ts.exists() {
+        if js.exists() {
+            let _ = std::fs::remove_file(&js);
+            return Ok(Some("Both code.ts and content.js were present; content.js is ignored".into()));
+        }
+        return Ok(None);
+    }
+    if js.exists() {
+        let src = std::fs::read_to_string(&js).map_err(|e| format!("content.js: {e}"))?;
+        std::fs::write(&ts, format!("{CONVERTED_HEADER}{src}")).map_err(|e| e.to_string())?;
+        let _ = std::fs::remove_file(&js);
+        return Ok(Some("content.js was converted to code.ts".into()));
+    }
+    if dir.join("content.ts").exists() {
+        std::fs::rename(dir.join("content.ts"), &ts).map_err(|e| e.to_string())?;
+        return Ok(Some("content.ts was renamed to code.ts".into()));
+    }
+    Err("code.ts is missing (OyNIx extensions need oynix.json, code.ts and content.css)".into())
+}
+
+/// Where the compiled `code.ts` is kept inside an installed extension.
+fn compiled_path(dir: &Path) -> PathBuf {
+    dir.join(".build").join("code.js")
+}
+
+/// Compile `code.ts` if the cached JavaScript is missing or older.
+pub fn compile_code(dir: &Path) -> Result<String, String> {
+    ensure_code_ts(dir)?;
+    let ts = dir.join("code.ts");
+    let out = compiled_path(dir);
+    let fresh = match (std::fs::metadata(&ts).and_then(|m| m.modified()), std::fs::metadata(&out).and_then(|m| m.modified())) {
+        (Ok(a), Ok(b)) => b >= a,
+        _ => false,
+    };
+    if fresh {
+        if let Ok(js) = std::fs::read_to_string(&out) {
+            return Ok(js);
+        }
+    }
+    let src = std::fs::read_to_string(&ts).map_err(|e| format!("code.ts: {e}"))?;
+    let js = super::tscompile::transpile(&src, "code.ts")?;
+    let _ = std::fs::create_dir_all(out.parent().unwrap());
+    let _ = std::fs::write(&out, &js);
+    Ok(js)
+}
+
+/// Parse `extra.jsonl`: one JSON value per non-empty line.
+pub fn read_data(dir: &Path) -> Result<Vec<Value>, String> {
+    let p = dir.join("extra.jsonl");
+    let Ok(meta) = std::fs::metadata(&p) else { return Ok(vec![]) };
+    if meta.len() > MAX_DATA_BYTES {
+        return Err(format!("extra.jsonl is {} MB; the limit is 4 MB", meta.len() >> 20));
+    }
+    let text = std::fs::read_to_string(&p).map_err(|e| format!("extra.jsonl: {e}"))?;
+    text.lines()
+        .enumerate()
+        .filter(|(_, l)| !l.trim().is_empty())
+        .map(|(n, l)| serde_json::from_str(l).map_err(|e| format!("extra.jsonl:{}: {e}", n + 1)))
+        .collect()
+}
+
+/// Validate an OyNIx extension folder: `oynix.json` + `code.ts` (or
+/// `content.js`, converted) + `content.css`, and the optional extras.
 fn prepare_oynix(dir: &Path, e: &mut Entry) -> Result<(), String> {
     let meta = std::fs::read_to_string(dir.join("oynix.json")).map_err(|_| "oynix.json is missing".to_string())?;
     let v = parse_json_lenient(&meta)?;
-    if !dir.join("content.js").exists() {
-        if dir.join("content.ts").exists() {
-            return Err("OyNIx extensions use JavaScript: compile content.ts to content.js (e.g. `tsc content.ts`)".into());
-        }
-        return Err("content.js is missing (OyNIx extensions need oynix.json, content.js and content.css)".into());
+    if let Some(w) = ensure_code_ts(dir)? {
+        e.warnings.push(w);
     }
     if !dir.join("content.css").exists() {
         return Err("content.css is missing (it may be empty, but must exist)".into());
+    }
+    compile_code(dir)?;
+    e.data_records = read_data(dir)?.len();
+    e.has_panel = dir.join("graphics.qt").exists();
+    if e.has_panel {
+        let qml = std::fs::read_to_string(dir.join("graphics.qt")).map_err(|e| format!("graphics.qt: {e}"))?;
+        super::qmlcheck::check(&qml)?;
+    }
+    e.has_page = dir.join("extra.html").exists();
+    if e.has_panel && e.has_page {
+        e.warnings.push("graphics.qt and extra.html both exist; the toolbar shows graphics.qt".into());
     }
     let strs = |k: &str| -> Vec<String> {
         match v.get(k) {
@@ -635,12 +724,83 @@ fn prepare_oynix(dir: &Path, e: &mut Entry) -> Result<(), String> {
     Ok(())
 }
 
+/// The `oynix` object `code.ts` sees: its id, the records from
+/// `extra.jsonl`, and messaging with its panel (`graphics.qt` or
+/// `extra.html`) through OyNIx's WebChannel bridge.
+const OYNIX_API: &str = r#"var oynix = (function () {
+  var id = __ID__, listeners = [], bridge = null;
+  function connect() {
+    if (!__MESSAGING__) return Promise.reject(new Error('This extension has no panel to talk to'));
+    if (!window.__oynixChannel) window.__oynixChannel = new Promise(function (r) {
+      (function wait() {
+        if (typeof qt === 'undefined' || !qt.webChannelTransport || typeof QWebChannel === 'undefined') return setTimeout(wait, 25);
+        new QWebChannel(qt.webChannelTransport, r);
+      })();
+    });
+    return window.__oynixChannel.then(function (ch) {
+      if (!bridge) {
+        bridge = ch.objects.oynixExtensions;
+        bridge.message.connect(function (ext, target, payload) {
+          if (ext !== id || target !== 'content') return;
+          var msg; try { msg = JSON.parse(payload); } catch (e) { return; }
+          listeners.forEach(function (f) { try { f(msg); } catch (e) { console.error(e); } });
+        });
+      }
+      return bridge;
+    });
+  }
+  return Object.freeze({
+    id: id,
+    data: Object.freeze(__DATA__),
+    post: function (msg) { return connect().then(function (b) { b.post(id, 'panel', JSON.stringify(msg === undefined ? null : msg)); }); },
+    onMessage: function (f) { if (typeof f === 'function') { listeners.push(f); connect().catch(function () {}); } },
+    openPanel: function () { return connect().then(function (b) { b.post(id, 'oynix:open', '{}'); }); }
+  });
+})();"#;
+
+/// The `oynix` object in an extension's `extra.html` (the mirror image of
+/// OYNIX_API: it posts to code.ts and listens for messages from it).
+pub const PAGE_API: &str = r#"window.oynix = (function () {
+  var id = __ID__, listeners = [], ready = null;
+  function connect() {
+    if (!ready) ready = new Promise(function (resolve) {
+      (function wait() {
+        if (typeof qt === 'undefined' || !qt.webChannelTransport || typeof QWebChannel === 'undefined') return setTimeout(wait, 25);
+        new QWebChannel(qt.webChannelTransport, function (ch) {
+          var b = ch.objects.oynixExtensions;
+          b.message.connect(function (ext, target, payload) {
+            if (ext !== id || target !== 'panel') return;
+            var msg; try { msg = JSON.parse(payload); } catch (e) { return; }
+            listeners.forEach(function (f) { try { f(msg); } catch (e) { console.error(e); } });
+          });
+          resolve(b);
+        });
+      })();
+    });
+    return ready;
+  }
+  connect();
+  return Object.freeze({
+    id: id,
+    data: Object.freeze(__DATA__),
+    post: function (msg) { return connect().then(function (b) { b.post(id, 'content', JSON.stringify(msg === undefined ? null : msg)); }); },
+    onMessage: function (f) { if (typeof f === 'function') listeners.push(f); }
+  });
+})();"#;
+
 /// Build the injected script for an OyNIx extension: a Greasemonkey header
 /// (Qt WebEngine applies @match / @exclude / @run-at natively), the CSS and
 /// the JS.
 pub fn oynix_script(e: &Entry) -> Option<String> {
     let dir = Path::new(&e.path);
-    let js = std::fs::read_to_string(dir.join("content.js")).ok()?;
+    let js = match compile_code(dir) {
+        Ok(js) => js,
+        Err(err) => {
+            eprintln!("oynix: extension {}: {err}", e.name);
+            return None;
+        }
+    };
+    let data = read_data(dir).unwrap_or_default();
     let css = std::fs::read_to_string(dir.join("content.css")).unwrap_or_default();
     let mut header = format!("// ==UserScript==\n// @name {}\n", e.name.replace('\n', " "));
     for m in &e.matches {
@@ -658,8 +818,12 @@ pub fn oynix_script(e: &Entry) -> Option<String> {
     header.push_str(&format!("// @run-at {run_at}\n// ==/UserScript==\n"));
     let css_js = serde_json::to_string(&css).unwrap_or_else(|_| "\"\"".into());
     let id_js = serde_json::to_string(&e.id).unwrap_or_default();
+    let data_js = serde_json::to_string(&data).unwrap_or_else(|_| "[]".into());
+    // Messaging with the panel needs the WebChannel client in this world.
+    let channel = if (e.has_panel || e.has_page) && e.world != "main" { crate::bridge::native::ffi::webchannel_js() } else { String::new() };
+    let api = OYNIX_API.replace("__ID__", &id_js).replace("__DATA__", &data_js).replace("__MESSAGING__", if channel.is_empty() { "false" } else { "true" });
     Some(format!(
-        "{header}(function () {{\n  var css = {css_js};\n  if (css.trim()) {{\n    var s = document.createElement('style');\n    s.dataset.oynixExtension = {id_js};\n    s.textContent = css;\n    (document.head || document.documentElement).appendChild(s);\n  }}\n}})();\n(function () {{\n{js}\n}})();\n"
+        "{header}{channel}\n(function () {{\n  var css = {css_js};\n  if (css.trim()) {{\n    var s = document.createElement('style');\n    s.dataset.oynixExtension = {id_js};\n    s.textContent = css;\n    (document.head || document.documentElement).appendChild(s);\n  }}\n}})();\n(function () {{\n{api}\n{js}\n}})();\n"
     ))
 }
 
@@ -772,6 +936,25 @@ pub fn remove(id: &str, list: &mut Vec<Entry>) -> bool {
 }
 
 /// Create a ready-to-edit OyNIx extension skeleton and register it.
+const TEMPLATE_TS: &str = r#"// Runs on every page matched by oynix.json "matches".
+// OyNIx compiles this TypeScript when the extension is installed or edited.
+
+// What OyNIx provides (types only; erased when compiled).
+declare const oynix: {
+  readonly id: string;
+  /** Records from extra.jsonl, one per line. */
+  readonly data: readonly unknown[];
+  /** Send a message to graphics.qt / extra.html. */
+  post(message: unknown): Promise<void>;
+  onMessage(listener: (message: unknown) => void): void;
+  /** Open this extension's panel from the toolbar. */
+  openPanel(): Promise<void>;
+};
+
+const host: string = location.hostname;
+console.log(`[${oynix.id}] loaded on ${host}`);
+"#;
+
 pub fn create_template(name: &str, list: &mut Vec<Entry>) -> Result<Entry, String> {
     let src = std::env::temp_dir().join(format!("oynix-template-{}", now()));
     std::fs::create_dir_all(&src).map_err(|e| e.to_string())?;
@@ -785,11 +968,7 @@ pub fn create_template(name: &str, list: &mut Vec<Entry>) -> Result<Entry, Strin
         "world": "isolated"
     });
     std::fs::write(src.join("oynix.json"), serde_json::to_vec_pretty(&meta).unwrap()).map_err(|e| e.to_string())?;
-    std::fs::write(
-        src.join("content.js"),
-        "// Runs on every page matched by oynix.json \"matches\".\n// `document` is the page; this runs in an isolated world unless \"world\": \"main\".\nconsole.log('[OyNIx extension] loaded on', location.hostname);\n",
-    )
-    .map_err(|e| e.to_string())?;
+    std::fs::write(src.join("code.ts"), TEMPLATE_TS).map_err(|e| e.to_string())?;
     std::fs::write(src.join("content.css"), "/* Styles injected into matched pages. */\n").map_err(|e| e.to_string())?;
     let r = install(&src, list);
     let _ = std::fs::remove_dir_all(&src);
@@ -881,17 +1060,62 @@ mod tests {
         with_data_home();
         let d = tmp("oy");
         std::fs::write(d.join("oynix.json"), r#"{"name": "Dark Docs", "matches": ["*://docs.example.org/*"], "run_at": "document_start"}"#).unwrap();
-        std::fs::write(d.join("content.js"), "document.title += ' ✓';").unwrap();
         let mut list = vec![];
+        let err = install(&d, &mut list).unwrap_err();
+        assert!(err.contains("code.ts"), "{err}");
+        std::fs::write(d.join("code.ts"), "enum Mark { Done = 1 }\nconst t: string = ' ✓' + Mark.Done;\ndocument.title += t;").unwrap();
         let err = install(&d, &mut list).unwrap_err();
         assert!(err.contains("content.css"), "{err}");
         std::fs::write(d.join("content.css"), "body{background:#111}").unwrap();
+        std::fs::write(d.join("extra.jsonl"), "{\"word\": \"alpha\"}\n\n{\"word\": \"beta\"}\n").unwrap();
+        std::fs::write(d.join("graphics.qt"), "import QtQuick\nItem {}\n").unwrap();
         let e = install(&d, &mut list).unwrap();
         assert_eq!(e.kind, "oynix");
+        assert_eq!(e.data_records, 2);
+        assert!(e.has_panel && !e.has_page);
         let s = oynix_script(&e).unwrap();
         assert!(s.contains("// @match *://docs.example.org/*"));
         assert!(s.contains("// @run-at document-start"));
         assert!(s.contains("body{background:#111}"));
+        assert!(s.contains("Mark[Mark[\"Done\"] = 1]") && !s.contains(": string"));
+        assert!(s.contains(r#"[{"word":"alpha"},{"word":"beta"}]"#));
         remove(&e.id, &mut list);
+    }
+
+    #[test]
+    fn oynix_converts_javascript_and_rejects_bad_input() {
+        with_data_home();
+        let d = tmp("oyjs");
+        std::fs::write(d.join("oynix.json"), r#"{"name": "Plain JS"}"#).unwrap();
+        std::fs::write(d.join("content.js"), "document.body.dataset.x = '1';").unwrap();
+        std::fs::write(d.join("content.css"), "").unwrap();
+        let mut list = vec![];
+        let e = install(&d, &mut list).unwrap();
+        assert!(e.warnings.iter().any(|w| w.contains("converted to code.ts")), "{:?}", e.warnings);
+        let installed = Path::new(&e.path);
+        assert!(installed.join("code.ts").exists() && !installed.join("content.js").exists());
+        assert!(d.join("content.js").exists(), "the source folder is left alone");
+        assert!(oynix_script(&e).unwrap().contains("dataset.x = \"1\""));
+        remove(&e.id, &mut list);
+
+        let b = tmp("oybad");
+        std::fs::write(b.join("oynix.json"), r#"{"name": "Broken"}"#).unwrap();
+        std::fs::write(b.join("code.ts"), "const x: = 1;").unwrap();
+        std::fs::write(b.join("content.css"), "").unwrap();
+        let err = install(&b, &mut list).unwrap_err();
+        assert!(err.starts_with("code.ts:1:"), "{err}");
+        std::fs::write(b.join("code.ts"), "export {};").unwrap();
+        std::fs::write(b.join("extra.jsonl"), "{\"ok\": 1}\nnot json\n").unwrap();
+        let err = install(&b, &mut list).unwrap_err();
+        assert!(err.starts_with("extra.jsonl:2:"), "{err}");
+    }
+}
+
+#[cfg(test)]
+mod template_tests {
+    #[test]
+    fn template_compiles() {
+        let js = crate::core::tscompile::transpile(super::TEMPLATE_TS, "code.ts").unwrap();
+        assert!(js.contains("location.hostname") && !js.contains("declare"));
     }
 }

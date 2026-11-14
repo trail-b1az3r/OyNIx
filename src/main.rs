@@ -16,6 +16,7 @@ mod bridge {
     pub mod core;
     pub mod extbridge;
     pub mod native;
+    pub mod panel;
     pub mod usbbridge;
 }
 mod core;

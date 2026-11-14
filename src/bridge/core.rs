@@ -207,6 +207,18 @@ pub mod qobject {
         #[qinvokable]
         unsafe fn clear_cookies(self: &Core, profile: *mut QObject);
         #[qinvokable]
+        unsafe fn load_extension_panel(self: &Core, host: *mut QObject, id: &QString, api: *mut QObject) -> QString;
+        #[qinvokable]
+        unsafe fn unload_extension_panel(self: &Core, host: *mut QObject);
+        #[qinvokable]
+        fn extension_data(self: &Core, id: &QString) -> QString;
+        #[qinvokable]
+        fn extension_page_url(self: &Core, id: &QString) -> QString;
+        #[qinvokable]
+        fn extension_page_api(self: &Core, id: &QString) -> QString;
+        #[qinvokable]
+        fn webchannel_script(self: &Core) -> QString;
+        #[qinvokable]
         fn blocker_generation(self: &Core) -> i32;
         #[qinvokable]
         unsafe fn send_mouse(self: &Core, item: *mut QObject, x: f64, y: f64, button: i32, clicks: i32, modifiers: i32, kind: i32);
@@ -989,6 +1001,61 @@ impl qobject::Core {
     /// Desktop notification (used by extensions' notifications API).
     pub fn notify(&self, title: &QString, body: &QString) {
         let _ = std::process::Command::new("notify-send").args(["-a", "OyNIx", &s(title), &s(body)]).spawn();
+    }
+
+    fn oynix_dir(&self, id: &QString) -> Option<std::path::PathBuf> {
+        let id = s(id);
+        self.extensions.iter().find(|e| e.id == id && e.kind == "oynix").map(|e| std::path::PathBuf::from(&e.path))
+    }
+
+    /// # Safety
+    /// `host` must be a live QQuickItem and `api` a live ExtensionPanel, both from QML.
+    pub unsafe fn load_extension_panel(&self, host: *mut cxx_qt::QObject, id: &QString, api: *mut cxx_qt::QObject) -> QString {
+        let Some(dir) = self.oynix_dir(id) else { return qs("extension not found") };
+        let qml = dir.join("graphics.qt");
+        // Checked again here: the files may have been edited since install.
+        match std::fs::read_to_string(&qml) {
+            Ok(src) => {
+                if let Err(e) = crate::core::qmlcheck::check(&src) {
+                    return qs(e);
+                }
+            }
+            Err(e) => return qs(format!("graphics.qt: {e}")),
+        }
+        let err = crate::bridge::native::ffi::load_panel(host, &qml.to_string_lossy(), &dir.to_string_lossy(), api);
+        qs(err)
+    }
+
+    /// # Safety
+    /// `host` must be a live QQuickItem from QML.
+    pub unsafe fn unload_extension_panel(&self, host: *mut cxx_qt::QObject) {
+        crate::bridge::native::ffi::unload_panel(host);
+    }
+
+    /// `extra.jsonl` records as a JSON array.
+    pub fn extension_data(&self, id: &QString) -> QString {
+        let data = self.oynix_dir(id).map(|d| extensions::read_data(&d).unwrap_or_default()).unwrap_or_default();
+        to_qjson(&Value::Array(data))
+    }
+
+    /// The `oynix` object for an extension's `extra.html`: its data and
+    /// messaging with the extension's code.ts.
+    pub fn extension_page_api(&self, id: &QString) -> QString {
+        let data = self.extension_data(id);
+        let id_js = serde_json::to_string(&s(id)).unwrap_or_default();
+        qs(extensions::PAGE_API.replace("__ID__", &id_js).replace("__DATA__", &String::from(&data)))
+    }
+
+    pub fn webchannel_script(&self) -> QString {
+        qs(crate::bridge::native::ffi::webchannel_js())
+    }
+
+    /// file:// URL of `extra.html`, or "".
+    pub fn extension_page_url(&self, id: &QString) -> QString {
+        match self.oynix_dir(id).map(|d| d.join("extra.html")) {
+            Some(p) if p.exists() => qs(format!("file://{}", p.to_string_lossy())),
+            _ => qs(""),
+        }
     }
 
     /// # Safety

@@ -574,7 +574,12 @@ ApplicationWindow {
                         var host = win.app.extensionHost
                         host.revision; Core.extensionsRevision
                         if (win.privateMode || !host.supported) return []
-                        return JSON.parse(Core.extensions()).filter(function (e) { return e.enabled && e.kind !== "oynix" && host.isLoaded(e.id) })
+                        return JSON.parse(Core.extensions()).filter(function (e) {
+                            if (!e.enabled) return false
+                            // OyNIx extensions get a button when they have a panel or page.
+                            if (e.kind === "oynix") return e.hasPanel || e.hasPage
+                            return host.isLoaded(e.id)
+                        })
                     }
                     delegate: AbstractButton {
                         id: extBtn
@@ -605,6 +610,7 @@ ApplicationWindow {
                         ToolTip.visible: hovered; ToolTip.delay: 600
                         ToolTip.text: { var b = win.app.extensionHost.badgeFor(modelData); return b && b.title ? b.title : modelData.name }
                         onClicked: {
+                            if (modelData.kind === "oynix") { win.openOynixPanel(modelData, extBtn); return }
                             var u = win.app.extensionHost.popupUrl(modelData.id)
                             if (!u) {
                                 // No popup: the extension handles clicks itself.
@@ -1073,6 +1079,101 @@ ApplicationWindow {
     DownloadsPopover {
         id: downloadsPopover; app: win.app; parent: win.contentItem
         x: win.width - width - 12; y: Theme.toolbarHeight + 4
+    }
+
+    // ── OyNIx extension panels: graphics.qt (restricted QML) or extra.html ──
+    function openOynixPanel(ext, anchor) {
+        oyPopup.close()
+        oyPopup.ext = ext
+        var a = anchor || extMenuBtn
+        var p = a.mapToItem(win.contentItem, a.width, a.height + 6)
+        oyPopup.anchorRight = p.x; oyPopup.y = p.y
+        oyPopup.open()
+    }
+    Popover {
+        id: oyPopup
+        parent: win.contentItem
+        property var ext: null
+        property real anchorRight: 0
+        property string error: ""
+        readonly property bool qml: ext !== null && ext.hasPanel
+        padding: 0
+        width: qml ? Math.max(240, Math.min(480, panelHost.implicitWidth || 320)) : 360
+        height: qml ? Math.max(80, Math.min(640, (panelHost.implicitHeight || 240) + (error ? 60 : 0))) : 460
+        x: Math.max(8, anchorRight - width)
+        ExtensionPanel {
+            id: panelApi
+            onPosted: function (payload) { if (oyPopup.ext) win.app.extBridge.post(oyPopup.ext.id, "content", payload) }
+            onCloseRequested: oyPopup.close()
+        }
+        Connections {
+            target: win.app.extBridge
+            function onMessage(ext, target, payload) {
+                if (oyPopup.opened && oyPopup.ext && ext === oyPopup.ext.id && target === "panel") panelApi.deliver(payload)
+            }
+        }
+        onOpened: {
+            error = ""
+            if (!qml) return
+            panelApi.id = ext.id
+            panelApi.data = Core.extensionData(ext.id)
+            error = Core.loadExtensionPanel(panelHost, ext.id, panelApi)
+        }
+        onClosed: {
+            Core.unloadExtensionPanel(panelHost)
+            panelHost.implicitWidth = 0; panelHost.implicitHeight = 0
+            ext = null
+        }
+        contentItem: Item {
+            clip: true
+            Item {
+                id: panelHost
+                visible: oyPopup.qml
+                anchors.fill: parent
+                // The panel's root item fills the popover.
+                onChildrenChanged: {
+                    for (var i = 0; i < children.length; i++) {
+                        children[i].width = Qt.binding(function () { return panelHost.width })
+                        children[i].height = Qt.binding(function () { return panelHost.height })
+                    }
+                }
+            }
+            Txt {
+                visible: oyPopup.error !== ""
+                anchors.fill: parent; anchors.margins: 16
+                wrapMode: Text.WordWrap; elide: Text.ElideNone
+                color: Theme.danger; font.pixelSize: 12
+                text: oyPopup.ext ? qsTr("%1 couldn’t show its panel:\n%2").arg(oyPopup.ext.name).arg(oyPopup.error) : ""
+            }
+            Loader {
+                anchors.fill: parent
+                active: oyPopup.opened && oyPopup.ext !== null && !oyPopup.qml
+                sourceComponent: WebEngineView {
+                    id: pageView
+                    profile: win.app.defaultProfile
+                    backgroundColor: Theme.surfaceContainer
+                    webChannel: win.app.extChannel
+                    webChannelWorld: WebEngineScript.MainWorld
+                    settings.localContentCanAccessRemoteUrls: false
+                    settings.localContentCanAccessFileUrls: false
+                    Component.onCompleted: {
+                        var sc = WebEngine.script()
+                        sc.name = "oynix-page-api"
+                        sc.sourceCode = Core.webchannelScript() + "\n" + Core.extensionPageApi(oyPopup.ext.id)
+                        sc.injectionPoint = WebEngineScript.DocumentCreation
+                        sc.worldId = WebEngineScript.MainWorld
+                        userScripts.insert(sc)
+                        url = Core.extensionPageUrl(oyPopup.ext.id)
+                    }
+                    // The page stays inside the extension; links open in tabs.
+                    onNavigationRequested: function (request) {
+                        var u = request.url.toString()
+                        if (request.isMainFrame && u.indexOf("file://") !== 0) { request.reject(); win.openTab(u, { afterCurrent: true }); oyPopup.close() }
+                    }
+                    onNewWindowRequested: function (request) { win.openTab(request.requestedUrl.toString(), { afterCurrent: true }); oyPopup.close() }
+                }
+            }
+        }
     }
 
     // Extension action popup: a small web view sized to the popup's content.

@@ -86,7 +86,8 @@ fn qs(v: impl AsRef<str>) -> QString {
 /// Extension ids are 32 chars a–p; anything else is rejected so a page can
 /// never make us touch arbitrary files.
 fn valid_ext(id: &str) -> bool {
-    !id.is_empty() && id.len() <= 64 && id.chars().all(|c| c.is_ascii_alphanumeric())
+    // Chrome ids are a–p letters; OyNIx-format ids are slugs like "straight-links".
+    !id.is_empty() && id.len() <= 64 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
 fn valid_area(a: &str) -> bool {

@@ -1,19 +1,20 @@
 // Speed Keys: [ ] \ adjust playbackRate of the most relevant video.
-var STEP = 0.25, MIN = 0.25, MAX = 4;
-var label = null, hideTimer = 0;
+const STEP = 0.25, MIN = 0.25, MAX = 4;
+let label: HTMLDivElement | null = null;
+let hideTimer = 0;
 
-function video() {
-  var vs = Array.prototype.slice.call(document.querySelectorAll('video'));
+function video(): HTMLVideoElement | null {
+  const vs = Array.from(document.querySelectorAll('video'));
   // Prefer a playing video, then the largest one on screen.
   vs.sort(function (a, b) {
-    var pa = !a.paused, pb = !b.paused;
-    if (pa !== pb) return pb - pa;
+    const pa = !a.paused, pb = !b.paused;
+    if (pa !== pb) return Number(pb) - Number(pa);
     return b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight;
   });
   return vs[0] || null;
 }
 
-function show(v) {
+function show(v: HTMLVideoElement): void {
   if (!label) {
     label = document.createElement('div');
     label.className = 'oynix-speed-keys';
@@ -25,12 +26,12 @@ function show(v) {
   label.textContent = v.playbackRate.toFixed(2).replace(/0$/, '') + '×';
   label.classList.add('shown');
   clearTimeout(hideTimer);
-  hideTimer = setTimeout(function () { label.classList.remove('shown'); }, 900);
+  hideTimer = window.setTimeout(function () { label!.classList.remove('shown'); }, 900);
 }
 
 document.addEventListener('keydown', function (e) {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
-  var t = e.target;
+  const t = e.target as HTMLElement | null;
   if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
   if (e.key !== '[' && e.key !== ']' && e.key !== '\\') return;
   var v = video();

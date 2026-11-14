@@ -13,3 +13,5 @@ pub mod scripts;
 pub mod settings;
 pub mod usb;
 pub mod watchdog;
+pub mod tscompile;
+pub mod qmlcheck;

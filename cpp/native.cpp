@@ -3,12 +3,21 @@
 
 #include <QtCore/QByteArray>
 #include <QtCore/QCoreApplication>
+#include <QtCore/QDir>
 #include <QtCore/QFile>
+#include <QtCore/QLibraryInfo>
 #include <QtCore/QString>
 #include <QtCore/QUrl>
 #include <QtCore/QtGlobal>
 #include <QtGui/QGuiApplication>
 #include <QtNetwork/QNetworkProxyFactory>
+#include <QtNetwork/QNetworkAccessManager>
+#include <QtNetwork/QNetworkRequest>
+#include <QtQml/QQmlAbstractUrlInterceptor>
+#include <QtQml/QQmlComponent>
+#include <QtQml/QQmlContext>
+#include <QtQml/QQmlEngine>
+#include <QtQml/QQmlNetworkAccessManagerFactory>
 #include <QtGui/QIcon>
 #include <QtGui/QStyleHints>
 #include <QtGui/QSurfaceFormat>
@@ -215,5 +224,116 @@ rust::String webchannel_js() {
 }
 
 rust::String qt_runtime_version() { return rust::String(qVersion()); }
+
+} // namespace oynix
+
+
+// ── Extension panels (graphics.qt) ─────────────────────────────────────
+
+namespace {
+
+// Every request a panel makes fails: XMLHttpRequest, remote images, fonts.
+class DenyAllNam : public QNetworkAccessManager {
+public:
+    using QNetworkAccessManager::QNetworkAccessManager;
+protected:
+    QNetworkReply *createRequest(Operation op, const QNetworkRequest &req, QIODevice *data) override {
+        QNetworkRequest denied(req);
+        denied.setUrl(QUrl(QStringLiteral("oynix-denied:")));
+        return QNetworkAccessManager::createRequest(op, denied, data);
+    }
+};
+
+class DenyAllNamFactory : public QQmlNetworkAccessManagerFactory {
+public:
+    QNetworkAccessManager *create(QObject *parent) override { return new DenyAllNam(parent); }
+};
+
+// Allow Qt's own visual modules and the extension's own files; refuse the
+// rest (OyNIx, web content, files and settings, other folders on disk).
+class PanelUrlInterceptor : public QQmlAbstractUrlInterceptor {
+public:
+    explicit PanelUrlInterceptor(const QString &dir) : m_dir(QDir::cleanPath(dir) + QLatin1Char('/')) {}
+    QUrl intercept(const QUrl &url, DataType type) override {
+        const QString s = url.toString();
+        // The only QML document from the extension is graphics.qt itself.
+        if ((type == QmlFile || type == JavaScriptFile) && url.isLocalFile()
+            && QDir::cleanPath(url.toLocalFile()).startsWith(m_dir)
+            && QDir::cleanPath(url.toLocalFile()) != m_dir + QStringLiteral("graphics.qml"))
+            return QUrl();
+        static const char *blocked[] = {
+            "/OyNIx/", "/QtWebEngine", "/QtWebChannel", "/QtWebView", "/QtCore/", "/Qt/labs/",
+            "/QtQuick/Dialogs", "/QtQuick/LocalStorage", "/QtMultimedia", "/QtPositioning",
+            "/QtLocation", "/QtNetwork", "/QtTest", "/QtRemoteObjects", "/QtSensors", "/QtBluetooth", "/QtNfc",
+        };
+        for (const char *b : blocked)
+            if (s.contains(QLatin1String(b))) return QUrl();
+        if (type == QmldirFile || url.scheme() == QLatin1String("qrc") || url.scheme() == QLatin1String("data"))
+            return url;
+        if (url.isLocalFile()) {
+            const QString p = QDir::cleanPath(url.toLocalFile());
+            // Qt's own QML modules live under its install's qml/ folder.
+            if (p.startsWith(m_dir) || p.startsWith(m_qtQml)) return url;
+            return QUrl();
+        }
+        return type == UrlString ? QUrl() : url;
+    }
+    QString m_dir;
+    QString m_qtQml = QDir::cleanPath(QLibraryInfo::path(QLibraryInfo::QmlImportsPath)) + QLatin1Char('/');
+};
+
+} // namespace
+
+namespace oynix {
+
+rust::String load_panel(QObject *hostObj, rust::Str qmlPath, rust::Str extDir, QObject *api) {
+    auto *host = qobject_cast<QQuickItem *>(hostObj);
+    if (!host) return rust::String("no host item");
+    const QString path = QString::fromUtf8(qmlPath.data(), qmlPath.size());
+    const QString dir = QString::fromUtf8(extDir.data(), extDir.size());
+
+    auto *engine = new QQmlEngine();
+    engine->setNetworkAccessManagerFactory(new DenyAllNamFactory);
+    engine->addUrlInterceptor(new PanelUrlInterceptor(dir));
+    engine->setOfflineStoragePath(QString());
+    engine->setBaseUrl(QUrl::fromLocalFile(dir + QLatin1Char('/')));
+    engine->rootContext()->setContextProperty(QStringLiteral("extension"), api);
+
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly)) { delete engine; return rust::String("cannot read graphics.qt"); }
+    QQmlComponent component(engine);
+    // graphics.qt isn't a .qml name, so hand the source over with a .qml URL.
+    component.setData(f.readAll(), QUrl::fromLocalFile(dir + QStringLiteral("/graphics.qml")));
+    if (component.isError()) {
+        const QString err = component.errorString().trimmed();
+        delete engine;
+        return rust::String(err.toStdString());
+    }
+    QObject *obj = component.create();
+    auto *item = qobject_cast<QQuickItem *>(obj);
+    if (!item) {
+        delete obj;
+        const QString err = component.isError() ? component.errorString().trimmed() : QStringLiteral("graphics.qt must have an Item as its root");
+        delete engine;
+        return rust::String(err.toStdString());
+    }
+    item->setParent(host);
+    item->setParentItem(host);
+    // The panel's engine lives exactly as long as the panel.
+    QObject::connect(item, &QObject::destroyed, engine, &QObject::deleteLater);
+    host->setProperty("implicitWidth", item->implicitWidth() > 0 ? item->implicitWidth() : item->width());
+    host->setProperty("implicitHeight", item->implicitHeight() > 0 ? item->implicitHeight() : item->height());
+    return rust::String();
+}
+
+void unload_panel(QObject *hostObj) {
+    auto *host = qobject_cast<QQuickItem *>(hostObj);
+    if (!host) return;
+    const auto items = host->childItems();
+    for (QQuickItem *child : items) {
+        child->setParentItem(nullptr);
+        child->deleteLater();
+    }
+}
 
 } // namespace oynix

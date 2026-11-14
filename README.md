@@ -32,7 +32,7 @@ The interface follows **Material 3 Expressive**: dynamic colour generated from y
 | **Website settings** | Per-site zoom, JavaScript, content blocker, pop-ups and reader default. |
 | **Profiles** | Fully isolated profiles (`--profile work`), each running as its own app. Private windows. |
 | **Claude for OyNIx** | Built-in extension: Claude can navigate, read pages, find elements, click, type, press keys, scroll, fill forms, take screenshots, manage tabs, and read console and network logs, using real mouse and keyboard input. Per-site permission prompts, allowed and blocked site lists, a visible "Claude is working · Stop" indicator and an activity log. Works with Claude Desktop / Claude Code over MCP, or from the sidebar panel with an API key. |
-| **Extensions** | Chrome and Firefox WebExtensions (`.crx`, `.xpi`, `.zip` or unpacked folder; Manifest V2 and V3) plus lightweight **OyNIx extensions** (`oynix.json` + `content.js` + `content.css`). Toolbar buttons with popups and badges, options pages, per-extension enable/disable. |
+| **Extensions** | Chrome and Firefox WebExtensions (`.crx`, `.xpi`, `.zip` or unpacked folder; Manifest V2 and V3) plus lightweight **OyNIx extensions** (`oynix.json` + `code.ts` + `content.css`, optional `graphics.qt` panel, `extra.html` page and `extra.jsonl` data). Toolbar buttons with popups and badges, options pages, per-extension enable/disable. |
 | **Power users** | Developer Tools, user scripts (`*.user.js` with Greasemonkey metadata) and user styles (`*.user.css`), custom user agent, Print to PDF, view source. |
 | **Design** | Material 3 Expressive: colour roles generated from any accent colour (light and dark), pill-shaped controls that morph when pressed, the M3 switch, segmented buttons, navigation rail in Settings, expressive shapes on the Start Page, a wavy loading indicator. Frameless window with M3 window buttons (left or right), or the system title bar. |
 | **Downloads** | Pause, resume, cancel, open and show in folder; optional "Ask where to save each file". |
@@ -133,7 +133,7 @@ oynix --list-extensions
 |------|----------|-----------------|
 | **Chrome** | `.crx` (v2/v3), `.zip`, folder; MV2 and MV3 | Loads it through Qt WebEngine's extension manager. |
 | **Firefox** | `.xpi`, `.zip`, folder; MV2 and MV3 | Rewrites the manifest for Chromium: removes Gecko-only keys, moves MV3 host permissions, turns `background.scripts` into a service worker, maps `menus` to `contextMenus`. `browser.*` works with promises. |
-| **OyNIx** | folder or `.zip` with `oynix.json`, `content.js`, `content.css` (all required) | Injects the CSS and JS on pages matching `matches`, at `run_at`, in an isolated (default) or the main world. **New Extension** in Settings creates a ready-to-edit template. |
+| **OyNIx** | folder, `.zip` or `.oynix` with `oynix.json`, `code.ts`, `content.css` (required) and optionally `graphics.qt`, `extra.html`, `extra.jsonl` | Compiles `code.ts` to JavaScript (a lone `content.js` is converted to `code.ts`) and injects it with the CSS on pages matching `matches`, at `run_at`, in an isolated (default) or the main world. `graphics.qt` is a QML panel in the toolbar, run in a separate, restricted QML engine and checked before it loads; `extra.html` is an HTML page shown there instead; `extra.jsonl` is data for the code. Full format: [Build an extension](https://trail-b1az3r.github.io/OyNIx/docs/build-an-extension/). **New Extension** in Settings creates a ready-to-edit template. |
 
 ### From the Extension Gallery
 

@@ -1,8 +1,10 @@
 // Reading Time: estimate from the main article's paragraphs.
-var WPM = 230;
+const WPM = 230;
 
-function articleRoot() {
-  var best = null, bestWords = 0;
+interface Article { el: Element; words: number }
+
+function articleRoot(): Article | null {
+  let best: Element | null = null, bestWords = 0;
   document.querySelectorAll('article, main, [role=main], .post, .entry-content, #content').forEach(function (el) {
     var n = words(el);
     if (n > bestWords) { best = el; bestWords = n; }
@@ -10,15 +12,15 @@ function articleRoot() {
   return best ? { el: best, words: bestWords } : null;
 }
 
-function words(el) {
-  var n = 0;
+function words(el: Element): number {
+  let n = 0;
   el.querySelectorAll('p, li, blockquote').forEach(function (p) {
-    n += (p.innerText || '').split(/\s+/).filter(Boolean).length;
+    n += ((p as HTMLElement).innerText || '').split(/\s+/).filter(Boolean).length;
   });
   return n;
 }
 
-var root = articleRoot();
+const root = articleRoot();
 if (root && root.words >= 400) {
   var total = Math.max(1, Math.round(root.words / WPM));
   var pill = document.createElement('div');

@@ -125,6 +125,16 @@ QtObject {
 
     // WebChannel endpoint used by the extension runtime in pages.
     property ExtBridge extBridge: ExtBridge { WebChannel.id: "oynixExtensions" }
+    // code.ts can ask for its panel: oynix.openPanel()
+    property Connections oynixOpen: Connections {
+        target: app.extBridge
+        function onMessage(ext, target, payload) {
+            if (target !== "oynix:open") return
+            var e = JSON.parse(Core.extensions()).filter(function (x) { return x.id === ext && x.kind === "oynix" && x.enabled && (x.hasPanel || x.hasPage) })[0]
+            var w = app.activeWindow()
+            if (e && w) w.openOynixPanel(e, null)
+        }
+    }
     property WebChannel extChannel: WebChannel { registeredObjects: [app.extBridge, app.usb] }
 
     // WebUSB: device chooser and connect/disconnect detection.
