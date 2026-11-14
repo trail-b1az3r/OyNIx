@@ -166,6 +166,32 @@ impl Library {
             .collect()
     }
 
+    /// Completion candidates for the address field: every visited host
+    /// (weighted by total visits) plus full pages (weighted by their own visits).
+    pub fn completion_candidates(&self) -> Vec<(String, f64)> {
+        let mut hosts: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+        let mut out = Vec::new();
+        for (i, h) in self.history.iter().take(3000).enumerate() {
+            let recency = 1.0 / (1.0 + i as f64 / 200.0);
+            let p = super::omnibox::pretty(&h.url);
+            if p.is_empty() {
+                continue;
+            }
+            let bare = p.strip_prefix("http://").unwrap_or(&p);
+            let host_part = bare.split(['/', '?', '#']).next().unwrap_or("").to_string();
+            *hosts.entry(host_part).or_default() += h.visits as f64 * recency + 0.5;
+            out.push((p, h.visits as f64 * recency * 0.5));
+        }
+        for b in &self.bookmarks {
+            let p = super::omnibox::pretty(&b.url);
+            let bare = p.strip_prefix("http://").unwrap_or(&p);
+            let host_part = bare.split(['/', '?', '#']).next().unwrap_or("").to_string();
+            *hosts.entry(host_part).or_default() += 3.0;
+        }
+        out.extend(hosts);
+        out
+    }
+
     pub fn flush(&mut self) {
         if self.history_dirty {
             store("history.json", &self.history);

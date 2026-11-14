@@ -236,6 +236,23 @@ ApplicationWindow {
 
     function copyText(t) { clipHelper.text = t; clipHelper.selectAll(); clipHelper.copy() }
 
+    // Open an internal page (history, settings…) or switch to it if open.
+    function openInternal(u) {
+        for (var i = 0; i < tabModel.count; i++) if ((tabModel.get(i).url || "").indexOf(u) === 0) { activate(i); return }
+        var cur = currentTab
+        if (cur && (cur.model.url === "oynix://start" || cur.model.url === "about:blank")) cur.load(u)
+        else openTab(u, { afterCurrent: true })
+    }
+
+    // Back/forward history list for the current tab.
+    function showNavHistory(anchor, back) {
+        if (!currentView) return
+        navMenu.back = back
+        var p = anchor.mapToItem(win.contentItem, 0, anchor.height + 6)
+        navMenu.x = p.x; navMenu.y = p.y
+        navMenu.open()
+    }
+
     function openPrivacyReport() { app.openSettings("privacy") }
 
     function showTabMenu(i, item) {
@@ -358,7 +375,8 @@ ApplicationWindow {
     Shortcut { sequences: ["Ctrl+D"]; onActivated: if (win.currentTab) Core.toggleBookmark(win.currentTab.model.url, win.currentTab.model.title) }
     Shortcut { sequences: ["Ctrl+Shift+D"]; onActivated: if (win.currentTab) { Core.addToReadingList(win.currentTab.model.url, win.currentTab.model.title); toast.show(qsTr("Added to Reading List")) } }
     Shortcut { sequences: ["Ctrl+Shift+L", "Ctrl+Alt+S"]; onActivated: win.sidebarOpen = !win.sidebarOpen }
-    Shortcut { sequences: ["Ctrl+H"]; onActivated: { win.sidebarOpen = true; sidebar.panel = "history" } }
+    Shortcut { sequences: ["Ctrl+H"]; onActivated: win.openInternal("oynix://history") }
+    Shortcut { sequences: ["Ctrl+Shift+H"]; onActivated: { win.sidebarOpen = true; sidebar.panel = "history" } }
     Shortcut { sequences: ["Ctrl+Shift+B", "Ctrl+B"]; onActivated: { win.sidebarOpen = true; sidebar.panel = "bookmarks" } }
     Shortcut { sequences: ["Ctrl+Shift+\\", "Ctrl+Shift+A"]; onActivated: win.overviewOpen = !win.overviewOpen }
     Shortcut { sequences: ["Ctrl+Shift+F"]; onActivated: { win.focusMode = !win.focusMode; win.peek = false } }
@@ -431,14 +449,20 @@ ApplicationWindow {
                     onClicked: win.sidebarOpen = !win.sidebarOpen
                 }
                 IconButton {
-                    glyph: "back"; tip: qsTr("Back")
+                    id: backBtn
+                    glyph: "back"; tip: qsTr("Back — right-click for history")
                     enabled: win.currentView !== null && win.currentView.canGoBack
                     onClicked: win.currentView.goBack()
+                    TapHandler { acceptedButtons: Qt.RightButton; onTapped: win.showNavHistory(backBtn, true) }
+                    onPressAndHold: win.showNavHistory(backBtn, true)
                 }
                 IconButton {
-                    glyph: "forward"; tip: qsTr("Forward")
+                    id: fwdBtn
+                    glyph: "forward"; tip: qsTr("Forward — right-click for history")
                     enabled: win.currentView !== null && win.currentView.canGoForward
                     onClicked: win.currentView.goForward()
+                    TapHandler { acceptedButtons: Qt.RightButton; onTapped: win.showNavHistory(fwdBtn, false) }
+                    onPressAndHold: win.showNavHistory(fwdBtn, false)
                 }
 
                 Item { Layout.fillWidth: !win.compactTabs; Layout.preferredWidth: win.compactTabs ? 4 : -1 }
@@ -969,6 +993,30 @@ ApplicationWindow {
     }
 
     Popover {
+        id: navMenu
+        parent: win.contentItem
+        property bool back: true
+        width: 320
+        padding: 6
+        contentItem: ColumnLayout {
+            spacing: 1
+            Repeater {
+                model: navMenu.opened && win.currentView ? (navMenu.back ? win.currentView.history.backItems : win.currentView.history.forwardItems) : null
+                delegate: MenuRow {
+                    required property url url
+                    required property string title
+                    required property int offset
+                    glyph: "clock"
+                    text: title || Core.prettyUrl(url.toString())
+                    onClicked: { navMenu.close(); win.currentView.goBackOrForward(offset) }
+                }
+            }
+            Rectangle { Layout.fillWidth: true; height: 1; color: Theme.separator; Layout.topMargin: 4; Layout.bottomMargin: 4 }
+            MenuRow { glyph: "list"; text: qsTr("Show Full History"); shortcut: "Ctrl+H"; onClicked: { navMenu.close(); win.openInternal("oynix://history") } }
+        }
+    }
+
+    Popover {
         id: shareMenu
         parent: win.contentItem
         width: 230
@@ -1015,7 +1063,7 @@ ApplicationWindow {
             Rectangle { Layout.fillWidth: true; height: 1; color: Theme.separator; Layout.topMargin: 4; Layout.bottomMargin: 4 }
             MenuRow { text: qsTr("Bookmarks"); glyph: "bookmark"; shortcut: "Ctrl+B"; onClicked: { mainMenu.close(); win.sidebarOpen = true; sidebar.panel = "bookmarks" } }
             MenuRow { text: qsTr("Reading List"); glyph: "glasses"; onClicked: { mainMenu.close(); win.sidebarOpen = true; sidebar.panel = "reading" } }
-            MenuRow { text: qsTr("History"); glyph: "clock"; shortcut: "Ctrl+H"; onClicked: { mainMenu.close(); win.openTab("oynix://history", {}) } }
+            MenuRow { text: qsTr("History"); glyph: "clock"; shortcut: "Ctrl+H"; onClicked: { mainMenu.close(); win.openInternal("oynix://history") } }
             MenuRow { text: qsTr("Downloads"); glyph: "download"; shortcut: "Ctrl+J"; onClicked: { mainMenu.close(); downloadsPopover.open() } }
             MenuRow { text: qsTr("Privacy Report"); glyph: "shieldCheck"; onClicked: { mainMenu.close(); win.openPrivacyReport() } }
             MenuRow { text: qsTr("Extensions"); glyph: "puzzle"; onClicked: { mainMenu.close(); win.app.openSettings("extensions") } }

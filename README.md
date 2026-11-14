@@ -74,10 +74,10 @@ You can also set `OYNIX_GPU=vulkan`. `oynix --gpu-info` prints the detected Vulk
 
 ## Building
 
-OyNIx needs **Qt 6.10 or newer** (6.11 recommended) for Qt WebEngine's extension manager. Most distributions don't ship that yet, so a script downloads Qt 6.11 into `./.qt`, and `build.rs` finds it automatically:
+OyNIx needs **Qt 6.10 or newer** (6.12 recommended) for Qt WebEngine's extension manager. Most distributions don't ship that yet, so a script downloads Qt 6.12 into `./.qt`, and `build.rs` finds it automatically:
 
 ```bash
-./scripts/deps-ubuntu.sh        # system libraries + rustup + Qt 6.11 into ./.qt
+./scripts/deps-ubuntu.sh        # system libraries + rustup + Qt 6.12 into ./.qt
 cargo build --release
 ./target/release/oynix
 ```
@@ -130,7 +130,7 @@ oynix --list-extensions
 
 `manifest_version` must be 2 or 3. Higher numbers don't exist yet; they're accepted and loaded as MV3 with a warning.
 
-Qt WebEngine 6.11 loads extensions and serves their pages, but doesn't run content scripts or provide `chrome.*` APIs. OyNIx supplies those itself (it also marks each extension's own files as accessible to its pages, which Qt otherwise refuses to serve):
+Qt WebEngine 6.10–6.12 loads extensions and serves their pages, but doesn't run content scripts or provide `chrome.*` APIs. OyNIx supplies those itself (it also marks each extension's own files as accessible to its pages, which Qt otherwise refuses to serve):
 
 - **Content scripts** are injected by OyNIx, with match patterns, `run_at`, `all_frames` and CSS.
 - **Background** scripts and service workers run in a hidden extension page.

@@ -30,6 +30,9 @@ rust::String active_graphics_api();
 // 0 = follow the system, 1 = light, 2 = dark.
 void set_color_scheme(int32_t scheme);
 
+// Delete every cookie of a profile (Clear Browsing Data).
+void clear_cookies(QObject *profile);
+
 // Real input for the browser agent, delivered to a QQuickItem (the web view)
 // through its window, exactly like physical input. Coordinates are item-local.
 // mouse kind: 0 = move, 1 = click. button: 1 left, 2 right, 4 middle.

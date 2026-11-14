@@ -100,6 +100,12 @@ pub mod qobject {
         #[qinvokable]
         fn suggest_url(self: &Core, text: &QString) -> QString;
         #[qinvokable]
+        fn pretty_url(self: &Core, url: &QString) -> QString;
+        #[qinvokable]
+        fn is_navigation(self: &Core, text: &QString) -> bool;
+        #[qinvokable]
+        fn inline_complete(self: &Core, typed: &QString) -> QString;
+        #[qinvokable]
         fn search_engines(self: &Core) -> QString;
         #[qinvokable]
         fn bangs(self: &Core) -> QString;
@@ -193,6 +199,8 @@ pub mod qobject {
         fn cosmetic_script(self: &Core, host: &QString) -> QString;
         #[qinvokable]
         fn apply_color_scheme(self: &Core, dark: bool);
+        #[qinvokable]
+        unsafe fn clear_cookies(self: &Core, profile: *mut QObject);
         #[qinvokable]
         fn blocker_generation(self: &Core) -> i32;
         #[qinvokable]
@@ -613,7 +621,7 @@ impl qobject::Core {
                 break;
             }
             if (b.url.to_lowercase().contains(&tl) || b.title.to_lowercase().contains(&tl)) && seen.insert(b.url.clone()) {
-                out.push(json!({ "kind": "bookmark", "title": b.title, "subtitle": omnibox::display(&b.url, true), "url": b.url }));
+                out.push(json!({ "kind": "bookmark", "title": b.title, "subtitle": omnibox::pretty(&b.url), "url": b.url }));
             }
         }
         for h in self.library.search_history(&tl, 40) {
@@ -621,10 +629,26 @@ impl qobject::Core {
                 break;
             }
             if seen.insert(h.url.clone()) {
-                out.push(json!({ "kind": "history", "title": if h.title.is_empty() { h.url.clone() } else { h.title.clone() }, "subtitle": omnibox::display(&h.url, true), "url": h.url }));
+                out.push(json!({ "kind": "history", "title": if h.title.is_empty() { h.url.clone() } else { h.title.clone() }, "subtitle": omnibox::pretty(&h.url), "url": h.url }));
             }
         }
         to_qjson(&Value::Array(out))
+    }
+
+    /// Does this input open a page (URL / host / path), rather than search?
+    pub fn is_navigation(&self, text: &QString) -> bool {
+        let t = s(text);
+        let st = &self.settings;
+        let r = omnibox::resolve(&t, &st.search_engine, st.bangs_enabled, st.https_upgrade);
+        !t.trim().is_empty() && r != omnibox::search_url(&st.search_engine, t.trim()) && omnibox::expand_bang(&t).is_none()
+    }
+
+    pub fn pretty_url(&self, url: &QString) -> QString {
+        qs(omnibox::pretty(&s(url)))
+    }
+
+    pub fn inline_complete(&self, typed: &QString) -> QString {
+        qs(omnibox::inline_complete(&s(typed), &self.library.completion_candidates()))
     }
 
     pub fn suggest_url(&self, text: &QString) -> QString {
@@ -945,6 +969,14 @@ impl qobject::Core {
     /// Desktop notification (used by extensions' notifications API).
     pub fn notify(&self, title: &QString, body: &QString) {
         let _ = std::process::Command::new("notify-send").args(["-a", "OyNIx", &s(title), &s(body)]).spawn();
+    }
+
+    /// # Safety
+    /// `profile` must be a live WebEngineProfile handed over by QML.
+    pub unsafe fn clear_cookies(&self, profile: *mut cxx_qt::QObject) {
+        if !profile.is_null() {
+            crate::bridge::native::ffi::clear_cookies(profile);
+        }
     }
 
     /// Bumps each time a new rule set is installed (lists loaded/updated).

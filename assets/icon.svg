@@ -1,80 +1,28 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- OyNIx icon: two overlapping translucent discs form a lens around a
+       bright focal point, on a rounded tile. Original artwork for OyNIx. -->
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#1a0a2e"/>
-      <stop offset="50%" stop-color="#2d1b69"/>
-      <stop offset="100%" stop-color="#1a0a2e"/>
+    <linearGradient id="tile" x1="64" y1="40" x2="448" y2="472" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3a2fd6"/>
+      <stop offset="0.55" stop-color="#2463d8"/>
+      <stop offset="1" stop-color="#0fb59b"/>
     </linearGradient>
-    <radialGradient id="face" cx="0.5" cy="0.55" r="0.5">
-      <stop offset="0%" stop-color="#6a3d9a"/>
-      <stop offset="70%" stop-color="#4a2080"/>
-      <stop offset="100%" stop-color="#2d1250"/>
+    <radialGradient id="glow" cx="256" cy="256" r="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
     </radialGradient>
-    <linearGradient id="earL" x1="0" y1="1" x2="0.5" y2="0">
-      <stop offset="0%" stop-color="#6a3d9a"/>
-      <stop offset="100%" stop-color="#9c4dcc"/>
-    </linearGradient>
-    <linearGradient id="earR" x1="1" y1="1" x2="0.5" y2="0">
-      <stop offset="0%" stop-color="#6a3d9a"/>
-      <stop offset="100%" stop-color="#9c4dcc"/>
-    </linearGradient>
-    <linearGradient id="inner" x1="0.5" y1="1" x2="0.5" y2="0">
-      <stop offset="0%" stop-color="#ce93d8"/>
-      <stop offset="100%" stop-color="#f48fb1"/>
-    </linearGradient>
-    <radialGradient id="eye" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0%" stop-color="#e1bee7"/>
-      <stop offset="50%" stop-color="#b388ff"/>
-      <stop offset="100%" stop-color="#7c4dff"/>
-    </radialGradient>
-    <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#b388ff" stop-opacity="0.5"/>
-      <stop offset="50%" stop-color="#7c4dff" stop-opacity="0.2"/>
-      <stop offset="100%" stop-color="#b388ff" stop-opacity="0.5"/>
-    </linearGradient>
-    <filter id="sh">
-      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#7c4dff" flood-opacity="0.4"/>
-    </filter>
+    <clipPath id="tileClip"><rect x="32" y="32" width="448" height="448" rx="132"/></clipPath>
   </defs>
-
-  <!-- Rounded square background -->
-  <rect x="4" y="4" width="248" height="248" rx="52" ry="52" fill="url(#bg)" stroke="url(#rim)" stroke-width="2"/>
-
-  <!-- Left ear -->
-  <path d="M 68 108 L 52 32 L 100 82 Z" fill="url(#earL)" filter="url(#sh)"/>
-  <path d="M 72 100 L 60 48 L 94 80 Z" fill="url(#inner)" opacity="0.45"/>
-
-  <!-- Right ear -->
-  <path d="M 188 108 L 204 32 L 156 82 Z" fill="url(#earR)" filter="url(#sh)"/>
-  <path d="M 184 100 L 196 48 L 162 80 Z" fill="url(#inner)" opacity="0.45"/>
-
-  <!-- Face -->
-  <ellipse cx="128" cy="148" rx="72" ry="76" fill="url(#face)" filter="url(#sh)"/>
-  <ellipse cx="128" cy="148" rx="72" ry="76" fill="none" stroke="url(#rim)" stroke-width="1.5"/>
-
-  <!-- Left eye -->
-  <ellipse cx="104" cy="138" rx="14" ry="17" fill="#1a0a2e"/>
-  <ellipse cx="104" cy="138" rx="11" ry="14" fill="url(#eye)"/>
-  <ellipse cx="104" cy="135" rx="5" ry="6" fill="#e1bee7"/>
-  <circle cx="101" cy="132" r="2.5" fill="white" opacity="0.8"/>
-
-  <!-- Right eye -->
-  <ellipse cx="152" cy="138" rx="14" ry="17" fill="#1a0a2e"/>
-  <ellipse cx="152" cy="138" rx="11" ry="14" fill="url(#eye)"/>
-  <ellipse cx="152" cy="135" rx="5" ry="6" fill="#e1bee7"/>
-  <circle cx="149" cy="132" r="2.5" fill="white" opacity="0.8"/>
-
-  <!-- Nose -->
-  <ellipse cx="128" cy="158" rx="4" ry="3" fill="#ce93d8" opacity="0.7"/>
-
-  <!-- Smile -->
-  <path d="M 118 165 Q 123 173 128 173 Q 133 173 138 165" fill="none" stroke="#ce93d8" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>
-
-  <!-- Whiskers -->
-  <line x1="56" y1="145" x2="88" y2="153" stroke="#b388ff" stroke-width="1" opacity="0.35"/>
-  <line x1="58" y1="157" x2="88" y2="158" stroke="#b388ff" stroke-width="1" opacity="0.35"/>
-  <line x1="60" y1="169" x2="89" y2="162" stroke="#b388ff" stroke-width="1" opacity="0.3"/>
-  <line x1="200" y1="145" x2="168" y2="153" stroke="#b388ff" stroke-width="1" opacity="0.35"/>
-  <line x1="198" y1="157" x2="168" y2="158" stroke="#b388ff" stroke-width="1" opacity="0.35"/>
-  <line x1="196" y1="169" x2="167" y2="162" stroke="#b388ff" stroke-width="1" opacity="0.3"/>
+  <rect x="32" y="32" width="448" height="448" rx="132" fill="url(#tile)"/>
+  <g clip-path="url(#tileClip)">
+    <!-- soft light sweep across the tile -->
+    <path d="M32 300 C 160 220, 330 380, 480 250 L480 480 L32 480 Z" fill="#ffffff" opacity="0.07"/>
+  </g>
+  <g transform="rotate(-24 256 256)">
+    <circle cx="206" cy="256" r="118" fill="#ffffff" fill-opacity="0.22" stroke="#ffffff" stroke-opacity="0.9" stroke-width="22"/>
+    <circle cx="306" cy="256" r="118" fill="#ffffff" fill-opacity="0.22" stroke="#ffffff" stroke-opacity="0.9" stroke-width="22"/>
+  </g>
+  <circle cx="256" cy="256" r="110" fill="url(#glow)" opacity="0.55"/>
+  <circle cx="256" cy="256" r="34" fill="#ffffff"/>
+  <circle cx="256" cy="256" r="14" fill="#2463d8"/>
 </svg>

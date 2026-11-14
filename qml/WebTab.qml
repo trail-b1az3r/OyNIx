@@ -41,6 +41,9 @@ Item {
         else model.url = u   // activates the web loader, which loads model.url
     }
 
+    Component.onCompleted: if (internal && !model.title) model.title = titleFor(model.url)
+    onInternalChanged: if (internal) model.title = titleFor(model.url)
+
     function titleFor(u) {
         if (u.indexOf("oynix://settings") === 0) return qsTr("Settings")
         if (u.indexOf("oynix://history") === 0) return qsTr("History")
@@ -98,12 +101,21 @@ Item {
         id: pageLoader
         anchors.fill: parent
         active: tab.internal && !webLoader.active && tab.isCurrent
-        sourceComponent: (tab.model.url || "").indexOf("oynix://history") === 0 ? historyPage : startPage
+        sourceComponent: (tab.model.url || "").indexOf("oynix://history") === 0 ? historyPage
+                       : (tab.model.url || "").indexOf("oynix://settings") === 0 ? settingsPage : startPage
     }
 
     Component {
         id: startPage
         StartPage { win: tab.win }
+    }
+    Component {
+        id: settingsPage
+        SettingsView {
+            app: tab.win.app
+            page: { var m = (tab.model.url || "").match(/^oynix:\/\/settings\/?([a-z]*)/); return m && m[1] ? m[1] : "general" }
+            onPageChanged: if (tab.model.url !== "oynix://settings/" + page) tab.model.url = "oynix://settings/" + page
+        }
     }
     Component {
         id: historyPage
@@ -234,6 +246,14 @@ Item {
                 if (u !== "" && u !== tab.model.url) tab.model.url = u
                 tab.readerActive = false
                 tab.readerAvailable = false
+                // In-page navigations (pushState, #fragments) don't fire a
+                // load; record them once the title has had time to update.
+                if (!loading) spaRecord.restart()
+            }
+            Timer {
+                id: spaRecord
+                interval: 1200
+                onTriggered: if (!view.loading && !tab.win.privateMode) Core.recordVisit(view.url.toString(), view.title)
             }
             onTitleChanged: {
                 tab.model.title = title

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build an Arch Linux / pacman package (.pkg.tar.zst) with the bundled
-# Qt 6.11 runtime. Works on any Linux: uses only bsdtar + zstd, writing the
+# Qt 6.12 runtime. Works on any Linux: uses only bsdtar + zstd, writing the
 # same metadata makepkg does (.PKGINFO, .BUILDINFO, .MTREE).
 #   usage: scripts/build-pkg.sh [version]      → target/pkg/oynix-<ver>-1-x86_64.pkg.tar.zst
 set -euo pipefail
@@ -27,7 +27,7 @@ NOW=$(date +%s)
   echo "pkgname = oynix"
   echo "pkgbase = oynix"
   echo "pkgver = ${PKGVER}-${PKGREL}"
-  echo "pkgdesc = Fast, private web browser (Rust + QML, Qt 6.11) with Chrome/Firefox extension support"
+  echo "pkgdesc = Fast, private web browser (Rust + QML, Qt 6.12) with Chrome/Firefox extension support"
   echo "url = https://github.com/trail-b1az3r/OyNIx"
   echo "builddate = $NOW"
   echo "packager = OyNIx build script"

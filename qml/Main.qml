@@ -241,7 +241,18 @@ QtObject {
     }
 
     function openSettings(page) {
-        if (!settingsWindow) settingsWindow = settingsComponent.createObject(null, { app: app })
+        var w = null
+        for (var k = 0; k < windows.length; k++) if (windows[k].active) w = windows[k]
+        if (!w && windows.length) w = windows[windows.length - 1]
+        if (JSON.parse(Core.settingsJson).settingsOpenIn !== "window" && w) {
+            // In the browser window, like any other page.
+            w.openInternal("oynix://settings/" + (page || ""))
+            var t = w.currentTab
+            if (page && t && t.pageItem && t.pageItem.page !== undefined) t.pageItem.page = page
+            w.raise(); w.requestActivate()
+            return
+        }
+        if (!settingsWindow) settingsWindow = settingsComponent.createObject(null, { app: app, transientParent: w })
         if (page) settingsWindow.page = page
         settingsWindow.show()
         settingsWindow.raise()

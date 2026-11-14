@@ -19,6 +19,8 @@ pub struct Settings {
     pub show_favorites_bar: bool,
     pub show_status_bar: bool,
     pub use_system_title_bar: bool,
+    /// "tab": Settings opens as a tab; "window": as a dialog window.
+    pub settings_open_in: String,
     /// "left" (macOS style) | "right"
     pub window_controls_side: String,
     pub show_full_url: bool,
@@ -107,6 +109,7 @@ impl Default for Settings {
             show_favorites_bar: false,
             show_status_bar: false,
             use_system_title_bar: false,
+            settings_open_in: "tab".into(),
             window_controls_side: "right".into(),
             show_full_url: false,
             default_zoom: 1.0,
