@@ -23,6 +23,18 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
+      - name: Check the Pages source
+        # With "Deploy from a branch", GitHub also renders the README with
+        # Jekyll on every push and that deployment overwrites this one.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          type=$(gh api "repos/${{ github.repository }}/pages" --jq .build_type 2>/dev/null || echo none)
+          echo "Pages build type: $type"
+          if [ "$type" != "workflow" ]; then
+            echo "::error title=GitHub Pages source::Pages is set to '$type'. Open Settings › Pages › Build and deployment and set Source to 'GitHub Actions', then re-run this workflow. Otherwise GitHub's README build replaces the website after every push."
+            exit 1
+          fi
       - uses: actions/checkout@v4
       - name: Build site
         run: python3 scripts/build-site.py --out _site
