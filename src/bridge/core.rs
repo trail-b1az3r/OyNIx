@@ -216,6 +216,14 @@ pub mod qobject {
         #[qinvokable]
         fn extension_page_url(self: &Core, id: &QString) -> QString;
         #[qinvokable]
+        fn extension_has_permission(self: &Core, id: &QString, permission: &QString) -> bool;
+        /// The active browser style (validated theme.json of the chosen extension), or "{}".
+        #[qinvokable]
+        fn browser_style_json(self: &Core) -> QString;
+        /// [{id, name}] of enabled extensions that have a theme.json.
+        #[qinvokable]
+        fn browser_styles(self: &Core) -> QString;
+        #[qinvokable]
         fn extension_page_api(self: &Core, id: &QString) -> QString;
         #[qinvokable]
         fn webchannel_script(self: &Core) -> QString;
@@ -416,7 +424,7 @@ impl Default for CoreRust {
             force_restore: env.restore,
             settings,
             library: Library::load(),
-            extensions: extensions::load(),
+            extensions: { let mut l = extensions::load(); crate::core::builtin::sync(&mut l); l },
         };
         me.copy_settings_to_fields();
         me
@@ -1053,6 +1061,26 @@ impl qobject::Core {
         qs(crate::bridge::native::ffi::webchannel_js())
     }
 
+    pub fn extension_has_permission(&self, id: &QString, permission: &QString) -> bool {
+        let (id, p) = (s(id), s(permission));
+        self.extensions.iter().any(|e| e.id == id && e.enabled && e.permissions.contains(&p))
+    }
+
+    pub fn browser_style_json(&self) -> QString {
+        let want = &self.settings.browser_style;
+        let theme = self
+            .extensions
+            .iter()
+            .find(|e| !want.is_empty() && &e.id == want && e.enabled && e.has_theme)
+            .and_then(|e| extensions::read_theme(std::path::Path::new(&e.path)).ok().flatten());
+        to_qjson(&theme.unwrap_or_else(|| json!({})))
+    }
+
+    pub fn browser_styles(&self) -> QString {
+        let list: Vec<Value> = self.extensions.iter().filter(|e| e.enabled && e.has_theme).map(|e| json!({ "id": e.id, "name": e.name })).collect();
+        to_qjson(&Value::Array(list))
+    }
+
     /// file:// URL of `extra.html`, or "".
     pub fn extension_page_url(&self, id: &QString) -> QString {
         match self.oynix_dir(id).map(|d| d.join("extra.html")) {
@@ -1134,7 +1162,6 @@ impl qobject::Core {
             v.push(json!({ "name": "oynix-webusb-relay", "source": relay, "main": false, "start": true, "allFrames": false }));
         }
         v.push(json!({ "name": "oynix-gallery", "source": scripts::GALLERY_MARK.replace("__OYNIX_VERSION__", crate::VERSION), "main": false, "greasemonkey": true }));
-        v.push(json!({ "name": "oynix-amo-install", "source": scripts::AMO_INSTALL, "main": false, "greasemonkey": true }));
         for e in self.extensions.iter().filter(|e| e.enabled && e.kind == "oynix") {
             if let Some(src) = extensions::oynix_script(e) {
                 v.push(json!({ "name": format!("oynix-ext-{}", e.id), "source": src, "main": e.world == "main", "greasemonkey": true }));

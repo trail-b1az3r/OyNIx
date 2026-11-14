@@ -63,6 +63,12 @@ pub struct Entry {
     pub has_page: bool,
     /// Number of records in `extra.jsonl`.
     pub data_records: usize,
+    /// Has a valid `theme.json` (can restyle the browser).
+    pub has_theme: bool,
+    /// Extra abilities granted in oynix.json ("ocr").
+    pub permissions: Vec<String>,
+    /// Ships with OyNIx: can be turned off but not removed.
+    pub builtin: bool,
 }
 
 pub fn root() -> PathBuf {
@@ -659,6 +665,66 @@ pub fn read_data(dir: &Path) -> Result<Vec<Value>, String> {
         .collect()
 }
 
+/// Read and validate `theme.json`: how the extension restyles the browser.
+///
+/// ```json
+/// { "accent": "#0b8043",
+///   "light": { "surface": "#fbfdf8" }, "dark": { "surface": "#101410" },
+///   "font": "Inter", "displayFont": "Fraunces", "corners": 0.5 }
+/// ```
+/// `light` / `dark` override Material 3 colour roles by name; anything
+/// left out is generated from `accent`. `corners` scales corner radii
+/// (0 = square, 1 = default, 2 = very round).
+pub fn read_theme(dir: &Path) -> Result<Option<Value>, String> {
+    let p = dir.join("theme.json");
+    let Ok(text) = std::fs::read_to_string(&p) else { return Ok(None) };
+    let v = parse_json_lenient(&text).map_err(|e| format!("theme.json: {e}"))?;
+    let Value::Object(m) = v else { return Err("theme.json must be an object".into()) };
+    let hex = |s: &str| s.len() == 7 && s.starts_with('#') && s[1..].bytes().all(|b| b.is_ascii_hexdigit());
+    let roles: Vec<String> = super::material::scheme("#2f7cf6", false).as_object().map(|o| o.keys().cloned().collect()).unwrap_or_default();
+    let mut out = Map::new();
+    for (k, val) in &m {
+        match k.as_str() {
+            "accent" => match val.as_str() {
+                Some(c) if hex(c) => {
+                    out.insert(k.clone(), json!(c.to_lowercase()));
+                }
+                _ => return Err("theme.json: accent must be a colour like \"#0b8043\"".into()),
+            },
+            "light" | "dark" => {
+                let Value::Object(o) = val else { return Err(format!("theme.json: {k} must be an object of colour roles")) };
+                let mut colours = Map::new();
+                for (role, c) in o {
+                    if !roles.contains(role) {
+                        return Err(format!("theme.json: “{role}” isn’t a colour role (e.g. primary, surface, surfaceContainer, onSurface)"));
+                    }
+                    match c.as_str() {
+                        Some(c) if hex(c) => {
+                            colours.insert(role.clone(), json!(c.to_lowercase()));
+                        }
+                        _ => return Err(format!("theme.json: {k}.{role} must be a colour like \"#101410\"")),
+                    }
+                }
+                out.insert(k.clone(), Value::Object(colours));
+            }
+            "font" | "displayFont" => match val.as_str() {
+                Some(f) if !f.is_empty() && f.len() <= 64 && f.chars().all(|c| c.is_alphanumeric() || c == ' ' || c == '-') => {
+                    out.insert(k.clone(), json!(f));
+                }
+                _ => return Err(format!("theme.json: {k} must be a font family name")),
+            },
+            "corners" => match val.as_f64() {
+                Some(x) if (0.0..=2.0).contains(&x) => {
+                    out.insert(k.clone(), json!(x));
+                }
+                _ => return Err("theme.json: corners must be a number from 0 to 2".into()),
+            },
+            other => return Err(format!("theme.json: unknown key “{other}” (accent, light, dark, font, displayFont, corners)")),
+        }
+    }
+    Ok(Some(Value::Object(out)))
+}
+
 /// Validate an OyNIx extension folder: `oynix.json` + `code.ts` (or
 /// `content.js`, converted) + `content.css`, and the optional extras.
 fn prepare_oynix(dir: &Path, e: &mut Entry) -> Result<(), String> {
@@ -678,6 +744,22 @@ fn prepare_oynix(dir: &Path, e: &mut Entry) -> Result<(), String> {
         super::qmlcheck::check(&qml)?;
     }
     e.has_page = dir.join("extra.html").exists();
+    e.has_theme = read_theme(dir)?.is_some();
+    e.permissions = match v.get("permissions") {
+        None => vec![],
+        Some(Value::Array(a)) => {
+            let mut out = vec![];
+            for p in a {
+                match p.as_str() {
+                    Some("ocr") => out.push("ocr".to_string()),
+                    Some(other) => return Err(format!("unknown permission “{other}” (OyNIx extensions can ask for: ocr)")),
+                    None => return Err("permissions must be a list of strings".into()),
+                }
+            }
+            out
+        }
+        Some(_) => return Err("permissions must be a list, e.g. [\"ocr\"]".into()),
+    };
     if e.has_panel && e.has_page {
         e.warnings.push("graphics.qt and extra.html both exist; the toolbar shows graphics.qt".into());
     }
@@ -695,7 +777,9 @@ fn prepare_oynix(dir: &Path, e: &mut Entry) -> Result<(), String> {
     e.version = v.get("version").and_then(Value::as_str).unwrap_or("1.0").to_string();
     e.description = v.get("description").and_then(Value::as_str).unwrap_or("").to_string();
     e.matches = strs("matches");
-    if e.matches.is_empty() {
+    // "matches": [] means no pages (e.g. an extension that only restyles
+    // the browser with theme.json); leaving the key out means every page.
+    if e.matches.is_empty() && v.get("matches").is_none() {
         e.matches = vec!["*://*/*".into()];
         e.warnings.push("No \"matches\" given; runs on all http(s) pages".into());
     }
@@ -728,7 +812,7 @@ fn prepare_oynix(dir: &Path, e: &mut Entry) -> Result<(), String> {
 /// `extra.jsonl`, and messaging with its panel (`graphics.qt` or
 /// `extra.html`) through OyNIx's WebChannel bridge.
 const OYNIX_API: &str = r#"var oynix = (function () {
-  var id = __ID__, listeners = [], bridge = null;
+  var id = __ID__, listeners = [], bridge = null, pending = {}, canOcr = __OCR__;
   function connect() {
     if (!__MESSAGING__) return Promise.reject(new Error('This extension has no panel to talk to'));
     if (!window.__oynixChannel) window.__oynixChannel = new Promise(function (r) {
@@ -743,6 +827,14 @@ const OYNIX_API: &str = r#"var oynix = (function () {
         bridge.message.connect(function (ext, target, payload) {
           if (ext !== id || target !== 'content') return;
           var msg; try { msg = JSON.parse(payload); } catch (e) { return; }
+          // Answers to oynix.ocr() go to the page that asked.
+          if (msg && msg.__oynix === 'ocr') {
+            var p = pending[msg.req];
+            if (p) { delete pending[msg.req]; if (msg.error) p.reject(new Error(msg.error)); else p.resolve(msg.text); }
+            return;
+          }
+          // The panel talks to the tab you're looking at, not background tabs.
+          if (document.visibilityState !== 'visible') return;
           listeners.forEach(function (f) { try { f(msg); } catch (e) { console.error(e); } });
         });
       }
@@ -754,7 +846,21 @@ const OYNIX_API: &str = r#"var oynix = (function () {
     data: Object.freeze(__DATA__),
     post: function (msg) { return connect().then(function (b) { b.post(id, 'panel', JSON.stringify(msg === undefined ? null : msg)); }); },
     onMessage: function (f) { if (typeof f === 'function') { listeners.push(f); connect().catch(function () {}); } },
-    openPanel: function () { return connect().then(function (b) { b.post(id, 'oynix:open', '{}'); }); }
+    openPanel: function () { return connect().then(function (b) { b.post(id, 'oynix:open', '{}'); }); },
+    // Read text from what's on screen in this tab (CSS pixels relative to
+    // the viewport; default: the whole visible area). Needs "permissions":
+    // ["ocr"] in oynix.json. Works on scans, canvas and text in images.
+    ocr: function (rect) {
+      if (!canOcr) return Promise.reject(new Error('Add "permissions": ["ocr"] to oynix.json to use oynix.ocr()'));
+      var r = rect || { x: 0, y: 0, width: innerWidth, height: innerHeight };
+      var req = Math.random().toString(36).slice(2) + Date.now().toString(36);
+      return connect().then(function (b) {
+        return new Promise(function (resolve, reject) {
+          pending[req] = { resolve: resolve, reject: reject };
+          b.post(id, 'oynix:ocr', JSON.stringify({ req: req, url: location.href, x: r.x, y: r.y, width: r.width, height: r.height }));
+        });
+      });
+    }
   });
 })();"#;
 
@@ -792,6 +898,9 @@ pub const PAGE_API: &str = r#"window.oynix = (function () {
 /// (Qt WebEngine applies @match / @exclude / @run-at natively), the CSS and
 /// the JS.
 pub fn oynix_script(e: &Entry) -> Option<String> {
+    if e.matches.is_empty() {
+        return None;
+    }
     let dir = Path::new(&e.path);
     let js = match compile_code(dir) {
         Ok(js) => js,
@@ -820,8 +929,13 @@ pub fn oynix_script(e: &Entry) -> Option<String> {
     let id_js = serde_json::to_string(&e.id).unwrap_or_default();
     let data_js = serde_json::to_string(&data).unwrap_or_else(|_| "[]".into());
     // Messaging with the panel needs the WebChannel client in this world.
-    let channel = if (e.has_panel || e.has_page) && e.world != "main" { crate::bridge::native::ffi::webchannel_js() } else { String::new() };
-    let api = OYNIX_API.replace("__ID__", &id_js).replace("__DATA__", &data_js).replace("__MESSAGING__", if channel.is_empty() { "false" } else { "true" });
+    let ocr = e.permissions.iter().any(|p| p == "ocr");
+    let channel = if (e.has_panel || e.has_page || ocr) && e.world != "main" { crate::bridge::native::ffi::webchannel_js() } else { String::new() };
+    let api = OYNIX_API
+        .replace("__ID__", &id_js)
+        .replace("__DATA__", &data_js)
+        .replace("__MESSAGING__", if channel.is_empty() { "false" } else { "true" })
+        .replace("__OCR__", if ocr && !channel.is_empty() { "true" } else { "false" });
     Some(format!(
         "{header}{channel}\n(function () {{\n  var css = {css_js};\n  if (css.trim()) {{\n    var s = document.createElement('style');\n    s.dataset.oynixExtension = {id_js};\n    s.textContent = css;\n    (document.head || document.documentElement).appendChild(s);\n  }}\n}})();\n(function () {{\n{api}\n{js}\n}})();\n"
     ))
@@ -909,6 +1023,7 @@ fn install_inner(source: &Path, staging: &Path, base: &Path, list: &mut Vec<Entr
     let target = base.join(&e.id);
     if let Some(old) = list.iter().find(|x| x.id == e.id) {
         e.enabled = old.enabled;
+        e.builtin = old.builtin;
         e.first_run = false;
     }
     let _ = std::fs::remove_dir_all(&target);
@@ -925,6 +1040,9 @@ fn install_inner(source: &Path, staging: &Path, base: &Path, list: &mut Vec<Entr
 
 pub fn remove(id: &str, list: &mut Vec<Entry>) -> bool {
     let Some(pos) = list.iter().position(|e| e.id == id) else { return false };
+    if list[pos].builtin {
+        return false; // ships with OyNIx; turn it off instead
+    }
     let e = list.remove(pos);
     // Only delete folders we own.
     let p = PathBuf::from(&e.path);

@@ -1,0 +1,5 @@
+/* The selection rectangle for “Read an area”. */
+.oynix-scraper-shade { position: fixed; inset: 0; z-index: 2147483647; cursor: crosshair; background: rgba(0, 20, 60, .18); }
+.oynix-scraper-box { position: fixed; border: 2px solid #2463d8; background: rgba(36, 99, 216, .12); border-radius: 4px; pointer-events: none; }
+.oynix-scraper-hint { position: fixed; left: 50%; top: 18px; transform: translateX(-50%); padding: 8px 16px; border-radius: 18px;
+  background: #1e1f25; color: #e1e2ea; font: 500 13px system-ui, sans-serif; pointer-events: none; }

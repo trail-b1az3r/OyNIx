@@ -1,0 +1,8 @@
+{
+  "name": "Firefox Add-ons Button",
+  "version": "1.0.0",
+  "description": "Adds an “Add to OyNIx” button to add-on pages on addons.mozilla.org.",
+  "matches": ["https://addons.mozilla.org/*"],
+  "run_at": "document_idle",
+  "world": "isolated"
+}

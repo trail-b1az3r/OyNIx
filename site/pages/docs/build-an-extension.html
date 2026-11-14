@@ -16,6 +16,7 @@ description: The OyNIx extension format: oynix.json, code.ts and content.css, th
   <tr><td><code>graphics.qt</code></td><td>Optional</td><td>A panel in the browser’s toolbar, written in QML</td></tr>
   <tr><td><code>extra.html</code></td><td>Optional</td><td>A page in the toolbar instead, for when you’d rather write HTML</td></tr>
   <tr><td><code>extra.jsonl</code></td><td>Optional</td><td>Data your code can read: one JSON value per line, up to 4 MB</td></tr>
+  <tr><td><code>theme.json</code></td><td>Optional</td><td>A style for the browser itself: colours, fonts, corners</td></tr>
   <tr><td><code>icon.png</code> / <code>icon.svg</code></td><td>Optional</td><td>The toolbar and Settings icon</td></tr>
 </table>
 <p>The quickest start is <b>Settings › Extensions › New Extension</b>, which writes a working template into your extensions folder and installs it. Edit the files, then turn the extension off and on again; OyNIx recompiles <code>code.ts</code> when it changes.</p>
@@ -35,7 +36,8 @@ description: The OyNIx extension format: oynix.json, code.ts and content.css, th
   <tr><td><code>name</code></td><td>Required. Shown in Settings, the toolbar and the install prompt.</td></tr>
   <tr><td><code>version</code></td><td>Any dotted version. Installing a newer one replaces the old.</td></tr>
   <tr><td><code>description</code></td><td>One sentence.</td></tr>
-  <tr><td><code>matches</code></td><td>Pages to run on, as <a href="https://developer.chrome.com/docs/extensions/develop/concepts/match-patterns">match patterns</a>. <code>"*://*/*"</code> means every site.</td></tr>
+  <tr><td><code>matches</code></td><td>Pages to run on, as <a href="https://developer.chrome.com/docs/extensions/develop/concepts/match-patterns">match patterns</a>. <code>"*://*/*"</code> means every site; <code>[]</code> means none, for extensions that only style the browser.</td></tr>
+  <tr><td><code>permissions</code></td><td>Extra abilities. The only one is <code>"ocr"</code>: see <a href="#reading-text-from-pixels">Reading text from pixels</a>.</td></tr>
   <tr><td><code>exclude</code></td><td>Pages to skip, in the same form.</td></tr>
   <tr><td><code>run_at</code></td><td><code>document_start</code> (before the page’s own scripts), <code>document_end</code> (default; the page is parsed) or <code>document_idle</code> (after it has loaded).</td></tr>
   <tr><td><code>world</code></td><td><code>isolated</code> (default): your code sees the page’s DOM but not its JavaScript variables, and the page can’t see yours. <code>main</code>: runs alongside the page’s scripts. Messaging with a panel only works in <code>isolated</code>.</td></tr>
@@ -53,6 +55,8 @@ description: The OyNIx extension format: oynix.json, code.ts and content.css, th
   onMessage(listener: (message: unknown) =&gt; void): void;
   /** Open this extension's panel. */
   openPanel(): Promise&lt;void&gt;;
+  /** Read text from the visible page (needs "permissions": ["ocr"]). */
+  ocr(rect?: { x: number; y: number; width: number; height: number }): Promise&lt;string&gt;;
 };</code></pre>
 <div class="note">{{shape:cookie9:code}}<p><b>Only have JavaScript?</b> Install it anyway. A package with <code>content.js</code> and no <code>code.ts</code> is converted on install: JavaScript is valid TypeScript, so the file is renamed and gets a one-line note at the top.</p></div>
 
@@ -98,6 +102,34 @@ Rectangle {
 
 <h2>extra.jsonl: data</h2>
 <p>Put word lists, rules or settings in <code>extra.jsonl</code>, one JSON value per line. Blank lines are skipped. The file is checked on install, and a malformed line stops the install with its line number. Your code sees the records as <code>oynix.data</code>, and a panel as <code>extension.data</code>. Because the data is sent to every page the extension runs on, keep it under 4 MB.</p>
+
+<h2>theme.json: styling the browser</h2>
+<p>An extension can restyle OyNIx itself. Choose it in <b>Settings › Appearance › Browser Style</b>; only one style is active at a time. Everything is optional:</p>
+<pre data-copy><code>{
+  "accent": "#0b8043",
+  "light": { "surface": "#fbfdf8", "primary": "#0b6b3a" },
+  "dark":  { "surface": "#101410", "primary": "#8bd6a5" },
+  "font": "Inter",
+  "displayFont": "Fraunces",
+  "corners": 0.5
+}</code></pre>
+<table>
+  <tr><th>Key</th><th>Meaning</th></tr>
+  <tr><td><code>accent</code></td><td>The colour every other colour is generated from, as in Settings’ accent colours.</td></tr>
+  <tr><td><code>light</code>, <code>dark</code></td><td>Exact colours for Material 3 roles, overriding the generated ones: <code>primary</code>, <code>onPrimary</code>, <code>primaryContainer</code>, <code>secondaryContainer</code>, <code>tertiaryContainer</code>, <code>surface</code>, <code>surfaceContainerLowest</code> … <code>surfaceContainerHighest</code>, <code>onSurface</code>, <code>onSurfaceVariant</code>, <code>outline</code>, <code>error</code> and their <code>on…</code> partners.</td></tr>
+  <tr><td><code>font</code>, <code>displayFont</code></td><td>Font families for the interface and for headings. If a font isn’t installed, OyNIx’s own fonts are used.</td></tr>
+  <tr><td><code>corners</code></td><td>Corner roundness, from <code>0</code> (square) through <code>1</code> (OyNIx’s default) to <code>2</code>.</td></tr>
+</table>
+<p>Colours must be written as <code>#rrggbb</code>, and unknown keys or roles stop the install with a message, so a typo can’t half-apply a style. A style is data only; it can’t run code. <b>Graphite</b>, which comes with OyNIx, is a complete example.</p>
+
+<h2>Reading text from pixels</h2>
+<p>Some pages have no text to collect: scanned documents, pages drawn on a canvas, words inside photos. An extension that declares <code>"permissions": ["ocr"]</code> can call <code>oynix.ocr()</code> to read them:</p>
+<pre data-copy><code>// The whole visible page…
+const all = await oynix.ocr();
+// …or part of it, in CSS pixels from the top left of the window.
+const box = document.querySelector('canvas')!.getBoundingClientRect();
+const words = await oynix.ocr({ x: box.left, y: box.top, width: box.width, height: box.height });</code></pre>
+<p>OyNIx takes a picture of the tab and reads it on your computer with the <a href="https://github.com/robertknight/ocrs">ocrs</a> engine; nothing is uploaded. The first call downloads the 12 MB reading model once. It reads only the tab you’re looking at, only for the page that asked, and never in private windows. It works best on Latin-script text at normal reading sizes. Only what’s on screen can be read, so scroll something into view first. The built-in <b>Scraper</b> shows how.</p>
 
 <h2>Packaging</h2>
 <p>Zip the files with no enclosing folder and give the file a <code>.oynix</code> extension:</p>

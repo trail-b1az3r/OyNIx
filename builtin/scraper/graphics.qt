@@ -1,0 +1,147 @@
+import QtQuick
+import QtQuick.Layouts
+import QtQuick.Controls.Basic
+
+// Scraper panel. Commands go to code.ts in the tab you're looking at;
+// results come back as {type: "result" | "status", ...}.
+Rectangle {
+    id: root
+    implicitWidth: 440
+    implicitHeight: 560
+
+    SystemPalette { id: pal; colorGroup: SystemPalette.Active }
+    readonly property bool dark: (pal.base.r + pal.base.g + pal.base.b) / 3 < 0.5
+    readonly property color ink: dark ? "#e1e2ea" : "#1a1b21"
+    readonly property color dim: dark ? "#c3c5d6" : "#444654"
+    readonly property color card: dark ? "#292a2f" : "#e7e8ef"
+    readonly property color accent: dark ? "#b8c3ff" : "#005bbf"
+    readonly property color accentInk: dark ? "#002e68" : "#ffffff"
+    color: dark ? "#1e1f25" : "#ededf5"
+
+    property string title: "Scraper"
+    property string status: "Pick what to collect from this page."
+    property string output: ""
+    property bool canSave: false
+    property bool busy: false
+
+    function run(cmd) {
+        busy = cmd !== "save" && cmd !== "ocr-area"
+        if (cmd.indexOf("ocr") === 0 && cmd !== "ocr-area") status = "Reading text from the page’s pixels… the first time downloads the 12 MB reading model."
+        extension.post(JSON.stringify({ cmd: cmd }))
+    }
+
+    Connections {
+        target: extension
+        function onMessage(json) {
+            var m = JSON.parse(json)
+            if (m.type === "status") { root.status = m.message; return }
+            if (m.type === "result") {
+                root.busy = false
+                root.title = m.title
+                root.status = m.summary
+                root.output = m.text
+                root.canSave = m.canSave
+                out.cursorPosition = 0
+            }
+        }
+    }
+    Component.onCompleted: extension.post(JSON.stringify({ cmd: "hello" }))
+
+    component Chip: Button {
+        id: chip
+        property string cmd
+        Layout.fillWidth: true
+        implicitHeight: 36
+        enabled: !root.busy
+        onClicked: root.run(chip.cmd)
+        contentItem: Text {
+            text: chip.text; color: root.ink; font.pixelSize: 13
+            horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+        }
+        background: Rectangle {
+            radius: chip.down ? 8 : 18
+            color: chip.hovered ? Qt.darker(root.card, root.dark ? 0.85 : 1.06) : root.card
+            opacity: chip.enabled ? 1 : 0.5
+            Behavior on radius { NumberAnimation { duration: 160 } }
+        }
+    }
+
+    ColumnLayout {
+        anchors.fill: root
+        anchors.margins: 16
+        spacing: 10
+
+        Text { text: root.title; color: root.ink; font.pixelSize: 20; font.weight: Font.Medium }
+
+        Text { text: "Collect"; color: root.dim; font.pixelSize: 12 }
+        GridLayout {
+            Layout.fillWidth: true
+            columns: 4; columnSpacing: 6; rowSpacing: 6
+            Chip { text: "Text"; cmd: "text" }
+            Chip { text: "Images"; cmd: "images" }
+            Chip { text: "Links"; cmd: "links" }
+            Chip { text: "Tables"; cmd: "tables" }
+        }
+        Text { text: "Read text from pixels (OCR)"; color: root.dim; font.pixelSize: 12 }
+        GridLayout {
+            Layout.fillWidth: true
+            columns: 3; columnSpacing: 6; rowSpacing: 6
+            Chip { text: "Screen"; cmd: "ocr-screen" }
+            Chip { text: "An Area…"; cmd: "ocr-area" }
+            Chip { text: "Pictures"; cmd: "ocr-images" }
+        }
+
+        Text {
+            Layout.fillWidth: true
+            text: root.status; color: root.dim; font.pixelSize: 12
+            wrapMode: Text.WordWrap
+        }
+
+        Rectangle {
+            id: outBox
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            radius: 12
+            color: root.dark ? "#121319" : "#ffffff"
+            ScrollView {
+                id: scroller
+                anchors.fill: outBox
+                anchors.margins: 2
+                clip: true
+                TextArea {
+                    id: out
+                    readOnly: true
+                    selectByMouse: true
+                    wrapMode: TextEdit.Wrap
+                    text: root.output
+                    color: root.ink
+                    font.family: "monospace"; font.pixelSize: 12
+                    placeholderText: "Results appear here."
+                    placeholderTextColor: root.dim
+                    background: Item {}
+                }
+            }
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 8
+            Item { Layout.fillWidth: true }
+            Button {
+                id: copyBtn
+                text: "Copy"
+                enabled: root.output !== ""
+                onClicked: { out.selectAll(); out.copy(); out.deselect(); root.status = "Copied to the clipboard." }
+            }
+            Button {
+                id: saveBtn
+                text: "Save"
+                enabled: root.canSave
+                onClicked: root.run("save")
+                contentItem: Text { text: saveBtn.text; color: root.accentInk; font.pixelSize: 13; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                background: Rectangle { radius: 18; color: root.accent; opacity: saveBtn.enabled ? 1 : 0.4; implicitWidth: 80; implicitHeight: 36 }
+            }
+        }
+    }
+}

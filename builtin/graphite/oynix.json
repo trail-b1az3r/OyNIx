@@ -1,0 +1,8 @@
+{
+  "name": "Graphite",
+  "version": "1.0.0",
+  "description": "A quiet, nearly monochrome style for OyNIx with squarer corners. Choose it in Settings › Appearance.",
+  "matches": [],
+  "run_at": "document_end",
+  "world": "isolated"
+}
