@@ -52,7 +52,10 @@ windowrulev2 = size 980 700, title:^(OyNIx Settings)$</code></pre>
 sudo udevadm control --reload && sudo udevadm trigger</code></pre>
 
 <h2>Graphics</h2>
-<p>OyNIx draws its interface with Vulkan 1.3 or 1.2 when the graphics driver supports it, and with OpenGL ES otherwise. <code>oynix --gpu-info</code> shows what it found; <b>Settings › About</b> shows what it’s using. If you see flickering or a blank window, try <code>oynix --gpu gles</code>, and please <a href="{{repo}}/issues">report it</a> with the output of <code>--gpu-info</code>.</p>
+<p>On Wayland, OyNIx draws its interface with OpenGL ES. On X11 it uses Vulkan 1.3 or 1.2 when the driver supports it, and OpenGL otherwise. <b>Settings › About</b> shows what it’s using, and <code>--gpu vulkan|gles|opengl</code> overrides the choice.</p>
+<p>Vulkan isn’t the Wayland default because of how it waits for the screen: compositors such as Hyprland stop telling hidden windows when to draw, and a Vulkan window then waits indefinitely, which froze the whole browser until it was shown again. OpenGL ES on Wayland waits with a time limit instead.</p>
+<h3>If OyNIx freezes</h3>
+<p>OyNIx notices when its interface stops responding for more than a second and a half and notes it in <b>Settings › About › Responsiveness</b> (also <code>~/.cache/oynix/PROFILE/freezes.log</code>), with the graphics backend and whether the window was in the background. Please include those lines when you <a href="{{repo}}/issues">report a freeze</a>.</p>
 
 <h2>Building from source</h2>
 <p>You need Rust (stable) and Qt 6.10 or newer with Qt WebEngine. Most distributions don’t ship that yet, so a script fetches Qt 6.12 into the source folder:</p>

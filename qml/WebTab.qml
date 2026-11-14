@@ -19,6 +19,7 @@ Item {
     property bool readerAvailable: false
     property bool crashed: false
     property string hoveredLink: ""
+    readonly property string modelUrl: model.url || ""
     property string loadError: ""
     property int loadErrorCode: 0
     property string loadErrorUrl: ""
@@ -124,9 +125,17 @@ Item {
     Component {
         id: settingsPage
         SettingsView {
+            id: sv
             app: tab.win.app
-            page: { var m = (tab.model.url || "").match(/^oynix:\/\/settings\/?([a-z]*)/); return m && m[1] ? m[1] : "general" }
+            // The rail assigns `page` directly, so follow the address
+            // imperatively rather than through a binding it would break.
+            function pageFor(u) { var m = (u || "").match(/^oynix:\/\/settings\/?([a-z]*)/); return m && m[1] ? m[1] : "general" }
+            Component.onCompleted: page = pageFor(tab.model.url)
             onPageChanged: if (tab.model.url !== "oynix://settings/" + page) tab.model.url = "oynix://settings/" + page
+            Connections {
+                target: tab
+                function onModelUrlChanged() { if (tab.modelUrl.indexOf("oynix://settings") === 0 && sv.pageFor(tab.modelUrl) !== sv.page) sv.page = sv.pageFor(tab.modelUrl) }
+            }
         }
     }
     Component {

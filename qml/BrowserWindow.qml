@@ -206,7 +206,7 @@ ApplicationWindow {
 
     function navigate(text) {
         var u = Core.resolveInput(text)
-        if (u.indexOf("oynix://settings") === 0) { app.openSettings(""); return }
+        if (u.indexOf("oynix://settings") === 0) { app.openSettings(u.replace(/^oynix:\/\/settings\/?/, "")); return }
         if (u.indexOf("oynix://privacy") === 0) { openPrivacyReport(); return }
         if (!currentTab) { openTab(u, {}); return }
         currentTab.load(u)
@@ -238,7 +238,14 @@ ApplicationWindow {
 
     // Open an internal page (history, settings…) or switch to it if open.
     function openInternal(u) {
-        for (var i = 0; i < tabModel.count; i++) if ((tabModel.get(i).url || "").indexOf(u) === 0) { activate(i); return }
+        // One tab per internal page; settings sub-pages share the Settings tab.
+        var base = u.indexOf("oynix://settings") === 0 ? "oynix://settings" : u
+        for (var i = 0; i < tabModel.count; i++) {
+            if ((tabModel.get(i).url || "").indexOf(base) !== 0) continue
+            activate(i)
+            if (tabModel.get(i).url !== u && u.replace(/\/$/, "") !== base) tabItem(i).load(u)
+            return
+        }
         var cur = currentTab
         if (cur && (cur.model.url === "oynix://start" || cur.model.url === "about:blank")) cur.load(u)
         else openTab(u, { afterCurrent: true })

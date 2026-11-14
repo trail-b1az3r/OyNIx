@@ -954,6 +954,30 @@ Rectangle {
                 Divider {}
                 Row_ { label: qsTr("Configuration"); Txt { text: Core.configPath("config"); color: Theme.textDim; font.pixelSize: 12 } }
             }
+            Section {
+                id: freezeSection
+                title: qsTr("Responsiveness")
+                property string log: sw.shown ? Core.freezeLog() : ""
+                Txt {
+                    Layout.fillWidth: true; Layout.margins: 12
+                    wrapMode: Text.WordWrap; elide: Text.ElideNone
+                    color: Theme.textDim; font.pixelSize: 12
+                    text: freezeSection.log === ""
+                          ? qsTr("No freezes recorded. If OyNIx stops responding for more than a second and a half, it is noted here.")
+                          : qsTr("Times OyNIx stopped responding, newest last. Include these when reporting a problem.")
+                }
+                Txt {
+                    visible: freezeSection.log !== ""
+                    Layout.fillWidth: true; Layout.leftMargin: 12; Layout.rightMargin: 12; Layout.bottomMargin: 12
+                    wrapMode: Text.WrapAnywhere; elide: Text.ElideNone
+                    font.family: "monospace"; font.pixelSize: 11
+                    textFormat: Text.PlainText
+                    text: freezeSection.log.split("\n").map(function (l) {
+                        var p = l.split(" "), t = new Date(parseInt(p[0]) * 1000)
+                        return t.toLocaleString(Qt.locale(), "d MMM HH:mm:ss") + "  " + p.slice(1).join(" ")
+                    }).join("\n")
+                }
+            }
         }
     }
 }

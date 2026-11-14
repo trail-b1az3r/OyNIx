@@ -185,6 +185,11 @@ QtObject {
         interval: 30000; running: true; repeat: true
         onTriggered: { Core.flush(); app.saveSession() }
     }
+    // Tells the freeze detector the UI thread is alive (see core/watchdog.rs).
+    property Timer heartbeat: Timer {
+        interval: 500; running: true; repeat: true
+        onTriggered: { var a = false; for (var i = 0; i < windows.length; i++) if (windows[i].active) a = true; Core.heartbeat(a) }
+    }
     property Timer statsTimer: Timer { interval: 2000; running: true; repeat: true; onTriggered: Core.refreshStats() }
 
     function scheduleSave() { saveTimer.restart() }

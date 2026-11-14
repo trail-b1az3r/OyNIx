@@ -209,7 +209,9 @@ fn main() {
     let early = core::settings::Settings::load();
     let mut chromium = std::env::var("QTWEBENGINE_CHROMIUM_FLAGS").unwrap_or_default();
     chromium.push_str(if early.smooth_scrolling { " --enable-smooth-scrolling" } else { " --disable-smooth-scrolling" });
-    if selection.backend == gpu::Backend::Vulkan {
+    // Chromium's own Vulkan compositor is experimental on Linux and can hang
+    // the GPU process; it's independent of how OyNIx draws its interface.
+    if std::env::var("OYNIX_CHROMIUM_VULKAN").is_ok_and(|v| v == "1") {
         chromium.push_str(" --enable-features=Vulkan");
     }
     // prefers-color-scheme for websites. Qt only forwards the desktop's
@@ -251,6 +253,7 @@ fn main() {
         engine.load(&QUrl::from("qrc:/qt/qml/OyNIx/qml/Main.qml"));
     }
 
+    core::watchdog::start(native::ffi::active_graphics_api().to_string());
     let code = app.as_mut().map(|a| a.exec()).unwrap_or(1);
     core::blocker::save_stats();
     std::process::exit(code);

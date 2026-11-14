@@ -170,6 +170,10 @@ pub mod qobject {
         fn load_session(self: &Core) -> QString;
         #[qinvokable]
         fn flush(self: Pin<&mut Core>);
+        #[qinvokable]
+        fn heartbeat(self: &Core, active: bool);
+        #[qinvokable]
+        fn freeze_log(self: &Core) -> QString;
 
         // ── privacy ──
         #[qinvokable]
@@ -826,6 +830,17 @@ impl qobject::Core {
 
     pub fn load_session(&self) -> QString {
         qs(std::fs::read_to_string(paths::data_dir().join("session.json")).unwrap_or_default())
+    }
+
+    pub fn heartbeat(&self, active: bool) {
+        crate::core::watchdog::beat(active);
+    }
+
+    /// Recent UI freezes (newest last), for Settings › About.
+    pub fn freeze_log(&self) -> QString {
+        let t = std::fs::read_to_string(crate::core::watchdog::log_path()).unwrap_or_default();
+        let lines: Vec<&str> = t.lines().collect();
+        qs(lines[lines.len().saturating_sub(20)..].join("\n"))
     }
 
     pub fn flush(mut self: Pin<&mut Self>) {
