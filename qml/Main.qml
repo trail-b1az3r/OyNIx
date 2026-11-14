@@ -37,11 +37,14 @@ QtObject {
 
     // Websites follow OyNIx's light/dark theme (prefers-color-scheme).
     property bool themeDark: Theme.dark
+    // Should websites be shown dark? (auto follows the OyNIx theme)
+    readonly property bool websitesDark: Core.websiteAppearance === "dark" || (Core.websiteAppearance !== "light" && Theme.dark)
     onThemeDarkChanged: Core.applyColorScheme(themeDark)
     property Connections schemeEvents: Connections {
         target: Core
         function onDarkWebsitesChanged() { Core.applyColorScheme(Theme.dark) }
         function onThemeChanged() { Core.applyColorScheme(Theme.dark) }
+        function onWebsiteAppearanceChanged() { Core.applyColorScheme(Theme.dark) }
     }
 
     // ── Content-blocker list updates ──
@@ -122,7 +125,36 @@ QtObject {
 
     // WebChannel endpoint used by the extension runtime in pages.
     property ExtBridge extBridge: ExtBridge { WebChannel.id: "oynixExtensions" }
-    property WebChannel extChannel: WebChannel { registeredObjects: [app.extBridge] }
+    property WebChannel extChannel: WebChannel { registeredObjects: [app.extBridge, app.usb] }
+
+    // WebUSB: device chooser and connect/disconnect detection.
+    property UsbBridge usb: UsbBridge { WebChannel.id: "oynixUsb" }
+    readonly property string siteUrl: "https://trail-b1az3r.github.io/OyNIx/"
+    // Open a web address in the frontmost browser window (settings may be
+    // in their own window, which has no tabs).
+    function openInBrowser(u) {
+        var w = activeWindow()
+        if (w && w.openTab) w.openTab(u, {})
+        else if (windows.length) windows[0].openTab(u, {})
+    }
+    property int usbGrants: 0
+    // host|error type pairs the user chose to visit despite a certificate error (this session only)
+    property var certAllowed: ({})
+    function refreshUsbGrants() { usbGrants = JSON.parse(usb.permissions()).length }
+    property Connections usbEvents: Connections {
+        target: app.usb
+        function onChooserRequested(id, origin, devices) {
+            var w = app.activeWindow()
+            if (!w) { app.usb.choose(id, ""); return }
+            w.askUsbDevice(origin, JSON.parse(devices), function (key) { app.usb.choose(id, key || "") })
+        }
+        function onPermissionsChanged() { app.refreshUsbGrants() }
+    }
+    property Timer usbPoll: Timer {
+        interval: 2000; repeat: true
+        running: app.usbGrants > 0 && JSON.parse(Core.settingsJson).webusb === true
+        onTriggered: app.usb.poll()
+    }
 
     // Tab and window ids are global so extensions can address them.
     property int lastTabId: 0
@@ -218,6 +250,8 @@ QtObject {
     function handleDownload(download) {
         if (download.state !== WebEngineDownloadRequest.DownloadRequested) return
         download.downloadDirectory = Core.downloadDir
+        for (var wi = 0; wi < windows.length; wi++) windows[wi].settleDownloadTab(download.url.toString())
+        if (isExtensionPackage(download)) { offerExtensionInstall(download); return }
         var ask = JSON.parse(Core.settingsJson).askWhereToSave
         var w = null
         for (var k = 0; k < windows.length; k++) if (windows[k].active) w = windows[k]
@@ -236,12 +270,59 @@ QtObject {
         for (var i = 0; i < windows.length; i++) if (windows[i].active) windows[i].requestActivate()
     }
 
+    // ── Extension packages (.xpi / .crx), e.g. from addons.mozilla.org ──
+    function isExtensionPackage(d) {
+        var n = String(d.downloadFileName || "").toLowerCase(), m = String(d.mimeType || "").toLowerCase()
+        return m === "application/x-xpinstall" || m === "application/x-chrome-extension" || /\.(xpi|crx|oynix)$/.test(n)
+    }
+
+    function activeWindow() {
+        for (var k = 0; k < windows.length; k++) if (windows[k].active) return windows[k]
+        return windows.length ? windows[windows.length - 1] : null
+    }
+
+    function offerExtensionInstall(download) {
+        var w = activeWindow()
+        var source = Core.hostOf(download.url.toString())
+        var name = String(download.downloadFileName).replace(/\.(xpi|crx|oynix)$/i, "").replace(/[-_]\d[\d.]*$/, "").replace(/[_-]+/g, " ")
+        var go = function (ok) {
+            if (!ok) { download.cancel(); return }
+            download.downloadDirectory = Core.configPath("cache") + "/extension-downloads"
+            download.accept()
+            var done = function () {
+                if (download.state !== WebEngineDownloadRequest.DownloadCompleted) {
+                    if (download.state === WebEngineDownloadRequest.DownloadInterrupted || download.state === WebEngineDownloadRequest.DownloadCancelled)
+                        w && w.toastMessage(qsTr("Extension download failed"))
+                    return
+                }
+                download.stateChanged.disconnect(done)
+                var r = app.extensionHost.install(download.downloadDirectory + "/" + download.downloadFileName)
+                if (w) w.toastMessage(r.ok ? qsTr("Added “%1”").arg(r.extension.name) : qsTr("Could not install: %1").arg(r.error))
+            }
+            download.stateChanged.connect(done)
+            done()
+        }
+        if (w) w.askInstallExtension(name, source, go)
+        else go(true)
+    }
+
     function clearFinishedDownloads() {
         downloads = downloads.filter(function (d) { return d.state === WebEngineDownloadRequest.DownloadInProgress })
     }
 
     function openSettings(page) {
-        if (!settingsWindow) settingsWindow = settingsComponent.createObject(null, { app: app })
+        var w = null
+        for (var k = 0; k < windows.length; k++) if (windows[k].active) w = windows[k]
+        if (!w && windows.length) w = windows[windows.length - 1]
+        if (JSON.parse(Core.settingsJson).settingsOpenIn !== "window" && w) {
+            // In the browser window, like any other page.
+            w.openInternal("oynix://settings/" + (page || ""))
+            var t = w.currentTab
+            if (page && t && t.pageItem && t.pageItem.page !== undefined) t.pageItem.page = page
+            w.raise(); w.requestActivate()
+            return
+        }
+        if (!settingsWindow) settingsWindow = settingsComponent.createObject(null, { app: app, transientParent: w })
         if (page) settingsWindow.page = page
         settingsWindow.show()
         settingsWindow.raise()
@@ -272,5 +353,5 @@ QtObject {
         shutdown()
     }
 
-    Component.onCompleted: { setupProfile(); restore() }
+    Component.onCompleted: { setupProfile(); restore(); refreshUsbGrants() }
 }

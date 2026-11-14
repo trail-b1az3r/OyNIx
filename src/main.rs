@@ -16,6 +16,7 @@ mod bridge {
     pub mod core;
     pub mod extbridge;
     pub mod native;
+    pub mod usbbridge;
 }
 mod core;
 mod gpu;
@@ -133,12 +134,16 @@ fn parse_args() -> Args {
 /// Dark (true) / light (false) scheme websites should see, or None to let
 /// the platform decide.
 fn website_scheme(st: &core::settings::Settings) -> Option<bool> {
-    let dark = match st.theme.as_str() {
-        "dark" => true,
-        "light" => false,
-        _ => system_prefers_dark()?,
-    };
-    Some(dark && st.dark_websites)
+    match st.website_appearance.as_str() {
+        "dark" => return Some(true),
+        "light" => return Some(false),
+        _ => {}
+    }
+    match st.theme.as_str() {
+        "dark" => Some(true),
+        "light" => Some(false),
+        _ => system_prefers_dark(),
+    }
 }
 
 /// Best-effort desktop dark-mode detection (GNOME / GTK / KDE), used only

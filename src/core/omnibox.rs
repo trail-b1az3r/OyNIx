@@ -144,7 +144,8 @@ pub fn resolve(input: &str, engine_id: &str, bangs: bool, https_upgrade: bool) -
     // Explicit scheme.
     if let Ok(u) = Url::parse(text) {
         match u.scheme() {
-            "http" | "https" | "file" | "about" | "data" | "view-source" | "ftp" | INTERNAL_SCHEME => {
+            "http" | "https" => return strip_tracking(u.as_str()),
+            "file" | "about" | "data" | "view-source" | "ftp" | INTERNAL_SCHEME => {
                 return u.to_string();
             }
             "chrome" | "qrc" => return u.to_string(),
@@ -218,6 +219,88 @@ pub fn display(raw: &str, full: bool) -> String {
     h.strip_prefix("www.").unwrap_or(h).to_string()
 }
 
+/// Clean, human-friendly form of a URL for suggestions and copying:
+/// `https://www.google.com/` → `google.com`, `http://a.org/x?utm_source=y`
+/// → `http://a.org/x` (the scheme is kept only when it is not https),
+/// percent-escapes decoded.
+pub fn pretty(raw: &str) -> String {
+    let cleaned = strip_tracking(raw);
+    let Ok(u) = Url::parse(&cleaned) else { return raw.to_string() };
+    match u.scheme() {
+        "http" | "https" => {}
+        INTERNAL_SCHEME => return String::new(),
+        _ => return cleaned,
+    }
+    let host = u.host_str().unwrap_or("");
+    let host = host.strip_prefix("www.").unwrap_or(host);
+    let mut out = String::new();
+    if u.scheme() == "http" {
+        out.push_str("http://");
+    }
+    out.push_str(host);
+    if let Some(port) = u.port() {
+        out.push_str(&format!(":{port}"));
+    }
+    let path = u.path();
+    if path != "/" {
+        out.push_str(&percent_decode(path));
+    }
+    if let Some(q) = u.query() {
+        out.push('?');
+        out.push_str(&percent_decode(q));
+    }
+    if let Some(f) = u.fragment() {
+        out.push('#');
+        out.push_str(&percent_decode(f));
+    }
+    out
+}
+
+fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() + 1 && i + 3 <= bytes.len() {
+            if let Ok(v) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
+                out.push(v);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    // Keep the escaped form if decoding would produce invalid UTF-8,
+    // spaces or control characters (those must stay visible as escapes).
+    match String::from_utf8(out) {
+        Ok(t) if !t.chars().any(|c| c.is_control() || c == ' ') => t,
+        _ => s.to_string(),
+    }
+}
+
+/// Inline autocompletion for the address field: given what the user has
+/// typed, return the best `pretty` completion that starts with it, from
+/// (host, weight) and (pretty url, weight) candidates.
+pub fn inline_complete(typed: &str, candidates: &[(String, f64)]) -> String {
+    let t = typed.trim().to_lowercase();
+    let t = t.strip_prefix("https://").unwrap_or(&t);
+    let t = t.strip_prefix("www.").unwrap_or(t);
+    if t.len() < 2 || t.contains(' ') {
+        return String::new();
+    }
+    let t = t.strip_prefix("http://").unwrap_or(t);
+    // Plain-http pages are completed without their scheme; typing the host
+    // still resolves to http for local addresses.
+    candidates
+        .iter()
+        .map(|(c, w)| (c.strip_prefix("http://").unwrap_or(c), *w))
+        .filter(|(c, _)| c.to_lowercase().starts_with(t) && c.len() > t.len())
+        .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal).then(b.0.len().cmp(&a.0.len())))
+        .map(|(c, _)| c.to_string())
+        .unwrap_or_default()
+}
+
 pub fn is_secure(raw: &str) -> bool {
     Url::parse(raw).map(|u| matches!(u.scheme(), "https" | "oynix" | "file" | "qrc")).unwrap_or(false)
 }
@@ -265,6 +348,22 @@ mod tests {
         assert_eq!(strip_tracking("https://a.com/?utm_source=x&id=3&fbclid=y"), "https://a.com/?id=3");
         assert_eq!(strip_tracking("https://a.com/?utm_source=x"), "https://a.com/");
         assert_eq!(strip_tracking("https://a.com/?q=1"), "https://a.com/?q=1");
+    }
+
+    #[test]
+    fn pretty_urls() {
+        assert_eq!(pretty("https://www.google.com/"), "google.com");
+        assert_eq!(pretty("https://docs.rs/serde/latest/serde/"), "docs.rs/serde/latest/serde/");
+        assert_eq!(pretty("http://example.org/a?utm_source=x&id=2"), "http://example.org/a?id=2");
+        assert_eq!(pretty("https://de.wikipedia.org/wiki/M%C3%BCnchen"), "de.wikipedia.org/wiki/München");
+        assert_eq!(pretty("http://localhost:8765/a.html"), "http://localhost:8765/a.html");
+        let c = vec![("google.com".to_string(), 10.0), ("github.com".to_string(), 30.0), ("google.com/maps".to_string(), 3.0)];
+        assert_eq!(inline_complete("goo", &c), "google.com");
+        assert_eq!(inline_complete("https://www.gi", &c), "github.com");
+        assert_eq!(inline_complete("g", &c), "");
+        assert_eq!(inline_complete("google.com/m", &c), "google.com/maps");
+        let l = vec![("http://localhost:8765".to_string(), 5.0)];
+        assert_eq!(inline_complete("loc", &l), "localhost:8765");
     }
 
     #[test]

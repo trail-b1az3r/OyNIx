@@ -1,0 +1,16 @@
+{
+  "name": "Straight Links",
+  "version": "1.0.0",
+  "description": "Rewrites redirect and click-tracking links so they go straight to where they point.",
+  "matches": ["*://*/*"],
+  "exclude": [],
+  "run_at": "document_end",
+  "world": "isolated",
+  "gallery": {
+    "category": "Privacy",
+    "author": "OyNIx",
+    "shape": "clover4",
+    "summary": "Links that go where they say.",
+    "about": "Search engines, social networks and mail scanners often wrap the links they show you, so a click first visits their server and only then forwards you on. Straight Links unwraps them in place: hovering shows the real address in the status bar, and a click goes straight there. It also removes the hidden ping attribute that reports clicks in the background. It knows the redirect formats used by Google, Bing, DuckDuckGo, YouTube, Facebook, Instagram, Reddit, Steam, LinkedIn, Slack and Outlook Safe Links."
+  }
+}

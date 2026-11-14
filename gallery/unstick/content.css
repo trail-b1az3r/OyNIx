@@ -1,0 +1,5 @@
+.oynix-unstick-hidden {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity .18s ease-out !important;
+}

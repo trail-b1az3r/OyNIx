@@ -1,0 +1,16 @@
+{
+  "name": "Night Images",
+  "version": "1.0.0",
+  "description": "In dark mode, dims bright photos and illustrations until you point at them.",
+  "matches": ["*://*/*"],
+  "exclude": [],
+  "run_at": "document_start",
+  "world": "isolated",
+  "gallery": {
+    "category": "Appearance",
+    "author": "OyNIx",
+    "shape": "pentagon",
+    "summary": "Dark pages without the flashbulbs.",
+    "about": "Darkening a website turns its text and backgrounds dark, but photos keep their full brightness and can glare at night. When a page is shown in dark mode, Night Images lowers the brightness of images and videos a little and restores it while your pointer is over them. It is a single stylesheet with no script logic, and does nothing in light mode."
+  }
+}

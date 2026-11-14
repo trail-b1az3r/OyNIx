@@ -1,0 +1,9 @@
+.oynix-clean-copy {
+  position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
+  z-index: 2147483647; max-width: min(640px, 90vw);
+  padding: 12px 20px; border-radius: 22px;
+  font: 500 13px/1.35 system-ui, sans-serif; overflow-wrap: anywhere;
+  color: #e1e2ea; background: #292a2f; box-shadow: 0 4px 18px rgba(0, 0, 0, .3);
+  transition: opacity .3s;
+}
+.oynix-clean-copy.gone { opacity: 0; }

@@ -912,13 +912,32 @@ fn load_stats() {
             TOTAL_BLOCKED.store(g("blocked"), Ordering::Relaxed);
             TOTAL_ADS.store(g("ads"), Ordering::Relaxed);
             TOTAL_TRACKERS.store(g("trackers"), Ordering::Relaxed);
+            // Which tracker domains were seen on which sites (for the report).
+            if let (Some(sites), Ok(mut m)) = (v.get("sites").and_then(|x| x.as_object()), PER_SITE.lock()) {
+                for (host, e) in sites {
+                    let n = e.get("n").and_then(|x| x.as_u64()).unwrap_or(0);
+                    let d: HashSet<String> = e.get("d").and_then(|x| x.as_array()).map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default();
+                    m.insert(host.clone(), (n, d));
+                }
+            }
         }
     }
 }
 
 pub fn save_stats() {
     let (b, a, t) = totals();
-    let v = serde_json::json!({ "blocked": b, "ads": a, "trackers": t });
+    let mut sites = serde_json::Map::new();
+    if let Ok(m) = PER_SITE.lock() {
+        // Keep the busiest sites if the list grows very long.
+        let mut v: Vec<_> = m.iter().collect();
+        v.sort_by(|x, y| y.1 .0.cmp(&x.1 .0));
+        for (host, (n, d)) in v.into_iter().take(3000) {
+            let mut d: Vec<&String> = d.iter().collect();
+            d.sort();
+            sites.insert(host.clone(), serde_json::json!({ "n": n, "d": d }));
+        }
+    }
+    let v = serde_json::json!({ "blocked": b, "ads": a, "trackers": t, "sites": sites });
     let _ = paths::write_atomic(&stats_file(), v.to_string().as_bytes());
 }
 

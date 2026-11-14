@@ -1,0 +1,16 @@
+{
+  "name": "Reading Time",
+  "version": "1.0.0",
+  "description": "Shows how long an article takes to read, and how much is left as you go.",
+  "matches": ["*://*/*"],
+  "exclude": [],
+  "run_at": "document_idle",
+  "world": "isolated",
+  "gallery": {
+    "category": "Reading",
+    "author": "OyNIx",
+    "shape": "softBurst",
+    "summary": "A quiet clock for long articles.",
+    "about": "On pages with a real article, at least 400 words of running text, Reading Time adds a small pill to the bottom corner: “7 min read” at first, then “4 min left” as you scroll. It counts words in the article itself, not the menus and comments around it, and assumes 230 words a minute. Click the pill to hide it for that page."
+  }
+}

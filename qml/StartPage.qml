@@ -70,10 +70,11 @@ Rectangle {
             Rectangle {
                 Layout.fillWidth: true
                 visible: Core.startPageShowPrivacyReport
-                implicitHeight: 112
+                implicitHeight: Math.max(112, privacyRow.implicitHeight + 40)
                 radius: Theme.shapeXL
                 color: Theme.primaryContainer
                 RowLayout {
+                    id: privacyRow
                     anchors.fill: parent
                     anchors.margins: 20
                     spacing: 18
@@ -91,7 +92,7 @@ Rectangle {
                             color: Theme.primaryContainerFg
                             opacity: 0.85
                             text: Core.contentBlocker
-                                  ? qsTr("OyNIx has blocked %1 trackers and %2 ads. Nothing you do is sent to us — there is no telemetry.").arg(Math.round(Core.totalTrackers).toLocaleString()).arg(Math.round(Core.totalAds).toLocaleString())
+                                  ? qsTr("%1 trackers and %2 ads blocked. OyNIx sends nothing about you anywhere.").arg(Math.round(Core.totalTrackers).toLocaleString()).arg(Math.round(Core.totalAds).toLocaleString())
                                   : qsTr("Content blocking is turned off. Turn it on in Settings › Privacy.")
                         }
                     }

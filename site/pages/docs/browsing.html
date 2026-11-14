@@ -1,0 +1,73 @@
+<!--
+title: Everyday browsing
+short: Browsing
+order: 1
+icon: tabs
+lede: Tabs, the address field, history, reading and the shortcuts worth learning.
+description: How tabs, the address field, history, Reader View, appearance and keyboard shortcuts work in OyNIx.
+-->
+<h2>Tabs</h2>
+<p>Choose a layout in <b>Settings › Tabs</b>:</p>
+<ul>
+  <li><b>Standard</b>: a tab bar under the toolbar.</li>
+  <li><b>Compact</b>: tabs inside the toolbar, for small screens.</li>
+  <li><b>Vertical</b>: a list in the sidebar, for people who keep forty tabs open.</li>
+</ul>
+<p>Drag tabs to reorder them, or drag one out to a new window. Right-click a tab to pin, mute, duplicate or close the ones around it. <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>T</kbd> brings back the last one you closed.</p>
+<p>Tabs you haven’t looked at for 30 minutes are unloaded to free memory and reload when you switch to them. You can change the time, or turn this off, under <b>Memory</b>. <b>Low Power Mode</b> goes further: it freezes background tabs and turns off animations.</p>
+
+<h2>The address field</h2>
+<p>When you’re not typing, the field shows just the site’s name. Click it to see the full address.</p>
+<p>As you type, OyNIx completes the address inline from your history and bookmarks. <code>goo</code> becomes <code>google.com</code>, and suggestions are shown the way you’d write them, without <code>https://www.</code> or a trailing slash. Press <kbd>Enter</kbd> to accept, or <kbd>Delete</kbd> to drop the completion.</p>
+<p>Anything that isn’t an address is a search. Start with a <b>!bang</b> to search a particular site:</p>
+<table>
+  <tr><th>Type</th><th>Searches</th></tr>
+  <tr><td><code>!w</code></td><td>Wikipedia</td></tr>
+  <tr><td><code>!gh</code></td><td>GitHub</td></tr>
+  <tr><td><code>!yt</code></td><td>YouTube</td></tr>
+  <tr><td><code>!mdn</code></td><td>MDN Web Docs</td></tr>
+  <tr><td><code>!aw</code></td><td>ArchWiki</td></tr>
+</table>
+<p>The full list is under <b>Settings › Search</b>. Tracking parameters such as <code>utm_source</code> and <code>fbclid</code> are removed from addresses you type or paste.</p>
+
+<h2>History</h2>
+<p><kbd>Ctrl</kbd><kbd>H</kbd> opens the history page, grouped by day and searchable. Click an entry to open it, middle-click for a new tab, or use the × to remove an entry or every visit to that site. <b>Clear Browsing Data</b> removes history, cookies and the cache for the last hour, day or week, or for all time.</p>
+<p>Right-click (or press and hold) the Back or Forward button to jump several steps at once.</p>
+
+<h2>Reading</h2>
+<ul>
+  <li><b>Reader View</b> (<kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>R</kbd>): an icon appears in the address field on pages with an article. It shows the text and pictures in a clean column.</li>
+  <li><b>Reading List</b> (<kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>D</kbd>): save now, read later. Unread pages show on the Start Page and in the sidebar.</li>
+  <li><b>Focus Mode</b> (<kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd>): hides the toolbar and tabs. Point at the top edge to get them back.</li>
+</ul>
+
+<h2>Appearance</h2>
+<p><b>Settings › Appearance</b> sets the theme (light, dark or match the system) and the accent colour every other colour is made from.</p>
+<p><b>Website appearance</b> decides what pages see:</p>
+<ul>
+  <li><b>Match OyNIx</b>: dark pages when OyNIx is dark. Sites with their own dark theme use it; others are darkened automatically.</li>
+  <li><b>Always dark</b> or <b>Always light</b>: regardless of the OyNIx theme.</li>
+</ul>
+<p>If a darkened site looks wrong, click the site’s icon at the left of the address field and turn off <b>Dark mode</b> for that site.</p>
+<p><b>Open settings in</b> chooses between a tab (the default) and a separate window. See <a href="{{root}}docs/reference/#hyprland-and-tiling-window-managers">Hyprland and tiling window managers</a> if you use the window.</p>
+
+<h2>Downloads</h2>
+<p>Downloads go to your Downloads folder. <kbd>Ctrl</kbd><kbd>J</kbd> shows them, with pause, resume, open and show-in-folder. Turn on <b>Ask where to save each file</b> under <b>Settings › General</b> to pick a place every time.</p>
+
+<h2>Keyboard shortcuts</h2>
+<table>
+  <tr><th>Action</th><th>Keys</th></tr>
+  <tr><td>New tab, window, private window</td><td><kbd>Ctrl</kbd><kbd>T</kbd> · <kbd>Ctrl</kbd><kbd>N</kbd> · <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>N</kbd></td></tr>
+  <tr><td>Close tab, reopen closed tab</td><td><kbd>Ctrl</kbd><kbd>W</kbd> · <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>T</kbd></td></tr>
+  <tr><td>Address field</td><td><kbd>Ctrl</kbd><kbd>L</kbd> · <kbd>F6</kbd></td></tr>
+  <tr><td>All tabs</td><td><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>\</kbd></td></tr>
+  <tr><td>Switch tab</td><td><kbd>Ctrl</kbd><kbd>Tab</kbd> · <kbd>Ctrl</kbd><kbd>1</kbd>…<kbd>9</kbd></td></tr>
+  <tr><td>Sidebar, bookmarks</td><td><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>L</kbd> · <kbd>Ctrl</kbd><kbd>B</kbd></td></tr>
+  <tr><td>History page, history in sidebar</td><td><kbd>Ctrl</kbd><kbd>H</kbd> · <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>H</kbd></td></tr>
+  <tr><td>Reader View, Focus Mode</td><td><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>R</kbd> · <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd></td></tr>
+  <tr><td>Find, next, previous</td><td><kbd>Ctrl</kbd><kbd>F</kbd> · <kbd>Ctrl</kbd><kbd>G</kbd> · <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>G</kbd></td></tr>
+  <tr><td>Bookmark, add to Reading List</td><td><kbd>Ctrl</kbd><kbd>D</kbd> · <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>D</kbd></td></tr>
+  <tr><td>Zoom in, out, reset</td><td><kbd>Ctrl</kbd><kbd>=</kbd> · <kbd>Ctrl</kbd><kbd>-</kbd> · <kbd>Ctrl</kbd><kbd>0</kbd></td></tr>
+  <tr><td>Downloads, Settings</td><td><kbd>Ctrl</kbd><kbd>J</kbd> · <kbd>Ctrl</kbd><kbd>,</kbd></td></tr>
+  <tr><td>Developer Tools</td><td><kbd>F12</kbd> (turn on in Settings › Advanced)</td></tr>
+</table>

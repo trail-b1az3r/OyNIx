@@ -1,0 +1,47 @@
+<!--
+title: Privacy and blocking
+short: Privacy
+order: 2
+icon: shield
+lede: What OyNIx blocks, how it decides, and what it never does.
+description: How the OyNIx content blocker, filter lists, Privacy Report and other protections work.
+-->
+<h2>What OyNIx doesn’t do</h2>
+<p>OyNIx has no telemetry, no usage statistics, no crash reporter and no account. It talks to the network only for pages you open and for things you can switch off:</p>
+<ul>
+  <li>filter-list updates, downloaded from the list publishers every few days (every 4 by default);</li>
+  <li>search suggestions, sent to your search engine as you type (off in private windows, and switchable in <b>Settings › Search</b>);</li>
+  <li>Claude, only if you turn it on.</li>
+</ul>
+
+<h2>The content blocker</h2>
+<p>Every request a page makes is checked against your filter lists before it’s sent. Requests that match are never made, so the tracker never learns you were there. The blocker also hides page elements the lists describe, such as empty ad frames, so pages don’t keep holes where ads used to be.</p>
+<p>These lists are on by default:</p>
+<table>
+  <tr><th>List</th><th>Blocks</th></tr>
+  <tr><td>EasyList</td><td>Ads</td></tr>
+  <tr><td>EasyPrivacy</td><td>Tracking scripts, analytics and pixels</td></tr>
+  <tr><td>uBlock filters</td><td>Ads and trackers the big lists miss</td></tr>
+  <tr><td>Peter Lowe’s list</td><td>Known ad and tracking servers</td></tr>
+</table>
+<p>More are a switch away in <b>Settings › Privacy › Filter Lists</b>: AdGuard’s lists, Fanboy’s Annoyances, cookie-notice lists, social-media widgets and malware domains. You can add any list by URL, or a local file in Adblock Plus, uBlock or hosts format.</p>
+
+<h2>Per-site control</h2>
+<p>The shield in the toolbar shows how many requests this page lost, and to which companies. Its switch turns blocking off for that site, which fixes the occasional site that breaks when its trackers are missing. The choice is remembered, and listed under <b>Settings › Websites</b>.</p>
+
+<h2>The Privacy Report</h2>
+<p>The report (shield › <b>Privacy Report</b>, or the card on the Start Page) adds everything up: requests blocked, split into trackers and ads, and the tracker domains that appeared on the most different sites you visited. A tracker seen on many sites is one that could connect your visits into a profile. The counts live in your profile folder and never leave it. <b>Reset Counts</b> starts again from zero.</p>
+
+<h2>Other protections</h2>
+<table>
+  <tr><th>Setting</th><th>Default</th><th>What it does</th></tr>
+  <tr><td>Remove tracking parameters</td><td>On</td><td>Strips <code>utm_*</code>, <code>fbclid</code>, <code>gclid</code> and similar from addresses before loading them.</td></tr>
+  <tr><td>Block third-party cookies</td><td>On</td><td>Embedded content from other sites can’t set or read cookies.</td></tr>
+  <tr><td>Fingerprinting protection</td><td>On</td><td>Reports common values for hardware details and adds noise to canvas read-back, so your device is harder to single out.</td></tr>
+  <tr><td>Global Privacy Control</td><td>On</td><td>Tells sites you don’t want your data sold or shared. In some places, including California, they’re legally required to honour it.</td></tr>
+  <tr><td>Do Not Track</td><td>Off</td><td>An older signal most sites ignore. Off by default because it adds to your fingerprint.</td></tr>
+  <tr><td>Upgrade to HTTPS</td><td>On</td><td>Addresses you type load over HTTPS when the site supports it.</td></tr>
+</table>
+
+<h2>Private windows</h2>
+<p>A private window keeps its cookies, cache and history in memory and discards them when it closes. Extensions don’t run in it and Claude can’t see it. It doesn’t hide you from the sites you visit, your network or your employer; for that you need a VPN or Tor.</p>

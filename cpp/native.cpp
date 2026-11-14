@@ -119,6 +119,11 @@ static void install(QQuickWebEngineProfile *p) {
     }
 }
 
+void clear_cookies(QObject *obj) {
+    if (auto *p = qobject_cast<QQuickWebEngineProfile *>(obj))
+        if (QWebEngineCookieStore *store = p->cookieStore()) store->deleteAllCookies();
+}
+
 void attach_interceptor(QObject *obj) {
     if (auto *p = qobject_cast<QQuickWebEngineProfile *>(obj)) install(p);
 }

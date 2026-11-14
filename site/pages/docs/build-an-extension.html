@@ -1,0 +1,58 @@
+<!--
+title: Build an extension
+short: Build
+order: 4
+icon: code
+lede: An OyNIx extension is three files. This page is the whole specification.
+description: The OyNIx extension format: oynix.json, content.js and content.css, and how to publish to the Extension Gallery.
+-->
+<h2>The three files</h2>
+<p>An extension is a folder (or a zip of one, named <code>.zip</code> or <code>.oynix</code>) containing exactly these files. All three must exist, even if one is empty.</p>
+<table>
+  <tr><th>File</th><th>Contains</th></tr>
+  <tr><td><code>oynix.json</code></td><td>Name, version and where the extension runs</td></tr>
+  <tr><td><code>content.js</code></td><td>JavaScript run on matching pages</td></tr>
+  <tr><td><code>content.css</code></td><td>Styles added to matching pages</td></tr>
+</table>
+<p>The quickest start is <b>Settings › Extensions › New Extension</b>, which writes a working template into your extensions folder and installs it. Edit the files, then turn the extension off and on again to reload it.</p>
+
+<h2>oynix.json</h2>
+<pre data-copy><code>{
+  "name": "Reading Time",
+  "version": "1.0.0",
+  "description": "Shows how long an article takes to read.",
+  "matches": ["*://*/*"],
+  "exclude": ["*://mail.example.com/*"],
+  "run_at": "document_idle",
+  "world": "isolated"
+}</code></pre>
+<table>
+  <tr><th>Key</th><th>Meaning</th></tr>
+  <tr><td><code>name</code></td><td>Required. Shown in Settings and the install prompt.</td></tr>
+  <tr><td><code>version</code></td><td>Any dotted version. Installing a newer one replaces the old.</td></tr>
+  <tr><td><code>description</code></td><td>One sentence.</td></tr>
+  <tr><td><code>matches</code></td><td>Pages to run on, as <a href="https://developer.chrome.com/docs/extensions/develop/concepts/match-patterns">match patterns</a>. <code>"*://*/*"</code> means every site.</td></tr>
+  <tr><td><code>exclude</code></td><td>Pages to skip, in the same form.</td></tr>
+  <tr><td><code>run_at</code></td><td><code>document_start</code> (before the page’s own scripts), <code>document_end</code> (default; the page is parsed) or <code>document_idle</code> (after it has loaded).</td></tr>
+  <tr><td><code>world</code></td><td><code>isolated</code> (default): your script sees the page’s DOM but not its JavaScript variables, and the page can’t see yours. <code>main</code>: runs alongside the page’s scripts, for when you must call or replace the page’s own functions.</td></tr>
+</table>
+
+<h2>content.js and content.css</h2>
+<p>The stylesheet is added first, then the script runs inside its own function, so top-level <code>var</code>s don’t leak. Write plain JavaScript; there’s no build step and no special API. In the isolated world you can use everything a page can, including <code>fetch</code> (subject to the site’s CORS rules) and <code>navigator.clipboard</code> during a key press.</p>
+<p>Keep it small and predictable. Prefer reacting to events over polling, don’t scan the whole document on every mutation, and stay out of the way when the user is typing in a field.</p>
+
+<h2>Packaging</h2>
+<p>Zip the three files with no enclosing folder and give the file a <code>.oynix</code> extension:</p>
+<pre data-copy><code>cd my-extension && zip ../my-extension-1.0.0.oynix oynix.json content.js content.css</code></pre>
+
+<h2>Publishing to the Gallery</h2>
+<p>The Gallery is built from the <a href="{{repo}}/tree/main/gallery"><code>gallery/</code></a> folder of the OyNIx repository. To add yours, open a pull request with a folder containing your three files. Add a <code>gallery</code> section to <code>oynix.json</code> for the listing:</p>
+<pre data-copy><code>"gallery": {
+  "category": "Reading",
+  "author": "Your name",
+  "shape": "softBurst",
+  "summary": "A quiet clock for long articles.",
+  "about": "A paragraph or two: what it does, where it runs, and what it leaves alone."
+}</code></pre>
+<p>Gallery extensions are reviewed by reading them, so they must be readable: no minified or obfuscated code, no remote scripts, no network requests that send page content anywhere, and no analytics. The listing page shows your code in full.</p>
+<p><code>shape</code> picks the badge from the browser’s own set: <code>circle</code>, <code>cookie4</code>, <code>cookie6</code>, <code>cookie7</code>, <code>cookie9</code>, <code>cookie12</code>, <code>flower</code>, <code>clover4</code>, <code>clover8</code>, <code>sunny</code>, <code>burst</code>, <code>softBurst</code>, <code>pentagon</code> or <code>pill</code>.</p>

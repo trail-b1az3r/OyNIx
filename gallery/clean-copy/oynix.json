@@ -1,0 +1,16 @@
+{
+  "name": "Clean Copy",
+  "version": "1.0.0",
+  "description": "Ctrl+Shift+C copies the page address without tracking parameters, ready to share.",
+  "matches": ["*://*/*"],
+  "exclude": [],
+  "run_at": "document_end",
+  "world": "isolated",
+  "gallery": {
+    "category": "Privacy",
+    "author": "OyNIx",
+    "shape": "cookie6",
+    "summary": "Share the link, not the campaign.",
+    "about": "Addresses picked up from newsletters and social apps carry tags like utm_source, fbclid or gclid that tell the site where you came from, and tell it again for everyone you pass the link on to. Press Ctrl+Shift+C on any page to copy its address with those tags removed. A short confirmation shows exactly what was copied. Parameters a page needs to work, such as a search term or video ID, are kept."
+  }
+}

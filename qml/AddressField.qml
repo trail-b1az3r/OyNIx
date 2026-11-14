@@ -55,20 +55,43 @@ Rectangle {
         win.focusContent()
     }
 
-    function refresh() {
-        var t = input.text
+    // `typedPart` is what the user actually typed; the field may also hold
+    // an inline completion after it (selected).
+    function refresh(typedPart) {
+        var t = typedPart !== undefined ? typedPart : input.text
         typed = t
         if (!editing || t.trim() === "" || t === url) { items = []; popup.close(); return }
+        var full = input.text
         var local = JSON.parse(Core.suggestions(t))
         var list = [{ kind: "search", title: t, subtitle: qsTr("Search"), url: "" }]
-        var resolved = Core.resolveInput(t)
-        if (resolved.indexOf("://") > 0 && resolved.indexOf(t.replace(/\/$/, "")) >= 0 && !/\s/.test(t))
-            list = [{ kind: "go", title: resolved, subtitle: qsTr("Open"), url: resolved }]
+        var resolved = Core.resolveInput(full)
+        if (Core.isNavigation(full))
+            list = [{ kind: "go", title: Core.prettyUrl(resolved) || full, subtitle: qsTr("Open"), url: resolved },
+                    { kind: "search", title: t, subtitle: qsTr("Search"), url: "" }]
+        // Avoid listing the same page twice.
+        local = local.filter(function (x) { return !x.url || Core.prettyUrl(x.url) !== list[0].title })
         items = list.concat(local)
         selected = 0
         if (!popup.opened) popup.open()
         if (!win.privateMode) remote.fetch(t)
     }
+
+    property string lastTyped: ""
+    // Inline autocompletion: "goo" → "goo|gle.com" (completion selected).
+    function edited() {
+        var t = input.text
+        var grew = t.length > lastTyped.length
+        lastTyped = t
+        if (grew && input.cursorPosition === t.length && !win.privateMode) {
+            var c = Core.inlineComplete(t)
+            if (c && c.toLowerCase().indexOf(t.toLowerCase()) === 0 && c.length > t.length) {
+                input.text = t + c.slice(t.length)
+                input.select(t.length, input.text.length)
+            }
+        }
+        refresh(t)
+    }
+
 
     QtObject {
         id: remote
@@ -147,7 +170,7 @@ Rectangle {
                 clip: true
                 selectByMouse: true
                 opacity: field.editing ? 1 : 0
-                onTextEdited: field.refresh()
+                onTextEdited: field.edited()
                 onActiveFocusChanged: {
                     if (activeFocus) { field.resetText(); selectAll() }
                     else { popup.close(); field.resetText() }

@@ -1,0 +1,166 @@
+<!--
+title: OyNIx
+description: A fast, private desktop browser for Linux, written in Rust and drawn with Vulkan. Blocks trackers before they load, sends nothing home, runs Chrome and Firefox extensions.
+nav:
+addr: <b>oynix</b> · a browser that keeps to itself
+-->
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="eyebrow">OyNIx {{version}} for Linux</span>
+      <h1>A browser that keeps <em>to itself.</em></h1>
+      <p class="lede">OyNIx is a desktop web browser written in Rust and drawn with Vulkan. Trackers and ads are stopped before they load, nothing about you is sent anywhere, and your Chrome and Firefox extensions come with you.</p>
+      <div class="btn-row">
+        <a class="btn" href="#download">{{icon:download}}Download {{version}}</a>
+        <a class="btn tonal" href="{{root}}docs/">Read the docs</a>
+      </div>
+      <p class="hero-meta">Free and open source · Debian, Ubuntu, Mint and Arch · x86-64</p>
+    </div>
+    <div class="stage">
+      <span class="shape s-softBurst backdrop" aria-hidden="true"></span>
+      {{shot:start.webp|The OyNIx Start Page: favourites and frequently visited sites on rounded shapes, and a Privacy Report card counting blocked trackers.}}
+    </div>
+  </div>
+</section>
+
+<section class="wrap" style="padding-top:48px">
+  <div class="section-head">
+    <span class="eyebrow">A quick tour</span>
+    <h2>Everything is one click from the page.</h2>
+    <p class="lede">There’s a single toolbar, and every button on it opens something you’ll use. Point at a number to see what it does.</p>
+  </div>
+  <div class="tour" data-tour="tour-notes">
+    {{shot:article.webp|OyNIx showing a Wikipedia article, with the toolbar along the top.}}
+    <button class="pin shape s-cookie6" style="--x:2.5%;--y:3.6%" aria-label="1: Sidebar"><span>1</span></button>
+    <button class="pin shape s-cookie6" style="--x:24.5%;--y:3.6%" aria-label="2: Address field"><span>2</span></button>
+    <button class="pin shape s-cookie6" style="--x:55.4%;--y:3.6%" aria-label="3: Reader View"><span>3</span></button>
+    <button class="pin shape s-cookie6" style="--x:73%;--y:3.6%" aria-label="4: Privacy Report for this site"><span>4</span></button>
+    <button class="pin shape s-cookie6" style="--x:83.4%;--y:3.6%" aria-label="5: All tabs"><span>5</span></button>
+    <button class="pin shape s-cookie6" style="--x:44%;--y:52%" aria-label="6: The page"><span>6</span></button>
+  </div>
+  <ol class="notes" id="tour-notes">
+    <li><div><b>Sidebar</b><p>Bookmarks, Reading List, History and Claude, beside whatever you’re reading. Vertical tabs live here too, if you prefer them.</p></div></li>
+    <li><div><b>Address field</b><p>Shows the site, not a wall of parameters. Type <code>goo</code> and it completes to <code>google.com</code>, with the tracking tags already gone.</p></div></li>
+    <li><div><b>Reader View</b><p>Appears on pages with an article. It keeps the text and pictures and drops the rest. <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>R</kbd></p></div></li>
+    <li><div><b>This site’s report</b><p>How many trackers this page tried to load, which companies they belong to, and a switch to let the site through.</p></div></li>
+    <li><div><b>All tabs</b><p>A grid of live previews you can search by title or address. <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>\</kbd></p></div></li>
+    <li><div><b>The page itself</b><p>Rendered by Chromium’s engine, so sites behave as they do in Chrome. In dark mode it follows your theme, even when the site has no dark theme of its own.</p></div></li>
+  </ol>
+</section>
+
+<section class="wrap">
+  <div class="chapter tone-primary">
+    <div class="chapter-text">
+      <span class="eyebrow" style="color:inherit;opacity:.75">Privacy</span>
+      <h2>Blocked before the request is made.</h2>
+      <p>OyNIx checks every request against EasyList, EasyPrivacy, uBlock’s own filters and Peter Lowe’s list before it leaves your computer. Cookie banners, newsletter pop-ups and social widgets can go too, from lists you switch on.</p>
+      <p>The Privacy Report shows the companies that turned up on the most sites you visited. It’s worked out on your computer and stays there: OyNIx has no telemetry, no crash reporter and no account.</p>
+      <a class="btn text" href="{{root}}docs/privacy/">How blocking works {{icon:chevronRight}}</a>
+    </div>
+    {{shot:privacy.webp|The Privacy Report page: 236 requests blocked, split into trackers and ads, with doubleclick.net seen on five sites.}}
+  </div>
+
+  <div class="chapter tone-plain">
+    {{shot:article-dark.webp|A Wikipedia article shown dark in OyNIx.}}
+    <div class="chapter-text">
+      <span class="eyebrow">Appearance</span>
+      <h2>Dark mode that reaches the page.</h2>
+      <p>Most browsers turn dark around the page and leave the page alone. In OyNIx, a site with its own dark theme gets asked for it, and a site without one is darkened for you. If a site looks wrong that way, you can switch it off for that site only.</p>
+      <p>The interface follows Material 3: colours come from one accent you choose, controls change shape when you press them, and nothing is grey for the sake of it.</p>
+      <a class="btn text" href="{{root}}docs/browsing/#appearance">Appearance settings {{icon:chevronRight}}</a>
+    </div>
+  </div>
+
+  <div class="chapter tone-tertiary">
+    <div class="chapter-text">
+      <span class="eyebrow" style="color:inherit;opacity:.75">Extensions</span>
+      <h2>Bring yours. Read ours.</h2>
+      <p>Chrome and Firefox extensions install from a file, a folder or straight from addons.mozilla.org, where OyNIx adds its own <b>Add to OyNIx</b> button. Manifest V2 and V3 both work.</p>
+      <p>OyNIx extensions are smaller: a JavaScript file, a stylesheet and a few lines of JSON. The ones in the <a href="{{root}}extensions/">Extension Gallery</a> are short enough that each page shows you the whole program before you install it.</p>
+      <a class="btn text" href="{{root}}extensions/">Open the Gallery {{icon:chevronRight}}</a>
+    </div>
+    {{shot:gallery.webp|The Extension Gallery open in OyNIx, with the browser asking whether to add the Unstick extension.}}
+  </div>
+
+  <div class="chapter tone-secondary">
+    {{shot:claude.webp|The Claude panel in the OyNIx sidebar, next to a Wikipedia article.}}
+    <div class="chapter-text">
+      <span class="eyebrow" style="color:inherit;opacity:.75">Claude for OyNIx</span>
+      <h2>Ask Claude to do the clicking.</h2>
+      <p>Connect OyNIx to Claude Desktop or Claude Code, and Claude can open pages, read them, fill in forms and move between tabs. It uses real mouse and keyboard input, so sites respond as they would to you.</p>
+      <p>It asks before touching each site, can never see private windows or the sites you block, and shows a <b>Stop</b> button for as long as it’s working. It’s off until you turn it on.</p>
+      <a class="btn text" href="{{root}}docs/claude/">Set up Claude {{icon:chevronRight}}</a>
+    </div>
+  </div>
+
+  <div class="chapter tone-plain">
+    <div class="chapter-text">
+      <span class="eyebrow">Linux</span>
+      <h2>Made on Linux, for Linux.</h2>
+      <ul>
+        <li>Draws with Vulkan 1.2 or 1.3, and falls back to OpenGL ES on older graphics.</li>
+        <li>Runs on Wayland or X11. On Hyprland, settings can open in a floating window.</li>
+        <li>WebUSB for flashing boards and talking to hardware, with a device picker and per-site access.</li>
+        <li>Separate profiles that run as separate apps, each with its own cookies and extensions.</li>
+        <li>Packages for apt and pacman that carry their own Qt, so nothing on your system changes.</li>
+      </ul>
+      <a class="btn text" href="{{root}}docs/reference/">Command line and files {{icon:chevronRight}}</a>
+    </div>
+    {{shot:settings.webp|OyNIx Settings, Appearance page, with a navigation rail on the left.}}
+  </div>
+</section>
+
+<section class="wrap">
+  <div class="section-head">
+    <span class="eyebrow">The small things</span>
+    <h2>You’ll find these on the first day.</h2>
+  </div>
+  <div class="smalls">
+    <div><b>Tabs that sleep</b><p>Tabs you haven’t looked at in a while are unloaded and quietly reload when you return. A restored session loads only the tab you’re looking at.</p></div>
+    <div><b>!bangs</b><p>Type <code>!w otters</code> to search Wikipedia, <code>!gh</code> for GitHub, <code>!mdn</code> for the web docs. Twenty-five are built in.</p></div>
+    <div><b>Three tab layouts</b><p>A tab bar under the toolbar, tabs inside the toolbar, or a vertical list in the sidebar.</p></div>
+    <div><b>Focus Mode</b><p>Hides everything except the page. Move the pointer to the top edge to get the toolbar back. <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd></p></div>
+    <div><b>History that keeps up</b><p>Single-page apps that change the address without reloading are recorded too. Right-click Back to see where you’ve been in a tab.</p></div>
+    <div><b>Readable error pages</b><p>“Can’t find example.con” with a button to search for it, rather than a code to look up.</p></div>
+    <div><b>Reading List</b><p>Save a page to read later with <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>D</kbd>. Unread pages wait on the Start Page.</p></div>
+    <div><b>Per-site settings</b><p>Zoom, JavaScript, pop-ups, blocking and dark mode, remembered for each site.</p></div>
+    <div><b>User scripts and styles</b><p>Drop <code>.user.js</code> and <code>.user.css</code> files in a folder; Greasemonkey headers are understood.</p></div>
+    <div><b>Private windows</b><p>Nothing from them is written to disk, and extensions and Claude can’t see them.</p></div>
+    <div><b>Clean addresses</b><p>Addresses you type lose their <code>utm_</code> and <code>fbclid</code> tags on the way.</p></div>
+    <div><b>Import your bookmarks</b><p>From any browser’s HTML export, and back out again.</p></div>
+  </div>
+</section>
+
+<section class="wrap" id="download">
+  <div class="get">
+    <div class="section-head" style="margin-bottom:28px">
+      <span class="eyebrow">Download</span>
+      <h2>OyNIx {{version}}</h2>
+      <p class="lede">Packages for 64-bit Intel and AMD PCs. Each one includes its own copy of Qt, so it installs without touching your system’s libraries.</p>
+    </div>
+    <div class="seg" data-panels="install" role="tablist">
+      <button type="button" data-panel="get-deb" aria-selected="true">Debian, Ubuntu, Mint</button>
+      <button type="button" data-panel="get-arch" aria-selected="false">Arch, Manjaro</button>
+      <button type="button" data-panel="get-src" aria-selected="false">From source</button>
+    </div>
+    <div class="panel" id="get-deb">
+      <pre data-copy><code><span class="c"># download oynix_{{version}}_amd64.deb from the release page, then:</span>
+sudo apt install ./oynix_{{version}}_amd64.deb</code></pre>
+    </div>
+    <div class="panel" id="get-arch" hidden>
+      <pre data-copy><code><span class="c"># download oynix-{{version}}-1-x86_64.pkg.tar.zst from the release page, then:</span>
+sudo pacman -U oynix-{{version}}-1-x86_64.pkg.tar.zst</code></pre>
+    </div>
+    <div class="panel" id="get-src" hidden>
+      <pre data-copy><code>git clone {{repo}}.git && cd OyNIx
+./scripts/deps-ubuntu.sh      <span class="c"># system libraries, Rust and Qt 6.12</span>
+cargo build --release
+./scripts/install.sh          <span class="c"># into ~/.local, with a desktop entry</span></code></pre>
+    </div>
+    <div class="btn-row" style="margin-top:8px">
+      <a class="btn" href="{{repo}}/releases/latest">{{icon:download}}Release page</a>
+      <a class="btn text" href="{{root}}docs/">Getting started {{icon:chevronRight}}</a>
+    </div>
+    <p style="margin:22px 0 0;font-size:14px;color:var(--on-surface-variant)">Every release lists SHA-256 checksums. Check a download with <code>sha256sum -c SHA256SUMS</code>.</p>
+  </div>
+</section>

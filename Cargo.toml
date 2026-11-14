@@ -1,6 +1,6 @@
 [package]
 name = "oynix"
-version = "5.0.0"
+version = "5.1.0"
 edition = "2021"
 rust-version = "1.80"
 license = "MIT"
@@ -23,6 +23,7 @@ url = "2"
 ash = { version = "0.38", default-features = false, features = ["loaded", "debug"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 aho-corasick = "1"
+rusb = { version = "0.9", features = ["vendored"] }
 
 [build-dependencies]
 cxx-qt-build = "0.10"

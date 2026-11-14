@@ -1,11 +1,11 @@
 # Arch Linux package for OyNIx, built from source with makepkg.
 #   cd packaging/arch && makepkg -si
-# Downloads Qt 6.11 (with WebEngine) via aqtinstall and bundles it under
+# Downloads Qt 6.12 (with WebEngine) via aqtinstall and bundles it under
 # /usr/lib/oynix/qt, so the system Qt version does not matter.
 pkgname=oynix
-pkgver=5.0.0
+pkgver=5.1.0
 pkgrel=1
-pkgdesc="Fast, private web browser (Rust + QML, Qt 6.11) with Chrome/Firefox extension support"
+pkgdesc="Fast, private web browser (Rust + QML, Qt 6.12) with Chrome/Firefox extension support"
 arch=('x86_64')
 url="https://github.com/trail-b1az3r/OyNIx"
 license=('MIT')

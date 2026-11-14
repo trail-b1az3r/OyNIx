@@ -61,8 +61,8 @@ Popover {
             Layout.fillWidth: true
             Txt { text: qsTr("Dark Mode"); Layout.fillWidth: true }
             Toggle {
-                checked: sp.s.forceDark !== undefined ? sp.s.forceDark : Core.forceDarkWebsites
-                onToggled: sp.set("forceDark", checked === Core.forceDarkWebsites ? null : checked)
+                checked: sp.s.forceDark !== undefined ? sp.s.forceDark : sp.win.app.websitesDark
+                onToggled: sp.set("forceDark", checked === sp.win.app.websitesDark ? null : checked)
             }
         }
         RowLayout {

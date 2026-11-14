@@ -19,6 +19,8 @@ pub struct Settings {
     pub show_favorites_bar: bool,
     pub show_status_bar: bool,
     pub use_system_title_bar: bool,
+    /// "tab": Settings opens as a tab; "window": as a dialog window.
+    pub settings_open_in: String,
     /// "left" (macOS style) | "right"
     pub window_controls_side: String,
     pub show_full_url: bool,
@@ -67,6 +69,11 @@ pub struct Settings {
     pub force_dark_websites: bool,
     /// Tell websites to use their dark theme when OyNIx is dark.
     pub dark_websites: bool,
+    /// Website appearance: "auto" (dark when OyNIx is dark: the site's own
+    /// dark theme, otherwise automatic darkening), "dark" or "light".
+    pub website_appearance: String,
+    /// Let secure websites ask for access to USB devices (WebUSB).
+    pub webusb: bool,
 
     // ── Claude for OyNIx ──────────────────────────────────────────
     /// Allow Claude (MCP clients and the built-in panel) to control the browser.
@@ -107,6 +114,7 @@ impl Default for Settings {
             show_favorites_bar: false,
             show_status_bar: false,
             use_system_title_bar: false,
+            settings_open_in: "tab".into(),
             window_controls_side: "right".into(),
             show_full_url: false,
             default_zoom: 1.0,
@@ -138,6 +146,8 @@ impl Default for Settings {
             filter_update_days: 4,
             force_dark_websites: false,
             dark_websites: true,
+            website_appearance: "auto".into(),
+            webusb: true,
             agent_enabled: false,
             agent_mode: "ask".into(),
             agent_allowed_sites: Vec::new(),

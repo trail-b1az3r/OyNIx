@@ -8,3 +8,4 @@
 .qmlls.ini
 /.qt
 /dist/
+_site/

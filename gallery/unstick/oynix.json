@@ -1,0 +1,16 @@
+{
+  "name": "Unstick",
+  "version": "1.0.0",
+  "description": "Hides sticky headers and floating bars while you scroll down, and brings them back when you scroll up.",
+  "matches": ["*://*/*"],
+  "exclude": [],
+  "run_at": "document_end",
+  "world": "isolated",
+  "gallery": {
+    "category": "Reading",
+    "author": "OyNIx",
+    "shape": "cookie9",
+    "summary": "Get the top of the screen back.",
+    "about": "Plenty of sites pin a header, a cookie reminder or a “subscribe” strip to the edge of the window. On a laptop that can be a fifth of the screen. Unstick tucks those bars away as soon as you scroll down and returns them the moment you scroll up, so menus are still there when you reach for them. Dialogs, video players and anything taller than half the window are left alone."
+  }
+}

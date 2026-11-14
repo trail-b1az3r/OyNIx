@@ -236,7 +236,36 @@ ApplicationWindow {
 
     function copyText(t) { clipHelper.text = t; clipHelper.selectAll(); clipHelper.copy() }
 
-    function openPrivacyReport() { app.openSettings("privacy") }
+    // Open an internal page (history, settings…) or switch to it if open.
+    function openInternal(u) {
+        for (var i = 0; i < tabModel.count; i++) if ((tabModel.get(i).url || "").indexOf(u) === 0) { activate(i); return }
+        var cur = currentTab
+        if (cur && (cur.model.url === "oynix://start" || cur.model.url === "about:blank")) cur.load(u)
+        else openTab(u, { afterCurrent: true })
+    }
+
+    // Back/forward history list for the current tab.
+    function showNavHistory(anchor, back) {
+        if (!currentView) return
+        navMenu.back = back
+        var p = anchor.mapToItem(win.contentItem, 0, anchor.height + 6)
+        navMenu.x = p.x; navMenu.y = p.y
+        navMenu.open()
+    }
+
+    function openPrivacyReport() { openInternal("oynix://privacy") }
+
+    // A tab whose own address turned out to be a download keeps no page:
+    // point it back at the last page it showed, or close it (as Chrome
+    // does), so session restore doesn't download the file again.
+    function settleDownloadTab(u) {
+        for (var i = tabModel.count - 1; i >= 0; i--) {
+            if (tabModel.get(i).url !== u) continue
+            var t = tabItem(i), shown = t && t.view ? t.view.url.toString() : ""
+            if (shown && shown !== u && shown !== "about:blank") tabModel.setProperty(i, "url", shown)
+            else closeTab(i, true)
+        }
+    }
 
     function showTabMenu(i, item) {
         tabMenu.index = i
@@ -291,6 +320,22 @@ ApplicationWindow {
             if (newTabUrl() === "oynix://start") Qt.callLater(addressField.focusField)
         }
     }
+
+    function toastMessage(t) { toast.show(t) }
+
+    // "Install this extension?" (downloads of .xpi / .crx files)
+    property var installAsk: null
+
+    // WebUSB device chooser: {origin, devices:[{key,name,ids,paired}], cb}
+    property var usbAsk: null
+    property string usbPick: ""
+    function askUsbDevice(origin, devices, cb) {
+        if (usbAsk) usbAsk.cb("")
+        usbPick = devices.length ? devices[0].key : ""
+        usbAsk = { origin: origin, devices: devices, cb: cb }
+    }
+    function answerUsb(key) { var a = usbAsk; usbAsk = null; if (a) a.cb(key) }
+    function askInstallExtension(name, source, cb) { installAsk = { name: name, source: source, cb: cb } }
 
     // "Ask where to save each file"
     FileDialog {
@@ -358,7 +403,8 @@ ApplicationWindow {
     Shortcut { sequences: ["Ctrl+D"]; onActivated: if (win.currentTab) Core.toggleBookmark(win.currentTab.model.url, win.currentTab.model.title) }
     Shortcut { sequences: ["Ctrl+Shift+D"]; onActivated: if (win.currentTab) { Core.addToReadingList(win.currentTab.model.url, win.currentTab.model.title); toast.show(qsTr("Added to Reading List")) } }
     Shortcut { sequences: ["Ctrl+Shift+L", "Ctrl+Alt+S"]; onActivated: win.sidebarOpen = !win.sidebarOpen }
-    Shortcut { sequences: ["Ctrl+H"]; onActivated: { win.sidebarOpen = true; sidebar.panel = "history" } }
+    Shortcut { sequences: ["Ctrl+H"]; onActivated: win.openInternal("oynix://history") }
+    Shortcut { sequences: ["Ctrl+Shift+H"]; onActivated: { win.sidebarOpen = true; sidebar.panel = "history" } }
     Shortcut { sequences: ["Ctrl+Shift+B", "Ctrl+B"]; onActivated: { win.sidebarOpen = true; sidebar.panel = "bookmarks" } }
     Shortcut { sequences: ["Ctrl+Shift+\\", "Ctrl+Shift+A"]; onActivated: win.overviewOpen = !win.overviewOpen }
     Shortcut { sequences: ["Ctrl+Shift+F"]; onActivated: { win.focusMode = !win.focusMode; win.peek = false } }
@@ -431,14 +477,20 @@ ApplicationWindow {
                     onClicked: win.sidebarOpen = !win.sidebarOpen
                 }
                 IconButton {
-                    glyph: "back"; tip: qsTr("Back")
+                    id: backBtn
+                    glyph: "back"; tip: qsTr("Back — right-click for history")
                     enabled: win.currentView !== null && win.currentView.canGoBack
                     onClicked: win.currentView.goBack()
+                    TapHandler { acceptedButtons: Qt.RightButton; onTapped: win.showNavHistory(backBtn, true) }
+                    onPressAndHold: win.showNavHistory(backBtn, true)
                 }
                 IconButton {
-                    glyph: "forward"; tip: qsTr("Forward")
+                    id: fwdBtn
+                    glyph: "forward"; tip: qsTr("Forward — right-click for history")
                     enabled: win.currentView !== null && win.currentView.canGoForward
                     onClicked: win.currentView.goForward()
+                    TapHandler { acceptedButtons: Qt.RightButton; onTapped: win.showNavHistory(fwdBtn, false) }
+                    onPressAndHold: win.showNavHistory(fwdBtn, false)
                 }
 
                 Item { Layout.fillWidth: !win.compactTabs; Layout.preferredWidth: win.compactTabs ? 4 : -1 }
@@ -847,6 +899,120 @@ ApplicationWindow {
                     }
                 }
 
+                // ── WebUSB device chooser ──
+                Rectangle {
+                    z: 50
+                    anchors.fill: parent
+                    visible: win.usbAsk !== null
+                    onVisibleChanged: if (visible) forceActiveFocus()
+                    color: Theme.alpha("#000000", 0.32)
+                    MouseArea { anchors.fill: parent }
+                    Keys.onEscapePressed: win.answerUsb("")
+                    Keys.onReturnPressed: if (win.usbPick) win.answerUsb(win.usbPick)
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: Math.min(460, parent.width - 48)
+                        height: usbCol.implicitHeight + 48
+                        radius: Theme.shapeXL
+                        color: Theme.surfaceContainerHigh
+                        ColumnLayout {
+                            id: usbCol
+                            anchors.fill: parent
+                            anchors.margins: 24
+                            spacing: 14
+                            MShape { Layout.alignment: Qt.AlignHCenter; shape: "cookie9"; size: 56; color: Theme.tertiaryContainer
+                                Icon { anchors.centerIn: parent; name: "usb"; size: 26; color: Theme.tertiaryContainerFg } }
+                            Txt {
+                                Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; elide: Text.ElideNone
+                                font.pixelSize: 20; font.family: Theme.displayFont
+                                text: win.usbAsk ? qsTr("%1 wants to connect to a USB device").arg(Core.hostOf(win.usbAsk.origin)) : ""
+                            }
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: Math.min(240, Math.max(64, usbList.contentHeight + 8))
+                                radius: Theme.shapeL
+                                color: Theme.surfaceContainerLow
+                                ListView {
+                                    id: usbList
+                                    anchors.fill: parent; anchors.margins: 4
+                                    clip: true
+                                    model: win.usbAsk ? win.usbAsk.devices : []
+                                    delegate: Rectangle {
+                                        required property var modelData
+                                        width: usbList.width; height: 52
+                                        radius: Theme.shapeM
+                                        color: win.usbPick === modelData.key ? Theme.secondaryContainer : (devHover.hovered ? Theme.alpha(Theme.text, 0.06) : "transparent")
+                                        HoverHandler { id: devHover }
+                                        TapHandler { onTapped: win.usbPick = modelData.key; onDoubleTapped: win.answerUsb(modelData.key) }
+                                        ColumnLayout {
+                                            anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 14
+                                            spacing: 0
+                                            Item { Layout.fillHeight: true }
+                                            Txt { Layout.fillWidth: true; text: modelData.name; font.weight: Font.Medium }
+                                            Txt { Layout.fillWidth: true; text: modelData.ids + (modelData.paired ? " · " + qsTr("allowed before") : ""); color: Theme.textDim; font.pixelSize: 12 }
+                                            Item { Layout.fillHeight: true }
+                                        }
+                                    }
+                                }
+                                Txt {
+                                    anchors.centerIn: parent
+                                    visible: usbList.count === 0
+                                    text: qsTr("No compatible devices found")
+                                    color: Theme.textDim
+                                }
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Item { Layout.fillWidth: true }
+                                PushButton { textOnly: true; text: qsTr("Cancel"); onClicked: win.answerUsb("") }
+                                PushButton { primary: true; text: qsTr("Connect"); enabled: win.usbPick !== ""; onClicked: win.answerUsb(win.usbPick) }
+                            }
+                        }
+                    }
+                }
+
+                // ── Install extension prompt ──
+                Rectangle {
+                    z: 50
+                    anchors.fill: parent
+                    visible: win.installAsk !== null
+                    onVisibleChanged: if (visible) forceActiveFocus()
+                    color: Theme.alpha("#000000", 0.32)
+                    MouseArea { anchors.fill: parent }
+                    Keys.onEscapePressed: { var a = win.installAsk; win.installAsk = null; a.cb(false) }
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: Math.min(420, parent.width - 48)
+                        height: instCol.implicitHeight + 48
+                        radius: Theme.shapeXL
+                        color: Theme.surfaceContainerHigh
+                        ColumnLayout {
+                            id: instCol
+                            anchors.fill: parent
+                            anchors.margins: 24
+                            spacing: 14
+                            MShape { Layout.alignment: Qt.AlignHCenter; shape: "flower"; size: 56; color: Theme.secondaryContainer
+                                Icon { anchors.centerIn: parent; name: "puzzle"; size: 26; color: Theme.secondaryContainerFg } }
+                            Txt {
+                                Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; elide: Text.ElideNone
+                                font.pixelSize: 22; font.family: Theme.displayFont
+                                text: win.installAsk ? qsTr("Add “%1”?").arg(win.installAsk.name) : ""
+                            }
+                            Txt {
+                                Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; elide: Text.ElideNone
+                                color: Theme.surfaceVariantFg
+                                text: win.installAsk ? qsTr("This extension comes from %1. Extensions can read and change data on websites you visit — only install ones you trust.").arg(win.installAsk.source) : ""
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Item { Layout.fillWidth: true }
+                                PushButton { textOnly: true; text: qsTr("Cancel"); onClicked: { var a = win.installAsk; win.installAsk = null; a.cb(false) } }
+                                PushButton { primary: true; text: qsTr("Add Extension"); onClicked: { var a = win.installAsk; win.installAsk = null; a.cb(true) } }
+                            }
+                        }
+                    }
+                }
+
                 // Toast
                 Rectangle {
                     id: toast
@@ -969,6 +1135,30 @@ ApplicationWindow {
     }
 
     Popover {
+        id: navMenu
+        parent: win.contentItem
+        property bool back: true
+        width: 320
+        padding: 6
+        contentItem: ColumnLayout {
+            spacing: 1
+            Repeater {
+                model: navMenu.opened && win.currentView ? (navMenu.back ? win.currentView.history.backItems : win.currentView.history.forwardItems) : null
+                delegate: MenuRow {
+                    required property url url
+                    required property string title
+                    required property int offset
+                    glyph: "clock"
+                    text: title || Core.prettyUrl(url.toString())
+                    onClicked: { navMenu.close(); win.currentView.goBackOrForward(offset) }
+                }
+            }
+            Rectangle { Layout.fillWidth: true; height: 1; color: Theme.separator; Layout.topMargin: 4; Layout.bottomMargin: 4 }
+            MenuRow { glyph: "list"; text: qsTr("Show Full History"); shortcut: "Ctrl+H"; onClicked: { navMenu.close(); win.openInternal("oynix://history") } }
+        }
+    }
+
+    Popover {
         id: shareMenu
         parent: win.contentItem
         width: 230
@@ -1015,7 +1205,7 @@ ApplicationWindow {
             Rectangle { Layout.fillWidth: true; height: 1; color: Theme.separator; Layout.topMargin: 4; Layout.bottomMargin: 4 }
             MenuRow { text: qsTr("Bookmarks"); glyph: "bookmark"; shortcut: "Ctrl+B"; onClicked: { mainMenu.close(); win.sidebarOpen = true; sidebar.panel = "bookmarks" } }
             MenuRow { text: qsTr("Reading List"); glyph: "glasses"; onClicked: { mainMenu.close(); win.sidebarOpen = true; sidebar.panel = "reading" } }
-            MenuRow { text: qsTr("History"); glyph: "clock"; shortcut: "Ctrl+H"; onClicked: { mainMenu.close(); win.openTab("oynix://history", {}) } }
+            MenuRow { text: qsTr("History"); glyph: "clock"; shortcut: "Ctrl+H"; onClicked: { mainMenu.close(); win.openInternal("oynix://history") } }
             MenuRow { text: qsTr("Downloads"); glyph: "download"; shortcut: "Ctrl+J"; onClicked: { mainMenu.close(); downloadsPopover.open() } }
             MenuRow { text: qsTr("Privacy Report"); glyph: "shieldCheck"; onClicked: { mainMenu.close(); win.openPrivacyReport() } }
             MenuRow { text: qsTr("Extensions"); glyph: "puzzle"; onClicked: { mainMenu.close(); win.app.openSettings("extensions") } }
