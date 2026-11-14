@@ -421,3 +421,19 @@ pub const WEBUSB_RELAY: &str = r#"
   channel();
 })();
 "#;
+
+/// The OyNIx website and Extension Gallery: tell the page it is open in
+/// OyNIx (and which version) so it can offer one-click installs.
+pub const GALLERY_MARK: &str = r#"// ==UserScript==
+// @name oynix-gallery
+// @match https://trail-b1az3r.github.io/OyNIx/*
+// @run-at document-start
+// ==/UserScript==
+(function () {
+  function mark() { document.documentElement.setAttribute('data-oynix', '__OYNIX_VERSION__'); }
+  if (document.documentElement) return mark();
+  // At document start the <html> element may not exist yet.
+  new MutationObserver(function (_, o) { if (document.documentElement) { o.disconnect(); mark(); } })
+    .observe(document, { childList: true });
+})();
+"#;

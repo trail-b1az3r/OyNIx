@@ -722,6 +722,13 @@ Rectangle {
             Section {
                 title: qsTr("Install")
                 Row_ {
+                    label: qsTr("Extension Gallery")
+                    hint: qsTr("Small, reviewed OyNIx extensions, installed with one click. Firefox add-ons can also be installed straight from addons.mozilla.org.")
+                    PushButton { primary: true; text: qsTr("Browse"); onClicked: sw.app.openInBrowser(sw.app.siteUrl + "extensions/") }
+                    PushButton { text: qsTr("Firefox Add-ons"); onClicked: sw.app.openInBrowser("https://addons.mozilla.org/firefox/extensions/") }
+                }
+                Divider {}
+                Row_ {
                     label: qsTr("Chrome & Firefox extensions")
                     hint: qsTr(".crx, .xpi or .zip files, or an unpacked folder. Manifest V2 and V3. Firefox extensions are adapted to Chromium automatically.")
                     PushButton { text: qsTr("From File…"); onClicked: extFileDialog.open() }
@@ -929,6 +936,13 @@ Rectangle {
                     wrapMode: Text.WordWrap
                     color: Theme.textDim
                     text: qsTr("A fast, private browser written in Rust and QML. Zero telemetry, built-in tracker and ad blocking.")
+                }
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    spacing: 8
+                    PushButton { textOnly: true; text: qsTr("Website"); onClicked: sw.app.openInBrowser(sw.app.siteUrl) }
+                    PushButton { textOnly: true; text: qsTr("Documentation"); onClicked: sw.app.openInBrowser(sw.app.siteUrl + "docs/") }
+                    PushButton { textOnly: true; text: qsTr("Release Notes"); onClicked: sw.app.openInBrowser("https://github.com/trail-b1az3r/OyNIx/releases") }
                 }
             }
             Section {

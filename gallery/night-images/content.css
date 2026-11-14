@@ -1,0 +1,9 @@
+@media (prefers-color-scheme: dark) {
+  img:not([src$=".svg"]), picture, video:not(:fullscreen), [style*="background-image"] {
+    filter: brightness(.82) contrast(1.04);
+    transition: filter .25s ease;
+  }
+  img:hover, picture:hover, video:hover, [style*="background-image"]:hover {
+    filter: none;
+  }
+}

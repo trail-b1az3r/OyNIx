@@ -1,0 +1,41 @@
+name: Website
+
+# Builds the website, documentation and Extension Gallery (site/ and
+# gallery/) and publishes them with GitHub Pages.
+# One-time setup: Settings › Pages › Build and deployment › Source: GitHub Actions.
+
+on:
+  push:
+    branches: ['main']
+    paths: ['site/**', 'gallery/**', 'scripts/build-site.py', 'qml/Icon.qml', 'qml/MShape.qml', 'assets/icon.svg', 'Cargo.toml', '.github/workflows/pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build site
+        run: python3 scripts/build-site.py --out _site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

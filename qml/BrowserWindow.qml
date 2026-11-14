@@ -253,7 +253,19 @@ ApplicationWindow {
         navMenu.open()
     }
 
-    function openPrivacyReport() { app.openSettings("privacy") }
+    function openPrivacyReport() { openInternal("oynix://privacy") }
+
+    // A tab whose own address turned out to be a download keeps no page:
+    // point it back at the last page it showed, or close it (as Chrome
+    // does), so session restore doesn't download the file again.
+    function settleDownloadTab(u) {
+        for (var i = tabModel.count - 1; i >= 0; i--) {
+            if (tabModel.get(i).url !== u) continue
+            var t = tabItem(i), shown = t && t.view ? t.view.url.toString() : ""
+            if (shown && shown !== u && shown !== "about:blank") tabModel.setProperty(i, "url", shown)
+            else closeTab(i, true)
+        }
+    }
 
     function showTabMenu(i, item) {
         tabMenu.index = i

@@ -1,0 +1,63 @@
+<!--
+title: Reference
+short: Reference
+order: 6
+icon: sliders
+lede: Command-line options, where OyNIx keeps your data, WebUSB, graphics and building from source.
+description: OyNIx command-line options, files and folders, WebUSB setup, Hyprland window rules, graphics backends and build instructions.
+-->
+<h2>Command line</h2>
+<table>
+  <tr><th>Option</th><th>Does</th></tr>
+  <tr><td><code>oynix [URL]</code></td><td>Open a page</td></tr>
+  <tr><td><code>--private</code></td><td>Open a private window</td></tr>
+  <tr><td><code>--profile NAME</code></td><td>Use or create a separate profile</td></tr>
+  <tr><td><code>--gpu vulkan|gles|opengl|software</code></td><td>Choose how the interface is drawn (default: the best available)</td></tr>
+  <tr><td><code>--wayland</code>, <code>--x11</code></td><td>Force a windowing system</td></tr>
+  <tr><td><code>--install-extension PATH</code></td><td>Install an extension and exit (repeatable)</td></tr>
+  <tr><td><code>--list-extensions</code></td><td>List installed extensions</td></tr>
+  <tr><td><code>--list-profiles</code></td><td>List profiles</td></tr>
+  <tr><td><code>--mcp</code></td><td>Run as an MCP server for Claude</td></tr>
+  <tr><td><code>--gpu-info</code></td><td>Show the Vulkan device OyNIx would use</td></tr>
+</table>
+<p>Other options starting with <code>--</code> are passed to Chromium, which is useful for its debugging switches.</p>
+
+<h2>Files</h2>
+<table>
+  <tr><th>Path</th><th>Contains</th></tr>
+  <tr><td><code>~/.config/oynix/PROFILE/settings.json</code></td><td>Settings and per-site choices</td></tr>
+  <tr><td><code>~/.config/oynix/PROFILE/filters/</code></td><td>Your own filter lists (<code>*.txt</code>)</td></tr>
+  <tr><td><code>~/.config/oynix/PROFILE/userscripts/</code></td><td>User scripts and styles (<code>*.user.js</code>, <code>*.user.css</code>)</td></tr>
+  <tr><td><code>~/.local/share/oynix/PROFILE/</code></td><td>History, bookmarks, Reading List, session, cookies, privacy counts, USB permissions</td></tr>
+  <tr><td><code>~/.local/share/oynix/PROFILE/extensions/</code></td><td>Installed extensions and their storage</td></tr>
+  <tr><td><code>~/.cache/oynix/PROFILE/</code></td><td>Web cache; safe to delete</td></tr>
+</table>
+<p>The default profile is called <code>default</code>. Back up <code>~/.config/oynix</code> and <code>~/.local/share/oynix</code> to keep everything.</p>
+
+<h2>Hyprland and tiling window managers</h2>
+<p>With <b>Open settings in › A separate window</b>, the settings window is a dialog of the browser window, so Hyprland floats it. Its title is always <code>OyNIx Settings</code>, so you can write rules for it:</p>
+<pre data-copy><code><span class="c"># ~/.config/hypr/hyprland.conf: tile it instead</span>
+windowrulev2 = tile, title:^(OyNIx Settings)$
+
+<span class="c"># or keep it floating at a fixed size</span>
+windowrulev2 = float, title:^(OyNIx Settings)$
+windowrulev2 = size 980 700, title:^(OyNIx Settings)$</code></pre>
+<p>Sway and i3 users can match the same title with <code>for_window [title="^OyNIx Settings$"]</code>.</p>
+
+<h2>WebUSB</h2>
+<p>Sites served over HTTPS can ask to use a USB device, which is how web-based board flashers, hardware-wallet apps and microcontroller IDEs work. A site has to ask from a click, you choose the device in a picker, and the permission is kept for that site until you remove it in <b>Settings › Websites › USB Devices</b>. Keyboards, mice, storage, audio and video devices can’t be claimed this way.</p>
+<p>Linux only lets your user open some USB devices. If a site says access was denied, add a udev rule for the device. Find its IDs with <code>lsusb</code> (for example <code>2341:8036</code>):</p>
+<pre data-copy><code>echo 'SUBSYSTEM=="usb", ATTR{idVendor}=="2341", ATTR{idProduct}=="8036", TAG+="uaccess"' | \
+  sudo tee /etc/udev/rules.d/70-oynix-webusb.rules
+sudo udevadm control --reload && sudo udevadm trigger</code></pre>
+
+<h2>Graphics</h2>
+<p>OyNIx draws its interface with Vulkan 1.3 or 1.2 when the graphics driver supports it, and with OpenGL ES otherwise. <code>oynix --gpu-info</code> shows what it found; <b>Settings › About</b> shows what it’s using. If you see flickering or a blank window, try <code>oynix --gpu gles</code>, and please <a href="{{repo}}/issues">report it</a> with the output of <code>--gpu-info</code>.</p>
+
+<h2>Building from source</h2>
+<p>You need Rust (stable) and Qt 6.10 or newer with Qt WebEngine. Most distributions don’t ship that yet, so a script fetches Qt 6.12 into the source folder:</p>
+<pre data-copy><code>git clone {{repo}}.git && cd OyNIx
+./scripts/deps-ubuntu.sh     <span class="c"># libraries, rustup and Qt 6.12 in ./.qt</span>
+cargo build --release
+./scripts/install.sh         <span class="c"># ~/.local/bin/oynix and a desktop entry</span></code></pre>
+<p>To use a Qt you already have, point <code>QMAKE</code> at it: <code>QMAKE=/usr/bin/qmake6 cargo build --release</code>. <code>scripts/build-deb.sh</code> and <code>scripts/build-pkg.sh</code> make the release packages.</p>

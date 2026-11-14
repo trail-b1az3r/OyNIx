@@ -129,7 +129,17 @@ QtObject {
 
     // WebUSB: device chooser and connect/disconnect detection.
     property UsbBridge usb: UsbBridge { WebChannel.id: "oynixUsb" }
+    readonly property string siteUrl: "https://trail-b1az3r.github.io/OyNIx/"
+    // Open a web address in the frontmost browser window (settings may be
+    // in their own window, which has no tabs).
+    function openInBrowser(u) {
+        var w = activeWindow()
+        if (w && w.openTab) w.openTab(u, {})
+        else if (windows.length) windows[0].openTab(u, {})
+    }
     property int usbGrants: 0
+    // host|error type pairs the user chose to visit despite a certificate error (this session only)
+    property var certAllowed: ({})
     function refreshUsbGrants() { usbGrants = JSON.parse(usb.permissions()).length }
     property Connections usbEvents: Connections {
         target: app.usb
@@ -240,6 +250,7 @@ QtObject {
     function handleDownload(download) {
         if (download.state !== WebEngineDownloadRequest.DownloadRequested) return
         download.downloadDirectory = Core.downloadDir
+        for (var wi = 0; wi < windows.length; wi++) windows[wi].settleDownloadTab(download.url.toString())
         if (isExtensionPackage(download)) { offerExtensionInstall(download); return }
         var ask = JSON.parse(Core.settingsJson).askWhereToSave
         var w = null
@@ -262,7 +273,7 @@ QtObject {
     // ── Extension packages (.xpi / .crx), e.g. from addons.mozilla.org ──
     function isExtensionPackage(d) {
         var n = String(d.downloadFileName || "").toLowerCase(), m = String(d.mimeType || "").toLowerCase()
-        return m === "application/x-xpinstall" || m === "application/x-chrome-extension" || /\.(xpi|crx)$/.test(n)
+        return m === "application/x-xpinstall" || m === "application/x-chrome-extension" || /\.(xpi|crx|oynix)$/.test(n)
     }
 
     function activeWindow() {
@@ -273,7 +284,7 @@ QtObject {
     function offerExtensionInstall(download) {
         var w = activeWindow()
         var source = Core.hostOf(download.url.toString())
-        var name = String(download.downloadFileName).replace(/\.(xpi|crx)$/i, "").replace(/[-_]\d[\d.]*$/, "").replace(/[_-]+/g, " ")
+        var name = String(download.downloadFileName).replace(/\.(xpi|crx|oynix)$/i, "").replace(/[-_]\d[\d.]*$/, "").replace(/[_-]+/g, " ")
         var go = function (ok) {
             if (!ok) { download.cancel(); return }
             download.downloadDirectory = Core.configPath("cache") + "/extension-downloads"

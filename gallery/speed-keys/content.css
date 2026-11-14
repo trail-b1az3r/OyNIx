@@ -1,0 +1,8 @@
+.oynix-speed-keys {
+  position: fixed; z-index: 2147483647; pointer-events: none;
+  padding: 6px 14px; border-radius: 16px;
+  font: 600 18px/1 system-ui, sans-serif; font-variant-numeric: tabular-nums;
+  color: #fff; background: rgba(18, 19, 25, .78);
+  opacity: 0; transform: scale(.9); transition: opacity .15s, transform .15s;
+}
+.oynix-speed-keys.shown { opacity: 1; transform: none; }

@@ -1,0 +1,18 @@
+{
+  "name": "Speed Keys",
+  "version": "1.0.0",
+  "description": "Speed up or slow down any video from the keyboard.",
+  "matches": [
+    "*://*/*"
+  ],
+  "exclude": [],
+  "run_at": "document_end",
+  "world": "isolated",
+  "gallery": {
+    "category": "Video",
+    "author": "OyNIx",
+    "shape": "flower",
+    "summary": "Faster lectures, slower tutorials.",
+    "about": "Press ] to speed up the video you're watching by a quarter, [ to slow it down, and \\ to go back to normal speed. A small label shows the new speed for a second. It works on any site that uses the standard video element, which is nearly all of them, and stays out of the way while you're typing in a text field."
+  }
+}

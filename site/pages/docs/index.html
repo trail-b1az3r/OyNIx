@@ -1,0 +1,31 @@
+<!--
+title: Getting started
+short: Start
+order: 0
+icon: home
+lede: Install OyNIx, bring your bookmarks over, and make it the browser your other apps open.
+description: Install OyNIx on Debian, Ubuntu, Mint or Arch, import bookmarks and set it as your default browser.
+-->
+<h2>Install</h2>
+<p>Download the package for your distribution from the <a href="{{repo}}/releases/latest">latest release</a> and install it with your package manager. Both packages put OyNIx in <code>/usr/lib/oynix</code> with its own copy of Qt, so they don’t depend on, or change, the Qt on your system.</p>
+<pre data-copy><code><span class="c"># Debian, Ubuntu, Linux Mint</span>
+sudo apt install ./oynix_{{version}}_amd64.deb
+
+<span class="c"># Arch, Manjaro, EndeavourOS</span>
+sudo pacman -U oynix-{{version}}-1-x86_64.pkg.tar.zst</code></pre>
+<p>Each release also has a <code>SHA256SUMS</code> file. Put it next to the download and run <code>sha256sum -c SHA256SUMS --ignore-missing</code> to check the file arrived intact.</p>
+<p>To build it yourself instead, see <a href="{{root}}docs/reference/#building-from-source">Building from source</a>.</p>
+
+<h2>First run</h2>
+<p>OyNIx opens on the Start Page with a few favourites to get you going; hover a tile and press the small × to remove it. Content blocking is already on. The filter lists download in the background during the first minute, and the Privacy Report on the Start Page starts counting as soon as they arrive.</p>
+<p>Nothing else needs setting up. If you want to look around, Settings is <kbd>Ctrl</kbd><kbd>,</kbd>, and it opens in a tab.</p>
+
+<h2>Bring your bookmarks</h2>
+<p>Export bookmarks from your old browser as an HTML file (every major browser can), then choose <b>Settings › General › Import Bookmarks</b>. <b>Export Bookmarks</b> writes the same format back out.</p>
+
+<h2>Make OyNIx your default browser</h2>
+<p><b>Settings › General › Default Browser</b> registers OyNIx with your desktop, so links from mail, chat and terminal apps open in it. Under the hood this is <code>xdg-settings set default-web-browser oynix.desktop</code>, which you can also run yourself.</p>
+
+<h2>Profiles</h2>
+<p>A profile is a separate browser: its own history, cookies, extensions and settings. Start one with <code>oynix --profile work</code>; it’s created the first time. Each profile runs as its own app, so it gets its own window group and taskbar entry. <b>Settings › Profiles</b> lists them and opens any of them.</p>
+<div class="note">{{shape:cookie9:mask}}<p>A <b>private window</b> (<kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>N</kbd>) is different: it forgets everything when it closes. Use a profile when you want to keep two lives apart, and a private window when you want to keep nothing.</p></div>

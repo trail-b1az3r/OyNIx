@@ -1048,6 +1048,7 @@ impl qobject::Core {
             let relay = format!("{}\n{}", crate::bridge::native::ffi::webchannel_js(), scripts::WEBUSB_RELAY);
             v.push(json!({ "name": "oynix-webusb-relay", "source": relay, "main": false, "start": true, "allFrames": false }));
         }
+        v.push(json!({ "name": "oynix-gallery", "source": scripts::GALLERY_MARK.replace("__OYNIX_VERSION__", crate::VERSION), "main": false, "greasemonkey": true }));
         v.push(json!({ "name": "oynix-amo-install", "source": scripts::AMO_INSTALL, "main": false, "greasemonkey": true }));
         for e in self.extensions.iter().filter(|e| e.enabled && e.kind == "oynix") {
             if let Some(src) = extensions::oynix_script(e) {

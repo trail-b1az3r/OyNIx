@@ -12,6 +12,8 @@ The interface follows **Material 3 Expressive**: dynamic colour generated from y
 |---|---|
 | ![Permission prompt](docs/screenshot-claude-permission.png) | ![Tab preview](docs/screenshot-tab-preview.png) |
 
+**Website, docs and Extension Gallery:** <https://trail-b1az3r.github.io/OyNIx/>
+
 ## Features
 
 | Area | What you get |
@@ -132,6 +134,10 @@ oynix --list-extensions
 | **Chrome** | `.crx` (v2/v3), `.zip`, folder; MV2 and MV3 | Loads it through Qt WebEngine's extension manager. |
 | **Firefox** | `.xpi`, `.zip`, folder; MV2 and MV3 | Rewrites the manifest for Chromium: removes Gecko-only keys, moves MV3 host permissions, turns `background.scripts` into a service worker, maps `menus` to `contextMenus`. `browser.*` works with promises. |
 | **OyNIx** | folder or `.zip` with `oynix.json`, `content.js`, `content.css` (all required) | Injects the CSS and JS on pages matching `matches`, at `run_at`, in an isolated (default) or the main world. **New Extension** in Settings creates a ready-to-edit template. |
+
+### From the Extension Gallery
+
+The [Extension Gallery](https://trail-b1az3r.github.io/OyNIx/extensions/) lists small OyNIx extensions (Unstick, Straight Links, Reading Time, Speed Keys, Clean Copy, Night Images). Each page shows the extension's full source; in OyNIx the button reads **Add to OyNIx** and installs after asking. Sources live in [`gallery/`](gallery/).
 
 ### From addons.mozilla.org
 
@@ -259,6 +265,10 @@ sudo udevadm control --reload && sudo udevadm trigger
 ```
 
 OyNIx ships its own libusb, so no extra package is needed. In containers without `/dev/bus/usb` WebUSB simply finds no devices.
+
+## Website
+
+`site/` (pages and assets) and `gallery/` (extensions) build into a static site with `python3 scripts/build-site.py` (standard library only; output in `_site/`). The *Website* workflow publishes it to GitHub Pages on pushes to `main`; enable it once under **Settings › Pages › Source: GitHub Actions**.
 
 ## Files
 

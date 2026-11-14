@@ -1,0 +1,38 @@
+<!--
+title: Extensions
+short: Extensions
+order: 3
+icon: puzzle
+lede: Install from the Gallery, from addons.mozilla.org, or from a file. Here’s what works and what doesn’t.
+description: Install OyNIx, Firefox and Chrome extensions, and what extension APIs OyNIx supports.
+-->
+<h2>From the Extension Gallery</h2>
+<p>Open the <a href="{{root}}extensions/">Extension Gallery</a> in OyNIx and click <b>Add to OyNIx</b>. The browser asks before installing. In other browsers the button downloads the package instead; install it with <code>oynix --install-extension</code>, or open the downloaded file in OyNIx.</p>
+
+<h2>From addons.mozilla.org</h2>
+<p>Open any add-on on <a href="https://addons.mozilla.org/firefox/extensions/">addons.mozilla.org</a>. Mozilla shows its own install button only to Firefox, so OyNIx adds an <b>Add to OyNIx</b> button in the bottom corner of the page. It fetches the add-on’s current version and asks before installing.</p>
+<p>Firefox extensions are adapted on install: Firefox-only manifest keys are removed, background scripts become a service worker on Manifest V3, and <code>browser.*</code> calls return promises as Firefox’s do.</p>
+
+<h2>From a file or folder</h2>
+<p><b>Settings › Extensions › From File…</b> takes <code>.crx</code>, <code>.xpi</code>, <code>.zip</code> and <code>.oynix</code> files; <b>From Folder…</b> loads an unpacked extension, which is handy while you write one. Opening any <code>.xpi</code>, <code>.crx</code> or <code>.oynix</code> link in OyNIx also offers to install it. From a terminal:</p>
+<pre data-copy><code>oynix --install-extension ublock_origin.xpi --install-extension ./my-extension
+oynix --list-extensions</code></pre>
+<p>Manifest V2 and V3 both work. Each extension can be turned off or removed in <b>Settings › Extensions</b>; if one fails to load, the reason is shown there.</p>
+
+<h2>What works</h2>
+<p>OyNIx runs extensions on Chromium’s engine through Qt WebEngine, and provides most of the <code>chrome.*</code> and <code>browser.*</code> APIs itself:</p>
+<table>
+  <tr><th>API</th><th>Support</th></tr>
+  <tr><td>Content scripts</td><td>Match patterns, <code>run_at</code>, <code>all_frames</code>, CSS</td></tr>
+  <tr><td>Background</td><td>Scripts and service workers, in a hidden page</td></tr>
+  <tr><td><code>runtime</code></td><td>Messages, ports, <code>getURL</code>, <code>getManifest</code>, <code>onInstalled</code>, options page</td></tr>
+  <tr><td><code>storage</code></td><td><code>local</code>, <code>sync</code>, <code>session</code>, <code>onChanged</code></td></tr>
+  <tr><td><code>tabs</code></td><td>Query, create, update, remove, reload, messages, <code>executeScript</code>, <code>insertCSS</code>, events</td></tr>
+  <tr><td><code>scripting</code></td><td><code>executeScript</code>, <code>insertCSS</code>, <code>removeCSS</code></td></tr>
+  <tr><td><code>contextMenus</code> / <code>menus</code></td><td>Items in the page’s context menu</td></tr>
+  <tr><td><code>action</code> / <code>browserAction</code></td><td>Toolbar button, popup, badge</td></tr>
+  <tr><td>Also</td><td><code>i18n</code>, <code>notifications</code>, <code>alarms</code>, <code>permissions</code>, <code>windows.getCurrent</code></td></tr>
+</table>
+
+<h2>What doesn’t</h2>
+<p><code>webRequest</code> blocking, <code>declarativeNetRequest</code>, devtools panels, native messaging, <code>commands</code> shortcuts and Firefox sidebars aren’t available. Calls to them fail rather than crash the extension. This mostly affects network ad blockers like uBlock Origin: their element hiding and popup work, but their request blocking doesn’t, and OyNIx’s built-in blocker does that job instead.</p>

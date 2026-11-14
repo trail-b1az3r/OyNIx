@@ -1,0 +1,15 @@
+.oynix-reading-time {
+  position: fixed; right: 18px; bottom: 18px; z-index: 2147483646;
+  padding: 8px 16px; border-radius: 20px; cursor: pointer;
+  font: 500 13px/1.2 system-ui, sans-serif; letter-spacing: .01em;
+  color: #001a41;
+  background: linear-gradient(90deg, #b8c3ff var(--progress, 0%), #dde1ff var(--progress, 0%));
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .18);
+  user-select: none;
+}
+@media (prefers-color-scheme: dark) {
+  .oynix-reading-time {
+    color: #dde1ff;
+    background: linear-gradient(90deg, #005bbf var(--progress, 0%), #004493 var(--progress, 0%));
+  }
+}

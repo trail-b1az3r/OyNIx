@@ -1,0 +1,34 @@
+<!--
+title: Claude for OyNIx
+short: Claude
+order: 5
+icon: sparkles
+lede: Let Claude open pages, read them and act in your browser, within limits you set.
+description: Connect OyNIx to Claude Desktop or Claude Code over MCP, or use the built-in Claude panel, and how its permissions work.
+-->
+<h2>Turn it on</h2>
+<p>Claude for OyNIx is off until you enable it in <b>Settings › Extensions › Claude for OyNIx</b>. There are two ways to use it, and you can use both.</p>
+
+<h2>With Claude Desktop or Claude Code</h2>
+<p>This uses your Claude subscription. OyNIx includes an MCP server, which Claude starts when it needs the browser. For Claude Code, run once:</p>
+<pre data-copy><code>claude mcp add oynix -- oynix --mcp</code></pre>
+<p>For Claude Desktop, add this to <code>claude_desktop_config.json</code> and restart it:</p>
+<pre data-copy><code>{ "mcpServers": { "oynix": { "command": "/usr/bin/oynix", "args": ["--mcp"] } } }</code></pre>
+<p>The Setup page in OyNIx’s Claude panel shows both with the right path and profile for your install. <code>oynix --mcp</code> talks to the running browser over a socket only your user can open, and starts OyNIx if it isn’t running. OyNIx never sees your Claude login.</p>
+
+<h2>With the Claude panel</h2>
+<p>The sidebar’s Claude panel chats with Claude directly, using an API key from the <a href="https://console.anthropic.com/">Claude Console</a>. Paste it in the panel’s Setup page; it’s stored in your profile folder, readable only by you. Usage is billed to that API account.</p>
+
+<h2>What Claude can do</h2>
+<p>Open, switch and close tabs; navigate; read a page as an outline of its elements; find text and elements; take screenshots; click, hover, type, press keys and scroll; fill in forms; wait for something to appear; read the console and network log; search your history and bookmarks. Clicks and typing are real input events, so pages react exactly as they would to you.</p>
+
+<h2>Limits</h2>
+<ul>
+  <li><b>Ask per site.</b> The first time Claude touches a site, OyNIx asks: allow for this task, always allow, or don’t allow. Unanswered requests are refused after two minutes.</li>
+  <li><b>Blocked sites</b> are never available to Claude. Put your bank and email here.</li>
+  <li><b>Visible while working.</b> The tab glows and a <b>Claude is working · Stop</b> chip appears. Stop refuses every further action until you resume.</li>
+  <li><b>Private windows</b> are invisible to Claude.</li>
+  <li><b>Careful by instruction.</b> Claude is told to treat page content as untrusted and to ask you before buying, sending, deleting or entering passwords.</li>
+  <li><b>Activity log.</b> Every action is listed in the panel.</li>
+</ul>
+<div class="note">{{shape:cookie9:warning}}<p>Web pages can contain text written to mislead an AI. Watch what Claude does on sites you don’t trust, and keep anything sensitive on the blocked list.</p></div>
