@@ -1,60 +1,103 @@
 // OyNIx website: small progressive enhancements. Every page works without it.
 (function () {
   'use strict';
-  (function () {
-  'use strict';
 
-  function parseVersion(value) {
-    return value ? value.replace(/^v/, '').split('-')[0] : '';
+  // Releases are displayed on this site, but the assets remain hosted by GitHub.
+  // Link directly to each asset's browser_download_url; never route through a
+  // GitHub release/tag page.
+  var releaseApi = 'https://api.github.com/repos/trail-b1az3r/OyNIx/releases?per_page=100';
+
+  function escapeHtml(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+    });
   }
 
-  function setText(selector, text) {
-    var el = document.querySelector(selector);
-    if (el) el.textContent = text;
+  function versionParts(release) {
+    var tag = String(release.tag_name || release.name || '').replace(/^v/i, '');
+    var core = tag.split('-')[0];
+    return core.split('.').map(function (part) {
+      var n = parseInt(part, 10);
+      return Number.isFinite(n) ? n : 0;
+    });
   }
 
-  function formatReleaseLink(tag, assetName) {
-    return 'https://github.com/trail-b1az3r/OyNIx/releases/tag/' + tag;
+  function isLegacy(release) {
+    var v = versionParts(release);
+    return v[0] < 4 || (v[0] === 4 && (v[1] || 0) <= 3);
   }
 
-  function renderReleaseData(data) {
-    if (!data || !data.length) return;
+  function formatSize(bytes) {
+    if (!Number.isFinite(bytes) || bytes <= 0) return '';
+    var units = ['B', 'KB', 'MB', 'GB'];
+    var n = bytes, i = 0;
+    while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+    return (i ? n.toFixed(1) : String(n)) + ' ' + units[i];
+  }
 
-    var stable = data.find(function (r) { return !r.prerelease; }) || data[0];
-    var beta = data.find(function (r) { return r.prerelease; }) || stable;
-    var latest = data[0];
+  function renderRelease(release) {
+    var tag = release.tag_name || release.name || 'Untitled release';
+    var assets = Array.isArray(release.assets) ? release.assets : [];
+    var date = release.published_at ? new Date(release.published_at) : null;
+    var dateText = date && !Number.isNaN(date.getTime())
+      ? date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+    var links = assets.map(function (asset) {
+      if (!asset.browser_download_url) return '';
+      var label = escapeHtml(asset.name || 'Download');
+      var size = formatSize(Number(asset.size));
+      return '<a class="btn release-download" href="' + escapeHtml(asset.browser_download_url) +
+        '" download rel="noopener noreferrer">' + label + (size ? '<small>' + escapeHtml(size) + '</small>' : '') + '</a>';
+    }).join('');
+    return '<article class="release-card">' +
+      '<div class="release-heading"><div><h3>' + escapeHtml(release.name || tag) + '</h3>' +
+      '<p class="release-meta">' + escapeHtml(tag) + (dateText ? ' · ' + escapeHtml(dateText) : '') +
+      (release.prerelease ? ' · Pre-release' : '') + '</p></div></div>' +
+      (links ? '<div class="release-assets">' + links + '</div>' : '<p class="release-empty">No downloadable assets are attached to this release.</p>') +
+      '</article>';
+  }
 
-    if (document.querySelector('#get-stable h3')) {
-      document.querySelector('#get-stable h3').textContent = 'Stable · v' + parseVersion(stable.tag_name || stable.name);
+  function fillList(id, releases) {
+    var target = document.getElementById(id);
+    if (!target) return;
+    target.innerHTML = releases.length ? releases.map(renderRelease).join('') :
+      '<p class="release-empty">There are no releases in this channel.</p>';
+  }
+
+  function renderReleases(releases) {
+    var published = releases.filter(function (r) { return !r.draft; });
+    var legacy = published.filter(isLegacy);
+    var current = published.filter(function (r) { return !isLegacy(r); });
+    fillList('release-stable', current.filter(function (r) { return !r.prerelease; }));
+    fillList('release-beta', current.filter(function (r) { return !!r.prerelease; }));
+    fillList('release-legacy', legacy);
+    var status = document.getElementById('release-status');
+    if (status) status.textContent = published.length + ' releases available · ' +
+      (current.length) + ' current and ' + legacy.length + ' legacy';
+  }
+
+  function loadReleases() {
+    var status = document.getElementById('release-status');
+    if (!status) return;
+    var all = [], page = 1;
+    function next() {
+      return fetch(releaseApi + '&page=' + page, { headers: { Accept: 'application/vnd.github+json' } })
+        .then(function (response) {
+          if (!response.ok) throw new Error('GitHub returned HTTP ' + response.status);
+          return response.json();
+        })
+        .then(function (batch) {
+          if (!Array.isArray(batch)) throw new Error('Unexpected release response');
+          all = all.concat(batch);
+          if (batch.length === 100 && page < 10) { page++; return next(); }
+          renderReleases(all);
+        });
     }
-    if (document.querySelector('#get-stable pre')) {
-      var stableCode = document.querySelector('#get-stable pre code');
-      if (stableCode) {
-        stableCode.innerHTML =
-          '<span class=\"c\"># Debian, Ubuntu, Mint</span>\n' +
-          'sudo apt install ./oynix_' + parseVersion(stable.tag_name || stable.name) + '_amd64.deb\n\n' +
-          '<span class=\"c\"># Arch, Manjaro, EndeavourOS</span>\n' +
-          'sudo pacman -U oynix-' + parseVersion(stable.tag_name || stable.name) + '-1-x86_64.pkg.tar.zst';
-      }
-    }
-
-    if (document.querySelector('#get-beta h3')) {
-      document.querySelector('#get-beta h3').textContent = 'Beta · v' + parseVersion(beta.tag_name || beta.name);
-    }
-
-    if (document.querySelector('#get-nightly h3')) {
-      document.querySelector('#get-nightly h3').textContent = 'Nightly · ' + (latest.tag_name || latest.name || 'latest');
-    }
+    next().catch(function () {
+      status.textContent = 'Releases could not be loaded right now. Please try again later.';
+    });
   }
 
-  var releaseBox = document.querySelector('#download');
-  if (releaseBox) {
-    fetch('https://api.github.com/repos/trail-b1az3r/OyNIx/releases')
-      .then(function (res) { return res.ok ? res.json() : []; })
-      .then(renderReleaseData)
-      .catch(function () {});
-  }
-})();
+  loadReleases();
 
   // Mobile menu
   var menu = document.querySelector('.menu-btn'), tabs = document.querySelector('.tabs');
@@ -76,7 +119,7 @@
     pre.appendChild(b);
   });
 
-  // Segmented buttons switching panels: <div class="seg" data-panels="name">
+  // Segmented buttons switching panels.
   document.querySelectorAll('.seg[data-panels]').forEach(function (seg) {
     var buttons = seg.querySelectorAll('button');
     function pick(id) {
