@@ -327,3 +327,18 @@ details.source pre { margin: 0; border-radius: 0 0 var(--shape-l) var(--shape-l)
 @media (max-width: 900px) { .ext-page { grid-template-columns: minmax(0, 1fr); gap: 28px; } .facts { position: static; } }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; } }
+
+/* Release cards use the same tonal surfaces and expressive controls as the rest of the site. */
+.release-status { color: var(--on-surface-variant); font-size: 14px; margin: 0 0 16px; }
+.release-list { display: grid; gap: 12px; }
+.release-card { padding: 22px; border-radius: var(--shape-xl); background: var(--surface-container); }
+.release-card h3 { font-size: 20px; }
+.release-meta { margin: 5px 0 0; color: var(--on-surface-variant); font-size: 13px; }
+.release-assets { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.release-download { height: auto; min-height: 42px; padding: 9px 14px; justify-content: flex-start; gap: 8px; max-width: 100%; overflow-wrap: anywhere; }
+.release-download small { color: inherit; opacity: .72; font-size: 11px; white-space: nowrap; }
+.release-empty { color: var(--on-surface-variant); font-size: 14px; margin: 8px 0 0; }
+.legacy-releases { margin-top: 22px; padding: 18px 22px; border: 1px solid var(--outline-variant); border-radius: var(--shape-xl); }
+.legacy-releases summary { cursor: pointer; font-weight: 600; color: var(--on-surface); }
+.legacy-releases[open] summary { margin-bottom: 12px; }
+.legacy-note { color: var(--on-surface-variant); font-size: 14px; margin: 0 0 16px; }
