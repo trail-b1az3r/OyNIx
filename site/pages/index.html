@@ -11,7 +11,7 @@ addr: <b>oynix</b> · a browser that keeps to itself
       <h1>A browser that keeps <em>to itself.</em></h1>
       <p class="lede">OyNIx is a desktop web browser written in Rust and drawn with Vulkan. Trackers and ads are stopped before they load, nothing about you is sent anywhere, and your Chrome and Firefox extensions come with you.</p>
       <div class="btn-row">
-        <a class="btn" href="#download">{{icon:download}}Download {{version}}</a>
+        <a class="btn" href="{{root}}downloads/">{{icon:download}}Download {{version}}</a>
         <a class="btn tonal" href="{{root}}docs/">Read the docs</a>
       </div>
       <p class="hero-meta">Free and open source · Debian, Ubuntu, Mint and Arch · x86-64</p>
@@ -131,39 +131,4 @@ addr: <b>oynix</b> · a browser that keeps to itself
   </div>
 </section>
 
-<section class="wrap" id="download">
-  <div class="get">
-    <div class="section-head" style="margin-bottom:28px">
-      <span class="eyebrow">Download</span>
-      <h2>OyNIx {{version}}</h2>
-      <p class="lede">Packages for 64-bit Intel and AMD PCs. Each one includes its own copy of Qt, so it installs without touching your system’s libraries.</p>
-    </div>
-    <div class="seg" data-panels="install" role="tablist">
-      <button type="button" data-panel="get-deb" aria-selected="true">Debian, Ubuntu, Mint</button>
-      <button type="button" data-panel="get-arch" aria-selected="false">Arch, Manjaro</button>
-      <button type="button" data-panel="get-src" aria-selected="false">From source</button>
-    </div>
-    <div class="panel" id="get-deb">
-      <pre data-copy><code><span class="c"># download oynix_{{version}}_amd64.deb from the release page, then:</span>
-sudo apt install ./oynix_{{version}}_amd64.deb</code></pre>
-    </div>
-    <div class="panel" id="get-arch" hidden>
-      <pre data-copy><code><span class="c"># download oynix-{{version}}-1-x86_64.pkg.tar.zst from the release page, then:</span>
-sudo pacman -U oynix-{{version}}-1-x86_64.pkg.tar.zst
 
-<span class="c"># or from the AUR, with any AUR helper:</span>
-yay -S oynix-bin</code></pre>
-    </div>
-    <div class="panel" id="get-src" hidden>
-      <pre data-copy><code>git clone {{repo}}.git && cd OyNIx
-./scripts/deps-ubuntu.sh      <span class="c"># system libraries, Rust and Qt 6.12</span>
-cargo build --release
-./scripts/install.sh          <span class="c"># into ~/.local, with a desktop entry</span></code></pre>
-    </div>
-    <div class="btn-row" style="margin-top:8px">
-      <a class="btn" href="{{repo}}/releases/latest">{{icon:download}}Release page</a>
-      <a class="btn text" href="{{root}}docs/">Getting started {{icon:chevronRight}}</a>
-    </div>
-    <p style="margin:22px 0 0;font-size:14px;color:var(--on-surface-variant)">Every release lists SHA-256 checksums. Check a download with <code>sha256sum -c SHA256SUMS</code>.</p>
-  </div>
-</section>
