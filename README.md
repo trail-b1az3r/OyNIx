@@ -102,7 +102,7 @@ Install for the current user, or build packages. All of them bundle the Qt runti
 
 `build-pkg.sh` works on any distribution (it needs only `bsdtar` and `zstd`). On Arch you can also build from source with makepkg: `cd packaging/arch && makepkg -si`.
 
-Install the packages with `sudo apt install ./oynix_*.deb` or `sudo pacman -U oynix-*.pkg.tar.zst`.
+Install the packages with `sudo apt install ./oynix_*.deb` or `sudo pacman -U oynix-*.pkg.tar.zst`. On Arch, stable releases are also on the AUR as [`oynix-bin`](https://aur.archlinux.org/packages/oynix-bin): `yay -S oynix-bin`.
 
 ### Releases
 
@@ -271,7 +271,7 @@ OyNIx ships its own libusb, so no extra package is needed. In containers without
 
 ## Updates
 
-OyNIx checks GitHub for a new release once a day (Settings › About › Updates; switchable, with a beta channel). It downloads the package that matches how it was installed (`.deb` or pacman), verifies it against the release's `SHA256SUMS`, and installs it with `pkexec apt-get install` / `pkexec pacman -U` when you click **Install**; **Restart** reopens your tabs in the new version. Source builds are told about new versions but not changed. The release workflow already publishes the files the updater needs (both packages and `SHA256SUMS`).
+OyNIx checks GitHub for a new release once a day (Settings › About › Updates; switchable, with a beta channel). It downloads the package that matches how it was installed (`.deb` or pacman), verifies it against the release's `SHA256SUMS`, and installs it with `pkexec apt-get install` / `pkexec pacman -U` when you click **Install**; **Restart** reopens your tabs in the new version. Source builds are told about new versions but not changed, and AUR installs (`oynix-bin`) leave updating to the AUR helper. The release workflow already publishes the files the updater needs (both packages and `SHA256SUMS`).
 
 `OYNIX_UPDATE_URL` points the updater at another release feed (forks, testing); `OYNIX_UPDATE_DRY_RUN=1` prints the install command instead of running it.
 

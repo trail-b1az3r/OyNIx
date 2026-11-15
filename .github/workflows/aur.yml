@@ -1,0 +1,179 @@
+name: Publish to the AUR
+
+# Updates the `oynix-bin` package on aur.archlinux.org from a GitHub release.
+#
+# Runs:
+#   • from build.yml, straight after it publishes a (non-pre-)release;
+#   • when a release is published by hand on GitHub;
+#   • by hand (Actions → Publish to the AUR → Run workflow), e.g. to bump pkgrel
+#     or to check the package without pushing (dry run).
+#
+# Needs the repository secret AUR_SSH_PRIVATE_KEY: the private half of an SSH
+# key whose public half is on the AUR account that maintains oynix-bin.
+# See packaging/aur/README.md.
+
+on:
+  release:
+    types: [published]
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
+      automatic:
+        description: 'Warn instead of failing when the AUR key is missing'
+        type: boolean
+        default: true
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release to publish (e.g. 5.2.1). Empty = latest release.'
+        required: false
+        default: ''
+      pkgrel:
+        description: 'pkgrel (raise it to republish the same version with packaging fixes)'
+        required: false
+        default: '1'
+      dry_run:
+        description: 'Build and check the package, but do not push to the AUR'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aur
+  cancel-in-progress: false
+
+jobs:
+  aur:
+    # Pre-releases (versions with a '-') are not valid pacman versions and
+    # shouldn't reach AUR users anyway.
+    if: github.event_name != 'release' || !github.event.release.prerelease
+    runs-on: ubuntu-24.04
+    container: archlinux:base-devel
+    env:
+      PKG: oynix-bin
+      REPO: ${{ github.repository }}
+
+    steps:
+      - name: Install tools
+        run: pacman -Syu --noconfirm --needed git openssh curl jq
+
+      - uses: actions/checkout@v4
+
+      - name: Work out the version
+        id: ver
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_PKGREL: ${{ inputs.pkgrel }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V="${INPUT_VERSION:-${RELEASE_TAG}}"
+          if [ -z "$V" ]; then
+            V=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$REPO/releases/latest" | jq -r .tag_name)
+          fi
+          V="${V#v}"
+          REL="${INPUT_PKGREL:-1}"
+          if ! [[ "$V" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+            echo "::notice::Skipping '$V': only plain release versions (like 5.2.1) go to the AUR."
+            echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          [[ "$REL" =~ ^[1-9][0-9]*$ ]] || { echo "::error::pkgrel must be a positive whole number, not '$REL'"; exit 1; }
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "pkgrel=$REL" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "Publishing $PKG $V-$REL"
+
+      - name: Fetch the release and check it against SHA256SUMS
+        if: steps.ver.outputs.skip != 'true'
+        id: sum
+        env:
+          V: ${{ steps.ver.outputs.version }}
+        run: |
+          base="https://github.com/$REPO/releases/download/v$V"
+          asset="oynix-$V-1-x86_64.pkg.tar.zst"
+          mkdir -p /tmp/rel && cd /tmp/rel
+          # The release job may have only just finished; give the CDN a moment.
+          for i in 1 2 3 4 5; do
+            curl -fsSL --retry 3 -o "$asset" "$base/$asset" && curl -fsSL -o SHA256SUMS "$base/SHA256SUMS" && break
+            echo "Not available yet, retrying in 20s…"; sleep 20
+          done
+          [ -s "$asset" ] || { echo "::error::$base/$asset could not be downloaded"; exit 1; }
+          grep " $asset\$" SHA256SUMS | sha256sum -c -
+          echo "sha256=$(sha256sum "$asset" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Fill in the PKGBUILD and build it
+        if: steps.ver.outputs.skip != 'true'
+        env:
+          V: ${{ steps.ver.outputs.version }}
+          REL: ${{ steps.ver.outputs.pkgrel }}
+          SUM: ${{ steps.sum.outputs.sha256 }}
+        run: |
+          useradd -m builder
+          install -d -o builder /tmp/pkg
+          cp packaging/aur/$PKG/PKGBUILD /tmp/pkg/
+          cd /tmp/pkg
+          sed -i -e "s/^pkgver=.*/pkgver=$V/" -e "s/^pkgrel=.*/pkgrel=$REL/" -e "s/^sha256sums=.*/sha256sums=('$SUM')/" PKGBUILD
+          cp /tmp/rel/oynix-$V-1-x86_64.pkg.tar.zst .
+          chown -R builder /tmp/pkg
+          # Build without installing dependencies: this checks the source,
+          # checksum and package() step, which is everything this PKGBUILD does.
+          sudo -u builder makepkg --nodeps --noconfirm --cleanbuild
+          sudo -u builder makepkg --printsrcinfo > .SRCINFO
+          ls -l *.pkg.tar.zst
+          echo "--- .SRCINFO"; cat .SRCINFO
+          bsdtar -tf $PKG-$V-$REL-x86_64.pkg.tar.zst | grep -qx 'usr/bin/oynix' || { echo "::error::usr/bin/oynix is missing from the package"; exit 1; }
+
+      - name: Push to aur.archlinux.org
+        if: steps.ver.outputs.skip != 'true' && !inputs.dry_run
+        env:
+          V: ${{ steps.ver.outputs.version }}
+          REL: ${{ steps.ver.outputs.pkgrel }}
+          AUR_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          AUTOMATIC: ${{ github.event_name == 'release' || inputs.automatic == true }}
+        run: |
+          if [ -z "$AUR_KEY" ]; then
+            msg="The AUR_SSH_PRIVATE_KEY secret isn't set, so $PKG wasn't published. See packaging/aur/README.md."
+            if [ "$AUTOMATIC" = true ]; then echo "::warning::$msg"; exit 0; fi
+            echo "::error::$msg"; exit 1
+          fi
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$AUR_KEY" > ~/.ssh/aur && chmod 600 ~/.ssh/aur
+          # Trust only the host keys whose fingerprints the AUR publishes on aur.archlinux.org.
+          ssh-keyscan -t ed25519,ecdsa,rsa aur.archlinux.org 2>/dev/null > /tmp/scanned
+          : > ~/.ssh/known_hosts
+          while read -r line; do
+            fp=$(printf '%s\n' "$line" | ssh-keygen -lf - | awk '{print $2}')
+            case "$fp" in
+              SHA256:RFzBCUItH9LZS0cKB5UE6ceAYhBD5C8GeOBip8Z11+4|SHA256:uTa/0PndEgPZTf76e1DFqXKJEXKsn7m9ivhLQtzGOCI|SHA256:5s5cIyReIfNNVGRFdDbe3hdYiI5OelHGpw2rOUud3Q8)
+                printf '%s\n' "$line" >> ~/.ssh/known_hosts ;;
+              *) echo "::warning::Ignoring unexpected AUR host key $fp" ;;
+            esac
+          done < /tmp/scanned
+          [ -s ~/.ssh/known_hosts ] || { echo "::error::None of aur.archlinux.org's host keys matched the published fingerprints"; exit 1; }
+          cat > ~/.ssh/config <<CFG
+          Host aur.archlinux.org
+            User aur
+            IdentityFile ~/.ssh/aur
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+          CFG
+
+          git config --global user.name "OyNIx release bot"
+          git config --global user.email "${{ github.repository_owner_id }}+${{ github.repository_owner }}@users.noreply.github.com"
+          git config --global init.defaultBranch master
+          # Cloning a package that doesn't exist yet gives an empty repository;
+          # the first push creates it (and makes this key's account its maintainer).
+          git clone "ssh://aur@aur.archlinux.org/$PKG.git" /tmp/aur
+          cp /tmp/pkg/PKGBUILD /tmp/pkg/.SRCINFO /tmp/aur/
+          cd /tmp/aur
+          git add PKGBUILD .SRCINFO
+          if git diff --cached --quiet; then
+            echo "The AUR already has $PKG $V-$REL; nothing to push."; exit 0
+          fi
+          git commit -q -m "Update to $V-$REL"
+          git push origin HEAD:master
+          echo "### Published [$PKG $V-$REL](https://aur.archlinux.org/packages/$PKG)" >> "$GITHUB_STEP_SUMMARY"

@@ -988,9 +988,10 @@ ApplicationWindow {
                     id: updateBanner
                     readonly property var u: win.app.updater
                     readonly property var rel: u.release ? JSON.parse(u.release) : null
+                    readonly property bool external: u.kind === "manual" || u.kind === "aur"
                     property string dismissed: ""
                     readonly property bool wanted: rel !== null && dismissed !== rel.version && !win.privateMode
-                        && (u.state === "ready" || u.state === "installing" || u.state === "installed" || (u.state === "available" && u.kind === "manual"))
+                        && (u.state === "ready" || u.state === "installing" || u.state === "installed" || (u.state === "available" && external))
                     z: 40
                     visible: wanted && win.active
                     anchors.right: parent.right; anchors.bottom: parent.bottom
@@ -1021,6 +1022,7 @@ ApplicationWindow {
                                     text: updateBanner.u.error !== "" ? updateBanner.u.error
                                         : updateBanner.u.state === "installed" ? qsTr("Restart to start using it. Your tabs will come back.")
                                         : updateBanner.u.state === "installing" ? qsTr("Installing… your system may ask for your password.")
+                                        : updateBanner.u.kind === "aur" ? qsTr("Update it with your AUR helper, for example: yay -Syu oynix-bin")
                                         : updateBanner.u.kind === "manual" ? qsTr("This copy wasn’t installed from a package, so update it the way you installed it.")
                                         : qsTr("Downloaded and checked. Installing asks for your password and takes a few seconds.")
                                 }
@@ -1044,12 +1046,12 @@ ApplicationWindow {
                                 primary: true
                                 enabled: updateBanner.u.state !== "installing"
                                 text: updateBanner.u.state === "installed" ? qsTr("Restart")
-                                    : updateBanner.u.kind === "manual" ? qsTr("Release Page")
+                                    : updateBanner.external ? qsTr("Release Page")
                                     : updateBanner.u.state === "installing" ? qsTr("Installing…") : qsTr("Install")
                                 onClicked: {
                                     var u = updateBanner.u
                                     if (u.state === "installed") { if (!win.app.restartForUpdate()) win.toastMessage(qsTr("Couldn’t restart OyNIx; please start it again yourself.")) }
-                                    else if (u.kind === "manual") win.openTab(updateBanner.rel.page, {})
+                                    else if (updateBanner.external) win.openTab(updateBanner.rel.page, {})
                                     else u.install()
                                 }
                             }

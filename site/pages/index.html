@@ -149,7 +149,10 @@ sudo apt install ./oynix_{{version}}_amd64.deb</code></pre>
     </div>
     <div class="panel" id="get-arch" hidden>
       <pre data-copy><code><span class="c"># download oynix-{{version}}-1-x86_64.pkg.tar.zst from the release page, then:</span>
-sudo pacman -U oynix-{{version}}-1-x86_64.pkg.tar.zst</code></pre>
+sudo pacman -U oynix-{{version}}-1-x86_64.pkg.tar.zst
+
+<span class="c"># or from the AUR, with any AUR helper:</span>
+yay -S oynix-bin</code></pre>
     </div>
     <div class="panel" id="get-src" hidden>
       <pre data-copy><code>git clone {{repo}}.git && cd OyNIx

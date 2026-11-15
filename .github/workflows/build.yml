@@ -141,7 +141,17 @@ jobs:
             ```bash
             sudo pacman -U oynix-*-x86_64.pkg.tar.zst
             ```
+            or from the AUR: `yay -S oynix-bin`
 
             Both packages include their own Qt ${{ env.QT_VERSION }} runtime under `/usr/lib/oynix`.
             Verify downloads with `sha256sum -c SHA256SUMS`.
           files: dist/*
+
+  aur:
+    # Stable releases also go to the AUR as oynix-bin (see aur.yml).
+    needs: [build, release]
+    if: needs.build.outputs.release == 'true' && !contains(needs.build.outputs.version, '-') && !inputs.prerelease && !inputs.draft
+    uses: ./.github/workflows/aur.yml
+    with:
+      version: ${{ needs.build.outputs.version }}
+    secrets: inherit

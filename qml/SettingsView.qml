@@ -1010,6 +1010,7 @@ Rectangle {
                     hint: {
                         var u = updSection.u, r = updSection.rel
                         if (u.error) return u.error
+                        if (u.kind === "aur") return qsTr("This copy came from the AUR, so update it with your AUR helper (for example: yay -Syu oynix-bin).")
                         if (u.kind === "manual") return qsTr("This copy wasn’t installed from a .deb or pacman package, so OyNIx can tell you about new versions but can’t install them.")
                         if (r && r.package && (u.state === "available" || u.state === "downloading")) return qsTr("%1 download, checked against its published SHA-256 before installing.").arg(updSection.size(r.package.size))
                         if (u.state === "ready") return qsTr("Installing uses your package manager and asks for your password.")
@@ -1017,12 +1018,12 @@ Rectangle {
                         return s > 1e15 ? qsTr("Not checked yet.") : qsTr("Last checked %1.").arg(s < 3600 ? qsTr("in the last hour") : s < 86400 ? qsTr("today") : qsTr("%1 days ago").arg(Math.floor(s / 86400)))
                     }
                     PushButton {
-                        visible: ["idle", "current", "error", "available"].indexOf(updSection.u.state) >= 0 && !(updSection.u.state === "available" && updSection.u.kind !== "manual")
+                        visible: ["idle", "current", "error", "available"].indexOf(updSection.u.state) >= 0 && !(updSection.u.state === "available" && updSection.u.kind !== "manual" && updSection.u.kind !== "aur")
                         text: qsTr("Check Now")
                         onClicked: sw.app.checkForUpdate(true)
                     }
                     PushButton {
-                        visible: updSection.u.state === "available" && updSection.u.kind !== "manual"
+                        visible: updSection.u.state === "available" && updSection.u.kind !== "manual" && updSection.u.kind !== "aur"
                         primary: true; text: qsTr("Download")
                         onClicked: updSection.u.download()
                     }
@@ -1043,7 +1044,7 @@ Rectangle {
                         onClicked: sw.app.restartForUpdate()
                     }
                     PushButton {
-                        visible: updSection.u.kind === "manual" && updSection.rel !== null
+                        visible: (updSection.u.kind === "manual" || updSection.u.kind === "aur") && updSection.rel !== null
                         text: qsTr("Release Page")
                         onClicked: sw.app.openInBrowser(updSection.rel.page)
                     }
