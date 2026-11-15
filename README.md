@@ -163,7 +163,9 @@ Qt WebEngine 6.10–6.12 loads extensions and serves their pages, but doesn't ru
   - `action` / `browserAction`: badge and title, onClicked
   - `alarms` and `permissions`
 
-**Not supported:** `webRequest` blocking, `declarativeNetRequest`, `scripting.registerContentScripts`, devtools panels, native messaging, `commands` keyboard shortcuts and Firefox `sidebar_action`. Context-menu items are not persisted across restarts (extensions normally recreate them at startup). Calling these throws or does nothing. Extensions built mainly on them, such as network-filtering ad blockers, won't work fully; OyNIx's built-in blocker covers that need. Extensions don't run in private windows.
+**Manifest V2:** Chromium in Qt WebEngine no longer loads V2, so OyNIx converts V2 manifests to V3 on install, runs the background page itself (persistently) and provides the V2 APIs. Also implemented: `bookmarks`, `history`, `topSites`, `sessions`, `downloads`, `webNavigation`, `commands`, `omnibox`, `idle`, `tts`, `contentSettings`, `privacy`, `fontSettings`, `search`, `identity.launchWebAuthFlow`, and more of `tabs`/`windows`. **Powerful APIs** (`nativeMessaging`, `cookies`, `webRequest` observation, `browsingData`, `management`) need Settings › Extensions › Developer mode › Allow powerful extension APIs. `.crx` installs keep their Chrome Web Store id (from the CRX key) so native messaging hosts recognise them.
+
+**Not supported:** `webRequest` blocking (listeners run, but can't change requests), `declarativeNetRequest`, `scripting.registerContentScripts`, `proxy`, `debugger`, devtools panels and Firefox `sidebar_action`. Context-menu items are not persisted across restarts (extensions normally recreate them at startup). Calling these throws or does nothing. Extensions built mainly on them, such as network-filtering ad blockers, won't work fully; OyNIx's built-in blocker covers that need. Extensions don't run in private windows.
 
 ## Claude for OyNIx
 

@@ -42,6 +42,13 @@ rust::String load_panel(QObject *host, rust::Str qml_path, rust::Str ext_dir, QO
 // Remove the panels load_panel put into `host`.
 void unload_panel(QObject *host);
 
+// chrome.cookies: all cookies of a WebEngineProfile as JSON
+// ([{name, value, domain, hostOnly, path, secure, httpOnly, sameSite,
+// session, expirationDate}]), and setting / deleting one.
+rust::String cookies_all(QObject *profile);
+bool cookie_set(QObject *profile, rust::Str cookie_json);
+bool cookie_remove(QObject *profile, rust::Str url, rust::Str name);
+
 // Real input for the browser agent, delivered to a QQuickItem (the web view)
 // through its window, exactly like physical input. Coordinates are item-local.
 // mouse kind: 0 = move, 1 = click. button: 1 left, 2 right, 4 middle.

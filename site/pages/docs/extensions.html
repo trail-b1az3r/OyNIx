@@ -28,20 +28,40 @@ description: Install OyNIx, Firefox and Chrome extensions, and what extension AP
 oynix --list-extensions</code></pre>
 <p>Manifest V2 and V3 both work. Each extension can be turned off or removed in <b>Settings › Extensions</b>; if one fails to load, the reason is shown there.</p>
 
+<h2>Manifest V2</h2>
+<p>Chromium, which OyNIx uses through Qt WebEngine, no longer loads Manifest V2 extensions. OyNIx still runs them: on install it rewrites the manifest into the V3 form Chromium accepts (actions, host permissions, web-accessible resources, shortcuts), runs the extension’s background page itself as a persistent page, as V2 expects, and provides the V2 APIs such as <code>chrome.extension</code>, <code>tabs.executeScript</code>, <code>browserAction</code> and <code>pageAction</code>. Settings shows these extensions as MV2.</p>
+<p>Two V2 behaviours can’t be reproduced. <code>webRequest</code> listeners marked <code>"blocking"</code> are called, but their answers can’t cancel or change requests, because Qt WebEngine decides each request before an extension could reply. And a popup’s <code>getBackgroundPage()</code> can’t hand back the background page’s live <code>window</code>, which lives in another process. Use messaging instead.</p>
+
 <h2>What works</h2>
-<p>OyNIx runs extensions on Chromium’s engine through Qt WebEngine, and provides most of the <code>chrome.*</code> and <code>browser.*</code> APIs itself:</p>
+<p>All of these need the matching permission in the extension’s manifest, as in Chrome.</p>
 <table>
   <tr><th>API</th><th>Support</th></tr>
   <tr><td>Content scripts</td><td>Match patterns, <code>run_at</code>, <code>all_frames</code>, CSS</td></tr>
-  <tr><td>Background</td><td>Scripts and service workers, in a hidden page</td></tr>
-  <tr><td><code>runtime</code></td><td>Messages, ports, <code>getURL</code>, <code>getManifest</code>, <code>onInstalled</code>, options page</td></tr>
+  <tr><td>Background</td><td>Pages, scripts and service workers, in a hidden page</td></tr>
+  <tr><td><code>runtime</code>, <code>extension</code></td><td>Messages, ports, <code>getURL</code>, <code>getManifest</code>, <code>onInstalled</code>, options page, <code>getBrowserInfo</code></td></tr>
   <tr><td><code>storage</code></td><td><code>local</code>, <code>sync</code>, <code>session</code>, <code>onChanged</code></td></tr>
-  <tr><td><code>tabs</code></td><td>Query, create, update, remove, reload, messages, <code>executeScript</code>, <code>insertCSS</code>, events</td></tr>
+  <tr><td><code>tabs</code>, <code>windows</code></td><td>Query, create, update, move, remove, reload, zoom, back/forward, <code>captureVisibleTab</code>, <code>executeScript</code>, <code>insertCSS</code>, events</td></tr>
   <tr><td><code>scripting</code></td><td><code>executeScript</code>, <code>insertCSS</code>, <code>removeCSS</code></td></tr>
-  <tr><td><code>contextMenus</code> / <code>menus</code></td><td>Items in the page’s context menu</td></tr>
-  <tr><td><code>action</code> / <code>browserAction</code></td><td>Toolbar button, popup, badge</td></tr>
-  <tr><td>Also</td><td><code>i18n</code>, <code>notifications</code>, <code>alarms</code>, <code>permissions</code>, <code>windows.getCurrent</code></td></tr>
+  <tr><td><code>bookmarks</code>, <code>history</code>, <code>topSites</code>, <code>sessions</code></td><td>Reading and changing them, with events</td></tr>
+  <tr><td><code>downloads</code></td><td>Download, search, pause, resume, cancel, open, show, erase, events</td></tr>
+  <tr><td><code>webNavigation</code></td><td>Before navigate, committed, completed, error and history-state events</td></tr>
+  <tr><td><code>commands</code>, <code>omnibox</code></td><td>Keyboard shortcuts (unless OyNIx already uses the keys) and address-field keywords</td></tr>
+  <tr><td><code>contextMenus</code> / <code>menus</code>, <code>notifications</code>, <code>alarms</code></td><td>Yes</td></tr>
+  <tr><td><code>action</code> / <code>browserAction</code> / <code>pageAction</code></td><td>Toolbar button, popup, badge</td></tr>
+  <tr><td>Also</td><td><code>i18n</code>, <code>idle</code>, <code>tts</code>, <code>permissions</code>, <code>contentSettings</code>, <code>privacy</code>, <code>fontSettings</code>, <code>search</code>, <code>identity.launchWebAuthFlow</code>, <code>management.getSelf</code></td></tr>
 </table>
 
+<h2>Powerful APIs</h2>
+<p>Some APIs let an extension act outside the pages you visit. They’re off until you turn on <b>Settings › Extensions › Developer mode</b> and then <b>Allow powerful extension APIs</b>, and even then only extensions that ask for them in their manifest get them:</p>
+<table>
+  <tr><th>API</th><th>What it allows</th></tr>
+  <tr><td><code>nativeMessaging</code></td><td>Starting a program on your computer and talking to it, as password managers such as KeePassXC-Browser do. OyNIx finds native hosts installed for Chrome, Chromium, Brave, Vivaldi, Edge, Firefox or OyNIx (<code>~/.config/oynix/NativeMessagingHosts</code>), and only starts a host whose manifest lists the extension.</td></tr>
+  <tr><td><code>cookies</code></td><td>Reading and changing every cookie, including sign-ins.</td></tr>
+  <tr><td><code>webRequest</code></td><td>Seeing every request the browser makes, with its headers.</td></tr>
+  <tr><td><code>browsingData</code></td><td>Deleting history, cookies, cache and downloads.</td></tr>
+  <tr><td><code>management</code></td><td>Listing other extensions, turning them on or off, and removing them.</td></tr>
+</table>
+<p>Extensions installed from a <code>.crx</code> keep the ID they have in the Chrome Web Store, so native hosts that list that ID work unchanged.</p>
+
 <h2>What doesn’t</h2>
-<p><code>webRequest</code> blocking, <code>declarativeNetRequest</code>, devtools panels, native messaging, <code>commands</code> shortcuts and Firefox sidebars aren’t available. Calls to them fail rather than crash the extension. This mostly affects network ad blockers like uBlock Origin: their element hiding and popup work, but their request blocking doesn’t, and OyNIx’s built-in blocker does that job instead.</p>
+<p>Blocking <code>webRequest</code>, <code>declarativeNetRequest</code>, <code>proxy</code>, <code>debugger</code>, devtools panels, <code>identity.getAuthToken</code> and Firefox sidebars aren’t available. Calls to them fail with a clear error rather than crashing the extension. Network ad blockers such as uBlock Origin still hide page elements and work in their popup, but OyNIx’s built-in blocker does the request blocking.</p>

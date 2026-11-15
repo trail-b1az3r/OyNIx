@@ -18,3 +18,5 @@ pub mod qmlcheck;
 pub mod updater;
 pub mod ocr;
 pub mod builtin;
+pub mod extevents;
+pub mod nativemsg;

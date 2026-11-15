@@ -205,6 +205,18 @@ ApplicationWindow {
     }
 
     function navigate(text) {
+        // Extension keywords (manifest "omnibox"): "kw some text".
+        if (!privateMode) {
+            var kws = JSON.parse(Core.webextOmnibox())
+            for (var k = 0; k < kws.length; k++) {
+                var kw = kws[k].keyword + " "
+                if (String(text).indexOf(kw) === 0) {
+                    app.extensionHost.tabEvent("ext:omnibox.onInputEntered", [kws[k].ext, String(text).slice(kw.length), "currentTab"])
+                    focusContent()
+                    return
+                }
+            }
+        }
         var u = Core.resolveInput(text)
         if (u.indexOf("oynix://settings") === 0) { app.openSettings(u.replace(/^oynix:\/\/settings\/?/, "")); return }
         if (u.indexOf("oynix://privacy") === 0) { openPrivacyReport(); return }
@@ -258,6 +270,57 @@ ApplicationWindow {
         var p = anchor.mapToItem(win.contentItem, 0, anchor.height + 6)
         navMenu.x = p.x; navMenu.y = p.y
         navMenu.open()
+    }
+
+    readonly property var reservedKeys: ["alt+d", "alt+home", "alt+left", "alt+right", "ctrl++", "ctrl+-", "ctrl+0", "ctrl+1", "ctrl+2", "ctrl+3", "ctrl+4",
+        "ctrl+5", "ctrl+6", "ctrl+7", "ctrl+8", "ctrl+9", "ctrl+=", "ctrl+alt+i", "ctrl+alt+s", "ctrl+b", "ctrl+d", "ctrl+e", "ctrl+f", "ctrl+f4", "ctrl+f5",
+        "ctrl+g", "ctrl+h", "ctrl+j", "ctrl+k", "ctrl+l", "ctrl+n", "ctrl+p", "ctrl+pgdown", "ctrl+pgup", "ctrl+q", "ctrl+r", "ctrl+s", "ctrl+shift+=",
+        "ctrl+shift+a", "ctrl+shift+b", "ctrl+shift+d", "ctrl+shift+f", "ctrl+shift+g", "ctrl+shift+h", "ctrl+shift+i", "ctrl+shift+l", "ctrl+shift+n",
+        "ctrl+shift+p", "ctrl+shift+pgdown", "ctrl+shift+pgup", "ctrl+shift+r", "ctrl+shift+t", "ctrl+shift+tab", "ctrl+shift+w", "ctrl+shift+y",
+        "ctrl+shift+\\", "ctrl+t", "ctrl+tab", "ctrl+u", "ctrl+w", "ctrl+,", "escape", "f11", "f12", "f3", "f5", "f6", "shift+f3", "shift+f5"]
+    // Extension keyboard shortcuts (manifest "commands").
+    // (Inside items, so each Shortcut belongs to this window.)
+    Repeater {
+        model: {
+            Core.extensionsRevision
+            if (win.privateMode) return []
+            // OyNIx's own shortcuts win: two bindings on one key would make
+            // Qt fire neither, so a clashing extension shortcut is skipped.
+            return JSON.parse(Core.webextCommands()).filter(function (c) {
+                var k = String(c.key).replace(/\s+/g, "").toLowerCase()
+                var clash = win.reservedKeys.indexOf(k) >= 0
+                if (clash) console.warn("OyNIx: extension shortcut " + c.key + " (" + c.name + ") is already used by OyNIx and was skipped")
+                return !clash
+            })
+        }
+        delegate: Item {
+            id: cmdItem
+            required property var modelData
+            Shortcut {
+                sequence: cmdItem.modelData.key
+                context: Qt.WindowShortcut
+                onActivated: win.runExtensionCommand(cmdItem.modelData)
+            }
+        }
+    }
+    function runExtensionCommand(c) {
+        if (/^_execute_(browser_|page_)?action$/.test(c.name)) {
+            var e = JSON.parse(Core.extensions()).filter(function (x) { return x.webId === c.ext })[0]
+            var u = e ? app.extensionHost.popupUrl(e.id) : ""
+            if (u) {
+                extPopup.url = u
+                var p = extMenuBtn.mapToItem(win.contentItem, extMenuBtn.width, extMenuBtn.height + 6)
+                extPopup.x = Math.max(8, p.x - extPopup.width); extPopup.y = p.y
+                extPopup.open()
+            } else app.extBridge.dispatch("action.onClicked", JSON.stringify([c.ext, app.extensionHost.tabInfo(win, currentIndex)]))
+            return
+        }
+        app.extensionHost.tabEvent("ext:commands.onCommand", [c.ext, c.name, app.extensionHost.tabInfo(win, currentIndex)])
+    }
+
+    // chrome.idle: note when the person last used the window.
+    HoverHandler {
+        onPointChanged: { var n = Date.now(); if (n - win.app.extensionHost.apis.lastInput > 5000) win.app.extensionHost.apis.lastInput = n }
     }
 
     function openPrivacyReport() { openInternal("oynix://privacy") }

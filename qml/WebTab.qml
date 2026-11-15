@@ -299,19 +299,25 @@ Item {
                 }
             }
             onNavigationRequested: function (request) {
+                // identity.launchWebAuthFlow ends at https://<id>.chromiumapp.org/…
+                if (request.isMainFrame && request.url.toString().indexOf(".chromiumapp.org/") > 0
+                    && tab.win.app.extensionHost.apis.interceptAuthRedirect(request.url.toString())) { request.reject(); return }
                 if (request.isMainFrame) updateCosmetic(Core.hostOf(request.url.toString()))
             }
 
             // Content scripts of Chrome/Firefox extensions talk to OyNIx over
             // this channel; it is only reachable from the isolated world.
             webChannel: tab.win.app.extChannel
-            webChannelWorld: WebEngineScript.ApplicationWorld
+            // Extension pages opened in a tab use the chrome.* runtime in
+            // their own (main) world; websites only in the isolated world.
+            webChannelWorld: (tab.model.url || "").indexOf("chrome-extension://") === 0 ? WebEngineScript.MainWorld : WebEngineScript.ApplicationWorld
 
             function installScripts() {
                 userScripts.clear()
                 var host = tab.win.app.extensionHost
                 host.installScripts(view, JSON.parse(Core.pageScripts()))
                 if (!tab.win.privateMode) host.installScripts(view, JSON.parse(Core.extensionScripts(tab.model.uid)))
+                if (!tab.win.privateMode) host.installScripts(view, JSON.parse(Core.extensionTabPageScripts(tab.model.uid)))
             }
             Connections {
                 target: Core
@@ -331,6 +337,8 @@ Item {
             onUrlChanged: {
                 var u = url.toString()
                 if (u !== "" && u !== tab.model.url) tab.model.url = u
+                if (u !== "" && !tab.win.privateMode)
+                    tab.win.app.extensionHost.tabEvent("webNavigation.onCommitted", [{ tabId: tab.model.uid, url: u, frameId: 0, processId: -1, timeStamp: Date.now(), transitionType: "link", transitionQualifiers: [] }])
                 tab.readerActive = false
                 tab.readerAvailable = false
                 // In-page navigations (pushState, #fragments) don't fire a
@@ -340,7 +348,11 @@ Item {
             Timer {
                 id: spaRecord
                 interval: 1200
-                onTriggered: if (!view.loading && !tab.win.privateMode) Core.recordVisit(view.url.toString(), view.title)
+                onTriggered: {
+                    if (view.loading || tab.win.privateMode) return
+                    Core.recordVisit(view.url.toString(), view.title)
+                    tab.win.app.extensionHost.tabEvent("webNavigation.onHistoryStateUpdated", [{ tabId: tab.model.uid, url: view.url.toString(), frameId: 0, timeStamp: Date.now(), transitionType: "link", transitionQualifiers: [] }])
+                }
             }
             onTitleChanged: {
                 tab.model.title = title
@@ -353,6 +365,18 @@ Item {
 
             onLoadingChanged: function (info) {
                 tab.model.loading = loading
+                // webNavigation events for extensions.
+                var nav = { tabId: tab.model.uid, url: info.url.toString(), frameId: 0, parentFrameId: -1, processId: -1, timeStamp: Date.now() }
+                var exth = tab.win.privateMode ? null : tab.win.app.extensionHost
+                if (exth && exth.hasWebExtensions) {
+                    if (info.status === WebEngineView.LoadStartedStatus) exth.tabEvent("webNavigation.onBeforeNavigate", [nav])
+                    else if (info.status === WebEngineView.LoadSucceededStatus) {
+                        exth.tabEvent("webNavigation.onDOMContentLoaded", [nav])
+                        exth.tabEvent("webNavigation.onCompleted", [nav])
+                        exth.tabEvent("history.onVisited", [{ id: "", url: nav.url, title: view.title, lastVisitTime: Date.now(), visitCount: 1, typedCount: 0 }])
+                    } else if (info.status === WebEngineView.LoadFailedStatus && info.errorCode !== -3)
+                        exth.tabEvent("webNavigation.onErrorOccurred", [Object.assign({ error: info.errorString }, nav)])
+                }
                 if (info.status === WebEngineView.LoadStartedStatus) {
                     tab.loadError = ""
                     tab.certError = null

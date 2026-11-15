@@ -117,6 +117,98 @@ fn crx_payload(bytes: &[u8]) -> Result<&[u8], String> {
     }
 }
 
+/// The extension's public key from a CRX header. Chrome derives the
+/// extension id from it; keeping it as the manifest "key" gives the
+/// extension the same id in OyNIx as in the Chrome Web Store, which native
+/// messaging hosts and some web services check.
+pub fn crx_public_key(bytes: &[u8]) -> Option<Vec<u8>> {
+    let u32le = |o: usize| bytes.get(o..o + 4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as usize);
+    if !bytes.starts_with(b"Cr24") {
+        return None;
+    }
+    match u32le(4)? {
+        2 => {
+            let len = u32le(8)?;
+            bytes.get(16..16 + len).map(|k| k.to_vec())
+        }
+        3 => {
+            let header = bytes.get(12..12 + u32le(8)?)?;
+            // CrxFileHeader: repeated AsymmetricKeyProof sha256_with_rsa = 2,
+            // sha256_with_ecdsa = 3 (each {bytes public_key = 1}), and
+            // signed_header_data = 10000 ({bytes crx_id = 1}).
+            let mut keys = Vec::new();
+            let mut crx_id = None;
+            for (field, data) in proto_fields(header)? {
+                match field {
+                    2 | 3 => {
+                        if let Some((_, k)) = proto_fields(data)?.into_iter().find(|(f, _)| *f == 1) {
+                            keys.push(k.to_vec());
+                        }
+                    }
+                    10000 => crx_id = proto_fields(data)?.into_iter().find(|(f, _)| *f == 1).map(|(_, v)| v.to_vec()),
+                    _ => {}
+                }
+            }
+            // The key whose hash is the crx_id is the extension's own (the
+            // others are the store's signing keys).
+            use sha2::{Digest, Sha256};
+            match crx_id {
+                Some(id) => keys.into_iter().find(|k| Sha256::digest(k)[..16] == id[..]),
+                None => keys.into_iter().next(),
+            }
+        }
+        _ => None,
+    }
+}
+
+/// Length-delimited fields of a protobuf message: (field number, bytes).
+/// Other wire types are skipped.
+fn proto_fields(mut b: &[u8]) -> Option<Vec<(u64, &[u8])>> {
+    fn varint(b: &mut &[u8]) -> Option<u64> {
+        let mut v = 0u64;
+        for i in 0..10 {
+            let (&byte, rest) = b.split_first()?;
+            *b = rest;
+            v |= ((byte & 0x7f) as u64) << (7 * i);
+            if byte & 0x80 == 0 {
+                return Some(v);
+            }
+        }
+        None
+    }
+    let mut out = Vec::new();
+    while !b.is_empty() {
+        let tag = varint(&mut b)?;
+        match tag & 7 {
+            0 => {
+                varint(&mut b)?;
+            }
+            1 => b = b.get(8..)?,
+            5 => b = b.get(4..)?,
+            2 => {
+                let len = varint(&mut b)? as usize;
+                out.push((tag >> 3, b.get(..len)?));
+                b = &b[len..];
+            }
+            _ => return None,
+        }
+    }
+    Some(out)
+}
+
+fn b64_encode(data: &[u8]) -> String {
+    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::new();
+    for c in data.chunks(3) {
+        let n = (c[0] as u32) << 16 | (*c.get(1).unwrap_or(&0) as u32) << 8 | *c.get(2).unwrap_or(&0) as u32;
+        out.push(T[(n >> 18) as usize & 63] as char);
+        out.push(T[(n >> 12) as usize & 63] as char);
+        out.push(if c.len() > 1 { T[(n >> 6) as usize & 63] as char } else { '=' });
+        out.push(if c.len() > 2 { T[n as usize & 63] as char } else { '=' });
+    }
+    out
+}
+
 fn unzip(bytes: &[u8], dest: &Path) -> Result<(), String> {
     let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|e| format!("not a valid archive: {e}"))?;
     for i in 0..zip.len() {
@@ -422,6 +514,59 @@ fn convert_firefox(dir: &Path, m: &mut Map<String, Value>, warnings: &mut Vec<St
         }
     }
     Ok(())
+}
+
+/// Rewrite a Manifest V2 manifest so Qt WebEngine's Chromium (which no
+/// longer loads V2) accepts it. OyNIx runs the background page itself and
+/// supplies the chrome.* APIs, so Chromium only needs to serve the
+/// extension's files and its action popup; V2 behaviour lives in OyNIx.
+fn convert_mv2(m: &mut Map<String, Value>, warnings: &mut Vec<String>) {
+    m.insert("manifest_version".into(), json!(3));
+    // browser_action / page_action -> action
+    let action = m.remove("browser_action");
+    let page_action = m.remove("page_action");
+    if !m.contains_key("action") {
+        if let Some(a) = action.or(page_action) {
+            m.insert("action".into(), a);
+        }
+    }
+    // Host patterns moved to host_permissions in V3.
+    for (from, to) in [("permissions", "host_permissions"), ("optional_permissions", "optional_host_permissions")] {
+        let mut hosts = vec![];
+        if let Some(Value::Array(perms)) = m.get_mut(from) {
+            let (h, rest): (Vec<Value>, Vec<Value>) = perms.drain(..).partition(|p| p.as_str().is_some_and(|s| s.contains("://") || s == "<all_urls>"));
+            *perms = rest;
+            hosts = h;
+        }
+        if !hosts.is_empty() {
+            if let Value::Array(a) = m.entry(to).or_insert_with(|| json!([])) {
+                a.extend(hosts);
+            }
+        }
+    }
+    // The background page runs in OyNIx (from the original manifest).
+    m.remove("background");
+    // V2's CSP string isn't valid in V3; Chromium's default applies.
+    if matches!(m.get("content_security_policy"), Some(Value::String(_))) {
+        m.remove("content_security_policy");
+        warnings.push("The extension's own content security policy was replaced by Chromium's default (eval isn't allowed)".into());
+    }
+    // web_accessible_resources: strings -> V3 objects.
+    if let Some(Value::Array(war)) = m.get_mut("web_accessible_resources") {
+        let names: Vec<Value> = war.iter().filter(|w| w.is_string()).cloned().collect();
+        war.retain(|w| !w.is_string());
+        if !names.is_empty() {
+            war.push(json!({ "resources": names, "matches": ["<all_urls>"] }));
+        }
+    }
+    if let Some(Value::Object(c)) = m.get_mut("commands") {
+        for k in ["_execute_browser_action", "_execute_page_action"] {
+            if let Some(v) = c.remove(k) {
+                c.insert("_execute_action".into(), v);
+            }
+        }
+    }
+    warnings.push("Manifest V2: Chromium in Qt WebEngine no longer loads V2 extensions, so OyNIx runs this one as V3 and provides the V2 APIs itself. webRequest “blocking” answers can’t cancel or change requests".into());
 }
 
 /// Qt WebEngine's renderer is not an extension process, so Chromium only
@@ -960,6 +1105,7 @@ pub fn install(source: &Path, list: &mut Vec<Entry>) -> Result<Entry, String> {
 fn install_inner(source: &Path, staging: &Path, base: &Path, list: &mut Vec<Entry>) -> Result<Entry, String> {
     let ext = source.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
     let from_xpi = ext == "xpi";
+    let mut crx_key: Option<Vec<u8>> = None;
     if source.is_dir() {
         copy_dir(source, staging).map_err(|e| e.to_string())?;
     } else if source.file_name().map(|n| n == "oynix.json" || n == "manifest.json").unwrap_or(false) {
@@ -968,6 +1114,7 @@ fn install_inner(source: &Path, staging: &Path, base: &Path, list: &mut Vec<Entr
         let bytes = std::fs::read(source).map_err(|e| format!("cannot read {}: {e}", source.display()))?;
         let zip = if bytes.starts_with(b"Cr24") { crx_payload(&bytes)? } else { &bytes[..] };
         unzip(zip, staging)?;
+        crx_key = crx_public_key(&bytes);
     }
     let dir = content_root(staging);
 
@@ -978,6 +1125,9 @@ fn install_inner(source: &Path, staging: &Path, base: &Path, list: &mut Vec<Entr
         let text = std::fs::read_to_string(dir.join("manifest.json")).map_err(|_| "no manifest.json or oynix.json found".to_string())?;
         let mut manifest = parse_json_lenient(&text)?;
         let Value::Object(ref mut m) = manifest else { return Err("manifest.json is not an object".into()) };
+        if let (Some(k), false) = (&crx_key, m.contains_key("key")) {
+            m.insert("key".into(), json!(b64_encode(k)));
+        }
         let mv = m.get("manifest_version").and_then(Value::as_u64).unwrap_or(0);
         match mv {
             2 | 3 => {}
@@ -992,12 +1142,14 @@ fn install_inner(source: &Path, staging: &Path, base: &Path, list: &mut Vec<Entr
         if firefox {
             convert_firefox(&dir, m, &mut e.warnings)?;
         }
+        // The background page comes from the manifest as written.
+        let original = Value::Object(m.clone());
         if mv == 2 {
-            e.warnings.push("Manifest V2: webRequestBlocking and other MV2-only APIs are not available".into());
+            convert_mv2(m, &mut e.warnings);
         }
-        expose_own_resources(m, mv);
+        expose_own_resources(m, 3.max(mv));
         std::fs::write(dir.join("manifest.json"), serde_json::to_vec_pretty(&manifest).unwrap()).map_err(|e| e.to_string())?;
-        e.background_page = write_background_page(&dir, &manifest)?;
+        e.background_page = write_background_page(&dir, &original)?;
         e.first_run = true;
 
         let raw_name = manifest.get("name").and_then(Value::as_str).unwrap_or("Extension").to_string();
@@ -1235,5 +1387,36 @@ mod template_tests {
     fn template_compiles() {
         let js = crate::core::tscompile::transpile(super::TEMPLATE_TS, "code.ts").unwrap();
         assert!(js.contains("location.hostname") && !js.contains("declare"));
+    }
+}
+
+#[cfg(test)]
+mod crx_tests {
+    #[test]
+    fn crx3_key_matches_crx_id() {
+        use sha2::{Digest, Sha256};
+        // Build a minimal CRX3: two key proofs, the second is the extension's.
+        let store_key = b"store-signing-key".to_vec();
+        let own_key = b"extension-own-public-key".to_vec();
+        let id = Sha256::digest(&own_key)[..16].to_vec();
+        let ld = |field: u64, data: &[u8]| -> Vec<u8> {
+            let mut v = vec![];
+            let mut tag = field << 3 | 2;
+            loop { let b = (tag & 0x7f) as u8; tag >>= 7; if tag == 0 { v.push(b); break } v.push(b | 0x80); }
+            let mut len = data.len() as u64;
+            loop { let b = (len & 0x7f) as u8; len >>= 7; if len == 0 { v.push(b); break } v.push(b | 0x80); }
+            v.extend_from_slice(data);
+            v
+        };
+        let mut header = ld(2, &ld(1, &store_key));
+        header.extend(ld(2, &ld(1, &own_key)));
+        header.extend(ld(10000, &ld(1, &id)));
+        let mut crx = b"Cr24".to_vec();
+        crx.extend(3u32.to_le_bytes());
+        crx.extend((header.len() as u32).to_le_bytes());
+        crx.extend(&header);
+        crx.extend(b"PK...");
+        assert_eq!(super::crx_public_key(&crx).unwrap(), own_key);
+        assert_eq!(crate::core::nativemsg::chrome_id_from_key(&own_key).len(), 32);
     }
 }
