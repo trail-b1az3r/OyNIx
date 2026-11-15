@@ -1,0 +1,59 @@
+name: Nightly
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  nightly:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libgl1-mesa-dev libegl-dev libvulkan-dev \
+            libxkbcommon-dev libxkbcommon-x11-0 libxcb-cursor0 libnss3 libfontconfig1 \
+            libarchive-tools zstd
+
+      - name: Install Qt 6.12
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.12.0'
+          host: linux
+          target: desktop
+          arch: linux_gcc_64
+          modules: qtwebengine qtwebchannel qtpositioning qtshadertools qtpdf
+          dir: ${{ github.workspace }}/.qt-ci
+          cache: true
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build nightly packages
+        run: |
+          QMAKE="$QT_ROOT_DIR/bin/qmake" cargo test --locked
+          QMAKE="$QT_ROOT_DIR/bin/qmake" ./scripts/build-deb.sh nightly
+          QMAKE="$QT_ROOT_DIR/bin/qmake" ./scripts/build-pkg.sh nightly
+
+      - name: Checksums
+        run: |
+          mkdir -p dist
+          cp target/deb/*.deb target/pkg/*.pkg.tar.zst dist/
+          (cd dist && sha256sum * > SHA256SUMS)
+
+      - name: Publish nightly release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nightly
+          name: OyNIx Nightly
+          prerelease: true
+          draft: false
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: dist/*
