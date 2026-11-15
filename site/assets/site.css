@@ -342,3 +342,8 @@ details.source pre { margin: 0; border-radius: 0 0 var(--shape-l) var(--shape-l)
 .legacy-releases summary { cursor: pointer; font-weight: 600; color: var(--on-surface); }
 .legacy-releases[open] summary { margin-bottom: 12px; }
 .legacy-note { color: var(--on-surface-variant); font-size: 14px; margin: 0 0 16px; }
+
+/* Dedicated releases page: version cards and a clear per-version download action. */
+.release-primary-row { margin-top: 14px; }
+.release-primary { min-height: 42px; height: auto; padding: 10px 18px; }
+.release-card .release-assets { padding-top: 12px; border-top: 1px solid var(--outline-variant); }
