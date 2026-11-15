@@ -135,30 +135,85 @@ addr: <b>oynix</b> · a browser that keeps to itself
   <div class="get">
     <div class="section-head" style="margin-bottom:28px">
       <span class="eyebrow">Download</span>
-      <h2>OyNIx {{version}}</h2>
+      <h2>OyNIx releases</h2>
       <p class="lede">Packages for 64-bit Intel and AMD PCs. Each one includes its own copy of Qt, so it installs without touching your system’s libraries.</p>
     </div>
+
     <div class="seg" data-panels="install" role="tablist">
-      <button type="button" data-panel="get-deb" aria-selected="true">Debian, Ubuntu, Mint</button>
-      <button type="button" data-panel="get-arch" aria-selected="false">Arch, Manjaro</button>
+      <button type="button" data-panel="get-stable" aria-selected="true">Stable</button>
+      <button type="button" data-panel="get-beta" aria-selected="false">Beta</button>
+      <button type="button" data-panel="get-nightly" aria-selected="false">Nightly</button>
+      <button type="button" data-panel="get-legacy" aria-selected="false">Legacy</button>
       <button type="button" data-panel="get-src" aria-selected="false">From source</button>
     </div>
-    <div class="panel" id="get-deb">
-      <pre data-copy><code><span class="c"># download oynix_{{version}}_amd64.deb from the release page, then:</span>
-sudo apt install ./oynix_{{version}}_amd64.deb</code></pre>
+
+    <div class="panel" id="get-stable">
+      <h3>Stable · v5.2.0</h3>
+      <pre data-copy><code><span class="c"># Debian, Ubuntu, Mint</span>
+sudo apt install ./oynix_5.2.0_amd64.deb
+
+<span class="c"># Arch, Manjaro, EndeavourOS</span>
+sudo pacman -U oynix-5.2.0-1-x86_64.pkg.tar.zst</code></pre>
+      <p style="margin-top:8px;font-size:14px;color:var(--on-surface-variant)">Current stable channel. Auto-updates to the latest stable release when a new one is published.</p>
     </div>
-    <div class="panel" id="get-arch" hidden>
-      <pre data-copy><code><span class="c"># download oynix-{{version}}-1-x86_64.pkg.tar.zst from the release page, then:</span>
-sudo pacman -U oynix-{{version}}-1-x86_64.pkg.tar.zst</code></pre>
+
+    <div class="panel" id="get-beta" hidden>
+      <h3>Beta · v5.1.0</h3>
+      <pre data-copy><code><span class="c"># Debian, Ubuntu, Mint</span>
+sudo apt install ./oynix_5.1.0_amd64.deb
+
+<span class="c"># Arch, Manjaro, EndeavourOS</span>
+sudo pacman -U oynix-5.1.0-1-x86_64.pkg.tar.zst</code></pre>
+      <p style="margin-top:8px;font-size:14px;color:var(--on-surface-variant)">Preview builds for the next stable release. This channel is for testers and early adopters.</p>
     </div>
+
+    <div class="panel" id="get-nightly" hidden>
+      <h3>Nightly</h3>
+      <pre data-copy><code><span class="c"># download the latest nightly .deb</span>
+sudo apt install ./oynix-nightly_amd64.deb
+
+<span class="c"># or the latest nightly Arch build</span>
+sudo pacman -U oynix-nightly-1-x86_64.pkg.tar.zst</code></pre>
+      <p style="margin-top:8px;font-size:14px;color:var(--on-surface-variant)">Nightly builds are generated automatically from the latest main branch and are meant for testing only.</p>
+    </div>
+
+    <div class="panel" id="get-legacy" hidden>
+      <h3>Legacy releases</h3>
+      <p>Older builds that remain available for reference and troubleshooting:</p>
+      <ul>
+        <li>v4.3</li>
+        <li>v4.2.7</li>
+        <li>v4.2.6</li>
+        <li>v4.2.5</li>
+        <li>v4.2.4</li>
+        <li>v4.2.3</li>
+        <li>v4.2.2</li>
+        <li>v4.2</li>
+        <li>v4.1.1.1.1</li>
+        <li>v4.1.1.1</li>
+        <li>v4.1</li>
+        <li>v4</li>
+        <li>v3.1.0</li>
+        <li>v3.0.5</li>
+        <li>v2.3</li>
+        <li>v2.1</li>
+        <li>v1.1.1.1.1</li>
+        <li>v1.1.1.1</li>
+        <li>v1.1.1</li>
+        <li>v1.1.0</li>
+      </ul>
+      <p style="margin-top:8px;font-size:14px;color:var(--on-surface-variant)">This archive is kept for older systems, testing, and troubleshooting. The full release history remains on GitHub.</p>
+    </div>
+
     <div class="panel" id="get-src" hidden>
       <pre data-copy><code>git clone {{repo}}.git && cd OyNIx
 ./scripts/deps-ubuntu.sh      <span class="c"># system libraries, Rust and Qt 6.12</span>
 cargo build --release
 ./scripts/install.sh          <span class="c"># into ~/.local, with a desktop entry</span></code></pre>
     </div>
+
     <div class="btn-row" style="margin-top:8px">
-      <a class="btn" href="{{repo}}/releases/latest">{{icon:download}}Release page</a>
+      <a class="btn" href="{{repo}}/releases">{{icon:download}}All releases</a>
       <a class="btn text" href="{{root}}docs/">Getting started {{icon:chevronRight}}</a>
     </div>
     <p style="margin:22px 0 0;font-size:14px;color:var(--on-surface-variant)">Every release lists SHA-256 checksums. Check a download with <code>sha256sum -c SHA256SUMS</code>.</p>
