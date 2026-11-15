@@ -48,11 +48,11 @@
       return '<a class="btn release-download" href="' + escapeHtml(asset.browser_download_url) +
         '" download rel="noopener noreferrer">' + label + (size ? '<small>' + escapeHtml(size) + '</small>' : '') + '</a>';
     }).join('');
-    return '<article class="release-card">' +
+    var primary = assets.find(function (a) { return a.browser_download_url && !/sha256|checksum/i.test(a.name || ''); }) || assets.find(function (a) { return a.browser_download_url; });\n    var primaryButton = primary ? '<a class="btn release-primary" href="' + escapeHtml(primary.browser_download_url) + '" rel="noopener noreferrer">Download this version</a>' : '';\n    return '<article class="release-card">' +
       '<div class="release-heading"><div><h3>' + escapeHtml(release.name || tag) + '</h3>' +
       '<p class="release-meta">' + escapeHtml(tag) + (dateText ? ' · ' + escapeHtml(dateText) : '') +
       (release.prerelease ? ' · Pre-release' : '') + '</p></div></div>' +
-      (links ? '<div class="release-assets">' + links + '</div>' : '<p class="release-empty">No downloadable assets are attached to this release.</p>') +
+      (primaryButton ? '<div class="release-primary-row">' + primaryButton + '</div>' : '') +\n      (links ? '<div class="release-assets">' + links + '</div>' : '<p class="release-empty">No downloadable assets are attached to this release.</p>') +
       '</article>';
   }
 
