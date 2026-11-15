@@ -48,11 +48,14 @@
       return '<a class="btn release-download" href="' + escapeHtml(asset.browser_download_url) +
         '" download rel="noopener noreferrer">' + label + (size ? '<small>' + escapeHtml(size) + '</small>' : '') + '</a>';
     }).join('');
-    var primary = assets.find(function (a) { return a.browser_download_url && !/sha256|checksum/i.test(a.name || ''); }) || assets.find(function (a) { return a.browser_download_url; });\n    var primaryButton = primary ? '<a class="btn release-primary" href="' + escapeHtml(primary.browser_download_url) + '" rel="noopener noreferrer">Download this version</a>' : '';\n    return '<article class="release-card">' +
+    var primary = assets.find(function (a) { return a.browser_download_url && !/sha256|checksum/i.test(a.name || ''); }) || assets.find(function (a) { return a.browser_download_url; });
+    var primaryButton = primary ? '<a class="btn release-primary" href="' + escapeHtml(primary.browser_download_url) + '" rel="noopener noreferrer">Download this version</a>' : '';
+    return '<article class="release-card">' +
       '<div class="release-heading"><div><h3>' + escapeHtml(release.name || tag) + '</h3>' +
       '<p class="release-meta">' + escapeHtml(tag) + (dateText ? ' · ' + escapeHtml(dateText) : '') +
       (release.prerelease ? ' · Pre-release' : '') + '</p></div></div>' +
-      (primaryButton ? '<div class="release-primary-row">' + primaryButton + '</div>' : '') +\n      (links ? '<div class="release-assets">' + links + '</div>' : '<p class="release-empty">No downloadable assets are attached to this release.</p>') +
+      (primaryButton ? '<div class="release-primary-row">' + primaryButton + '</div>' : '') +
+      (links ? '<div class="release-assets">' + links + '</div>' : '<p class="release-empty">No downloadable assets are attached to this release.</p>') +
       '</article>';
   }
 
@@ -111,7 +114,9 @@
     var b = document.createElement('button');
     b.className = 'copy'; b.type = 'button'; b.textContent = 'Copy';
     b.addEventListener('click', function () {
-      var text = pre.querySelector('code').innerText.replace(/^\s*#.*$/gm, '').replace(/\n{2,}/g, '\n').trim();
+      var text = pre.querySelector('code').innerText.replace(/^\s*#.*$/gm, '').replace(/
+{2,}/g, '
+').trim();
       navigator.clipboard.writeText(text).then(function () {
         b.textContent = 'Copied'; setTimeout(function () { b.textContent = 'Copy'; }, 1400);
       });
