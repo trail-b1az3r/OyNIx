@@ -134,10 +134,10 @@ class Site:
     def layout(self, path, title, body, description, current, addr, root=None):
         depth = path.count("/")
         root = "../" * depth if root is None else root
-        nav = [("", "Overview"), ("docs/", "Docs"), ("extensions/", "Extensions"), ("#download", "Download")]
+        nav = [("", "Overview"), ("docs/", "Docs"), ("extensions/", "Extensions"), ("downloads/", "Download")]
         links = []
         for href, label in nav:
-            target = (root + href) if not href.startswith("#") else (root + "index.html" + href if depth else href)
+            target = root + href
             cur = ' aria-current="page"' if current == href else ""
             links.append(f'<a href="{target or "./"}"{cur}>{label}</a>')
         full_title = "OyNIx" if title == "OyNIx" else f"{title} · OyNIx"

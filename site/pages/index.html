@@ -11,7 +11,7 @@ addr: <b>oynix</b> · a browser that keeps to itself
       <h1>A browser that keeps <em>to itself.</em></h1>
       <p class="lede">OyNIx is a desktop web browser written in Rust and drawn with Vulkan. Trackers and ads are stopped before they load, nothing about you is sent anywhere, and your Chrome and Firefox extensions come with you.</p>
       <div class="btn-row">
-        <a class="btn" href="#download">{{icon:download}}Download {{version}}</a>
+        <a class="btn" href="{{root}}downloads/">{{icon:download}}Download {{version}}</a>
         <a class="btn tonal" href="{{root}}docs/">Read the docs</a>
       </div>
       <p class="hero-meta">Free and open source · Debian, Ubuntu, Mint and Arch · x86-64</p>
@@ -131,41 +131,4 @@ addr: <b>oynix</b> · a browser that keeps to itself
   </div>
 </section>
 
-<section class="wrap" id="download">
-  <div class="get">
-    <div class="section-head" style="margin-bottom:28px">
-      <span class="eyebrow">Download</span>
-      <h2>OyNIx releases</h2>
-      <p class="lede">Browse releases here on the OyNIx website. Choose a package to download it directly; release pages are not opened.</p>
-    </div>
 
-    <div class="seg" data-panels="install" role="tablist" aria-label="Release channel">
-      <button type="button" data-panel="get-stable" aria-selected="true">Stable</button>
-      <button type="button" data-panel="get-beta" aria-selected="false">Pre-release</button>
-      <button type="button" data-panel="get-src" aria-selected="false">From source</button>
-    </div>
-
-    <p class="release-status" id="release-status" role="status" aria-live="polite">Loading releases…</p>
-    <div class="panel" id="get-stable">
-      <div class="release-list" id="release-stable"></div>
-    </div>
-    <div class="panel" id="get-beta" hidden>
-      <div class="release-list" id="release-beta"></div>
-    </div>
-
-    <details class="legacy-releases">
-      <summary>Show legacy releases (v4.3 and older)</summary>
-      <p class="legacy-note">Older builds are kept here for compatibility and troubleshooting. This section stays collapsed until opened.</p>
-      <div class="release-list" id="release-legacy"></div>
-    </details>
-
-    <div class="panel" id="get-src" hidden>
-      <pre data-copy><code>git clone {{repo}}.git && cd OyNIx
-./scripts/deps-ubuntu.sh      <span class="c"># system libraries, Rust and Qt 6.12</span>
-cargo build --release
-./scripts/install.sh          <span class="c"># into ~/.local, with a desktop entry</span></code></pre>
-    </div>
-
-    <p style="margin:22px 0 0;font-size:14px;color:var(--on-surface-variant)">Every release lists SHA-256 checksums. Download <code>SHA256SUMS</code> alongside a package and check it with <code>sha256sum -c SHA256SUMS</code>.</p>
-  </div>
-</section>
