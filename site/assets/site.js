@@ -1,6 +1,60 @@
 // OyNIx website: small progressive enhancements. Every page works without it.
 (function () {
   'use strict';
+  (function () {
+  'use strict';
+
+  function parseVersion(value) {
+    return value ? value.replace(/^v/, '').split('-')[0] : '';
+  }
+
+  function setText(selector, text) {
+    var el = document.querySelector(selector);
+    if (el) el.textContent = text;
+  }
+
+  function formatReleaseLink(tag, assetName) {
+    return 'https://github.com/trail-b1az3r/OyNIx/releases/tag/' + tag;
+  }
+
+  function renderReleaseData(data) {
+    if (!data || !data.length) return;
+
+    var stable = data.find(function (r) { return !r.prerelease; }) || data[0];
+    var beta = data.find(function (r) { return r.prerelease; }) || stable;
+    var latest = data[0];
+
+    if (document.querySelector('#get-stable h3')) {
+      document.querySelector('#get-stable h3').textContent = 'Stable · v' + parseVersion(stable.tag_name || stable.name);
+    }
+    if (document.querySelector('#get-stable pre')) {
+      var stableCode = document.querySelector('#get-stable pre code');
+      if (stableCode) {
+        stableCode.innerHTML =
+          '<span class=\"c\"># Debian, Ubuntu, Mint</span>\n' +
+          'sudo apt install ./oynix_' + parseVersion(stable.tag_name || stable.name) + '_amd64.deb\n\n' +
+          '<span class=\"c\"># Arch, Manjaro, EndeavourOS</span>\n' +
+          'sudo pacman -U oynix-' + parseVersion(stable.tag_name || stable.name) + '-1-x86_64.pkg.tar.zst';
+      }
+    }
+
+    if (document.querySelector('#get-beta h3')) {
+      document.querySelector('#get-beta h3').textContent = 'Beta · v' + parseVersion(beta.tag_name || beta.name);
+    }
+
+    if (document.querySelector('#get-nightly h3')) {
+      document.querySelector('#get-nightly h3').textContent = 'Nightly · ' + (latest.tag_name || latest.name || 'latest');
+    }
+  }
+
+  var releaseBox = document.querySelector('#download');
+  if (releaseBox) {
+    fetch('https://api.github.com/repos/trail-b1az3r/OyNIx/releases')
+      .then(function (res) { return res.ok ? res.json() : []; })
+      .then(renderReleaseData)
+      .catch(function () {});
+  }
+})();
 
   // Mobile menu
   var menu = document.querySelector('.menu-btn'), tabs = document.querySelector('.tabs');
