@@ -729,6 +729,28 @@ Rectangle {
                 }
             }
             Section {
+                title: qsTr("Developer")
+                SwitchRow {
+                    label: qsTr("Developer mode")
+                    hint: qsTr("For people writing or testing extensions. Shows each extension’s id and folder, and unlocks the setting below.")
+                    key: "extDeveloperMode"
+                }
+                Divider { visible: sw.s.extDeveloperMode === true }
+                SwitchRow {
+                    visible: sw.s.extDeveloperMode === true
+                    label: qsTr("Allow powerful extension APIs")
+                    hint: qsTr("Lets extensions that ask for them in their manifest: run programs on your computer (nativeMessaging, used by password managers such as KeePassXC), read and change every cookie including sign-ins (cookies), watch every request your browser makes (webRequest), delete browsing data (browsingData) and turn other extensions on, off or remove them (management). Only turn this on for extensions you trust completely.")
+                    key: "extPowerfulApis"
+                }
+                Txt {
+                    visible: sw.s.extDeveloperMode === true && sw.s.extPowerfulApis === true
+                    Layout.fillWidth: true; Layout.margins: 12
+                    wrapMode: Text.WordWrap; elide: Text.ElideNone
+                    color: Theme.warning; font.pixelSize: 12
+                    text: qsTr("Powerful APIs are on. Extensions that declare them can now act outside the web pages you visit.")
+                }
+            }
+            Section {
                 title: qsTr("Install")
                 Row_ {
                     label: qsTr("Extension Gallery")
@@ -746,7 +768,7 @@ Rectangle {
                 Divider {}
                 Row_ {
                     label: qsTr("OyNIx extensions")
-                    hint: qsTr("A folder with oynix.json, content.js and content.css — no build step.")
+                    hint: qsTr("oynix.json, code.ts and content.css, plus an optional panel, page, data or browser style. OyNIx compiles the TypeScript itself.")
                     Rectangle {
                         Layout.preferredWidth: 150; implicitHeight: 28; radius: 6; color: Theme.field; border.color: Theme.separator
                         TextInput {
@@ -810,6 +832,7 @@ Rectangle {
                                     spacing: 6
                                     Txt { text: ext.modelData.name; font.weight: Font.DemiBold; Layout.maximumWidth: 240 }
                                     Txt { text: ext.modelData.version + (ext.modelData.builtin ? " · " + qsTr("Built in") : "") + (ext.modelData.hasTheme ? " · " + qsTr("Browser style") : "") + ((ext.modelData.permissions || []).indexOf("ocr") >= 0 ? " · " + qsTr("Reads text from page screenshots") : ""); color: Theme.textDim; font.pixelSize: 11 }
+                                    Txt { visible: sw.s.extDeveloperMode === true; Layout.fillWidth: true; text: (ext.modelData.webId ? "ID " + ext.modelData.webId + " · " : "") + ext.modelData.path; color: Theme.textFaint; font.pixelSize: 11; font.family: "monospace"; elide: Text.ElideMiddle }
                                     Rectangle {
                                         implicitWidth: kindText.implicitWidth + 12; implicitHeight: 18; radius: 9
                                         color: ext.modelData.kind === "firefox" ? "#33ff9f0a" : ext.modelData.kind === "oynix" ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.2) : "#330a84ff"
@@ -987,6 +1010,7 @@ Rectangle {
                     hint: {
                         var u = updSection.u, r = updSection.rel
                         if (u.error) return u.error
+                        if (u.kind === "aur") return qsTr("This copy came from the AUR, so update it with your AUR helper (for example: yay -Syu oynix-bin).")
                         if (u.kind === "manual") return qsTr("This copy wasn’t installed from a .deb or pacman package, so OyNIx can tell you about new versions but can’t install them.")
                         if (r && r.package && (u.state === "available" || u.state === "downloading")) return qsTr("%1 download, checked against its published SHA-256 before installing.").arg(updSection.size(r.package.size))
                         if (u.state === "ready") return qsTr("Installing uses your package manager and asks for your password.")
@@ -994,12 +1018,12 @@ Rectangle {
                         return s > 1e15 ? qsTr("Not checked yet.") : qsTr("Last checked %1.").arg(s < 3600 ? qsTr("in the last hour") : s < 86400 ? qsTr("today") : qsTr("%1 days ago").arg(Math.floor(s / 86400)))
                     }
                     PushButton {
-                        visible: ["idle", "current", "error", "available"].indexOf(updSection.u.state) >= 0 && !(updSection.u.state === "available" && updSection.u.kind !== "manual")
+                        visible: ["idle", "current", "error", "available"].indexOf(updSection.u.state) >= 0 && !(updSection.u.state === "available" && updSection.u.kind !== "manual" && updSection.u.kind !== "aur")
                         text: qsTr("Check Now")
                         onClicked: sw.app.checkForUpdate(true)
                     }
                     PushButton {
-                        visible: updSection.u.state === "available" && updSection.u.kind !== "manual"
+                        visible: updSection.u.state === "available" && updSection.u.kind !== "manual" && updSection.u.kind !== "aur"
                         primary: true; text: qsTr("Download")
                         onClicked: updSection.u.download()
                     }
@@ -1020,7 +1044,7 @@ Rectangle {
                         onClicked: sw.app.restartForUpdate()
                     }
                     PushButton {
-                        visible: updSection.u.kind === "manual" && updSection.rel !== null
+                        visible: (updSection.u.kind === "manual" || updSection.u.kind === "aur") && updSection.rel !== null
                         text: qsTr("Release Page")
                         onClicked: sw.app.openInBrowser(updSection.rel.page)
                     }

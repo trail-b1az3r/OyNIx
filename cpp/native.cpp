@@ -3,7 +3,13 @@
 
 #include <QtCore/QByteArray>
 #include <QtCore/QCoreApplication>
+#include <algorithm>
+#include <QtCore/QDateTime>
 #include <QtCore/QDir>
+#include <QtCore/QJsonArray>
+#include <QtCore/QJsonDocument>
+#include <QtCore/QJsonObject>
+#include <QtNetwork/QNetworkCookie>
 #include <QtCore/QFile>
 #include <QtCore/QLibraryInfo>
 #include <QtCore/QString>
@@ -45,6 +51,19 @@ class Interceptor final : public QWebEngineUrlRequestInterceptor {
 public:
     using QWebEngineUrlRequestInterceptor::QWebEngineUrlRequestInterceptor;
 
+    // webRequest observation for extensions (queued in Rust only while an
+    // extension with powerful APIs is listening).
+    static void observe(QWebEngineUrlRequestInfo &info, const QByteArray &url, const QByteArray &first, int type, bool blocked) {
+        QJsonArray headers;
+        const auto h = info.httpHeaders();
+        for (auto it = h.cbegin(); it != h.cend(); ++it)
+            headers.append(QJsonObject{{QStringLiteral("name"), QString::fromLatin1(it.key())}, {QStringLiteral("value"), QString::fromLatin1(it.value())}});
+        const QByteArray hj = QJsonDocument(headers).toJson(QJsonDocument::Compact);
+        const QByteArray method = info.requestMethod();
+        observe_request(to_str(url), to_str(first), rust::Str(method.constData(), static_cast<size_t>(method.size())), type,
+                        rust::Str(hj.constData(), static_cast<size_t>(hj.size())), blocked);
+    }
+
     void interceptRequest(QWebEngineUrlRequestInfo &info) override {
         const QByteArray url = info.requestUrl().toEncoded();
         const QByteArray first = info.firstPartyUrl().toEncoded();
@@ -62,8 +81,10 @@ public:
             }
         } else if (should_block(to_str(url), to_str(first), type)) {
             info.block(true);
+            observe(info, url, first, type, true);
             return;
         }
+        observe(info, url, first, type, false);
         if (flags & 1u) info.setHttpHeader("DNT", "1");
         if (flags & 2u) info.setHttpHeader("Sec-GPC", "1");
     }
@@ -336,4 +357,106 @@ void unload_panel(QObject *hostObj) {
     }
 }
 
+// ── chrome.cookies ─────────────────────────────────────────────────────
+// Qt's cookie store has no synchronous read, so each profile's cookies are
+// mirrored here from the store's added/removed signals.
+
+namespace {
+struct CookieMirror { QList<QNetworkCookie> cookies; };
+QHash<QObject *, CookieMirror *> g_mirrors;
+
+QJsonObject cookie_json(const QNetworkCookie &c) {
+    QJsonObject o;
+    o.insert(QStringLiteral("name"), QString::fromUtf8(c.name()));
+    o.insert(QStringLiteral("value"), QString::fromUtf8(c.value()));
+    o.insert(QStringLiteral("domain"), c.domain());
+    o.insert(QStringLiteral("hostOnly"), !c.domain().startsWith(QLatin1Char('.')));
+    o.insert(QStringLiteral("path"), c.path().isEmpty() ? QStringLiteral("/") : c.path());
+    o.insert(QStringLiteral("secure"), c.isSecure());
+    o.insert(QStringLiteral("httpOnly"), c.isHttpOnly());
+    const auto ss = c.sameSitePolicy();
+    o.insert(QStringLiteral("sameSite"), ss == QNetworkCookie::SameSite::Strict ? QStringLiteral("strict")
+                                         : ss == QNetworkCookie::SameSite::Lax ? QStringLiteral("lax")
+                                         : ss == QNetworkCookie::SameSite::None ? QStringLiteral("no_restriction") : QStringLiteral("unspecified"));
+    o.insert(QStringLiteral("session"), c.isSessionCookie());
+    if (!c.isSessionCookie()) o.insert(QStringLiteral("expirationDate"), double(c.expirationDate().toMSecsSinceEpoch()) / 1000.0);
+    o.insert(QStringLiteral("storeId"), QStringLiteral("0"));
+    return o;
+}
+
+void notify_cookie(const QNetworkCookie &c, bool removed) {
+    const QByteArray j = QJsonDocument(cookie_json(c)).toJson(QJsonDocument::Compact);
+    cookie_changed(rust::Str(j.constData(), static_cast<size_t>(j.size())), removed);
+}
+
+CookieMirror *mirror(QObject *obj) {
+    auto *profile = qobject_cast<QQuickWebEngineProfile *>(obj);
+    if (!profile) return nullptr;
+    if (auto *m = g_mirrors.value(obj)) return m;
+    auto *m = new CookieMirror;
+    g_mirrors.insert(obj, m);
+    QWebEngineCookieStore *store = profile->cookieStore();
+    QObject::connect(store, &QWebEngineCookieStore::cookieAdded, store, [m](const QNetworkCookie &c) {
+        m->cookies.erase(std::remove_if(m->cookies.begin(), m->cookies.end(), [&](const QNetworkCookie &x) { return x.hasSameIdentifier(c); }), m->cookies.end());
+        m->cookies.append(c);
+        notify_cookie(c, false);
+    });
+    QObject::connect(store, &QWebEngineCookieStore::cookieRemoved, store, [m](const QNetworkCookie &c) {
+        m->cookies.erase(std::remove_if(m->cookies.begin(), m->cookies.end(), [&](const QNetworkCookie &x) { return x.hasSameIdentifier(c); }), m->cookies.end());
+        notify_cookie(c, true);
+    });
+    QObject::connect(obj, &QObject::destroyed, [obj]() { delete g_mirrors.take(obj); });
+    store->loadAllCookies();
+    return m;
+}
+} // namespace
+
+rust::String cookies_all(QObject *profile) {
+    QJsonArray out;
+    if (auto *m = mirror(profile))
+        for (const auto &c : m->cookies) out.append(cookie_json(c));
+    const QByteArray j = QJsonDocument(out).toJson(QJsonDocument::Compact);
+    return rust::String(j.constData(), static_cast<size_t>(j.size()));
+}
+
+bool cookie_set(QObject *obj, rust::Str json) {
+    auto *profile = qobject_cast<QQuickWebEngineProfile *>(obj);
+    if (!profile) return false;
+    mirror(obj);
+    const QJsonObject o = QJsonDocument::fromJson(QByteArray(json.data(), static_cast<qsizetype>(json.size()))).object();
+    const QUrl url(o.value(QStringLiteral("url")).toString());
+    if (!url.isValid() || url.host().isEmpty()) return false;
+    QNetworkCookie c(o.value(QStringLiteral("name")).toString().toUtf8(), o.value(QStringLiteral("value")).toString().toUtf8());
+    if (o.contains(QStringLiteral("domain"))) c.setDomain(o.value(QStringLiteral("domain")).toString());
+    c.setPath(o.value(QStringLiteral("path")).toString(QStringLiteral("/")));
+    c.setSecure(o.value(QStringLiteral("secure")).toBool());
+    c.setHttpOnly(o.value(QStringLiteral("httpOnly")).toBool());
+    const QString ss = o.value(QStringLiteral("sameSite")).toString();
+    if (ss == QLatin1String("strict")) c.setSameSitePolicy(QNetworkCookie::SameSite::Strict);
+    else if (ss == QLatin1String("lax")) c.setSameSitePolicy(QNetworkCookie::SameSite::Lax);
+    else if (ss == QLatin1String("no_restriction")) c.setSameSitePolicy(QNetworkCookie::SameSite::None);
+    if (o.contains(QStringLiteral("expirationDate")))
+        c.setExpirationDate(QDateTime::fromMSecsSinceEpoch(qint64(o.value(QStringLiteral("expirationDate")).toDouble() * 1000)));
+    profile->cookieStore()->setCookie(c, url);
+    return true;
+}
+
+bool cookie_remove(QObject *obj, rust::Str urlStr, rust::Str nameStr) {
+    auto *profile = qobject_cast<QQuickWebEngineProfile *>(obj);
+    CookieMirror *m = mirror(obj);
+    if (!profile || !m) return false;
+    const QUrl url(QString::fromUtf8(urlStr.data(), static_cast<qsizetype>(urlStr.size())));
+    const QByteArray name(nameStr.data(), static_cast<qsizetype>(nameStr.size()));
+    bool any = false;
+    for (const auto &c : m->cookies) {
+        const QString d = c.domain().startsWith(QLatin1Char('.')) ? c.domain().mid(1) : c.domain();
+        if (c.name() == name && (url.host() == d || url.host().endsWith(QLatin1Char('.') + d))) {
+            profile->cookieStore()->deleteCookie(c, url);
+            any = true;
+        }
+    }
+    return any;
+}
+
 } // namespace oynix
+

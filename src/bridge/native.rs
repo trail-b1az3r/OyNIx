@@ -6,6 +6,8 @@ pub mod ffi {
         fn should_block(url: &str, first_party: &str, resource_type: i32) -> bool;
         fn strip_tracking(url: &str) -> String;
         fn privacy_flags() -> u32;
+        fn observe_request(url: &str, first_party: &str, method: &str, resource_type: i32, headers_json: &str, blocked: bool);
+        fn cookie_changed(cookie_json: &str, removed: bool);
     }
 
     unsafe extern "C++" {
@@ -21,6 +23,9 @@ pub mod ffi {
         unsafe fn clear_cookies(profile: *mut QObject);
         unsafe fn load_panel(host: *mut QObject, qml_path: &str, ext_dir: &str, api: *mut QObject) -> String;
         unsafe fn unload_panel(host: *mut QObject);
+        unsafe fn cookies_all(profile: *mut QObject) -> String;
+        unsafe fn cookie_set(profile: *mut QObject, cookie_json: &str) -> bool;
+        unsafe fn cookie_remove(profile: *mut QObject, url: &str, name: &str) -> bool;
         fn active_graphics_api() -> String;
         fn qt_runtime_version() -> String;
         fn webchannel_js() -> String;
@@ -43,6 +48,17 @@ pub fn set_privacy_flags(dnt: bool, gpc: bool, strip: bool, third_party_cookies:
 
 fn privacy_flags() -> u32 {
     FLAGS.load(Ordering::Relaxed)
+}
+
+fn observe_request(url: &str, first_party: &str, method: &str, resource_type: i32, headers_json: &str, blocked: bool) {
+    let headers = serde_json::from_str(headers_json).unwrap_or(serde_json::Value::Array(vec![]));
+    crate::core::extevents::request(url, first_party, method, resource_type, headers, blocked);
+}
+
+fn cookie_changed(cookie_json: &str, removed: bool) {
+    if let Ok(v) = serde_json::from_str(cookie_json) {
+        crate::core::extevents::cookie(v, removed);
+    }
 }
 
 fn should_block(url: &str, first_party: &str, resource_type: i32) -> bool {

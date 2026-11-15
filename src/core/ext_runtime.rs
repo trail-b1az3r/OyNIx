@@ -38,6 +38,8 @@ pub const RUNTIME: &str = r#"
           bridge.storageChanged.connect(function (ext, area, changes) { var c = JSON.parse(changes); runtimes.forEach(function (r) { r._storage(ext, area, c); }); });
           bridge.tabsResult.connect(function (id, result) { runtimes.forEach(function (r) { r._tabs(id, result); }); });
           bridge.extEvent.connect(function (name, args) { var a = JSON.parse(args); runtimes.forEach(function (r) { r._event(name, a); }); });
+          if (bridge.nativeMessage) bridge.nativeMessage.connect(function (port, json) { runtimes.forEach(function (r) { r._native(port, json, null); }); });
+          if (bridge.nativeClosed) bridge.nativeClosed.connect(function (port, err) { runtimes.forEach(function (r) { r._native(port, null, err); }); });
           // Signals meant for the browser UI; acknowledge them so the
           // WebChannel client does not log "Unhandled signal".
           ['badgeChanged', 'optionsRequested', 'tabsRequest'].forEach(function (n) { if (bridge[n]) bridge[n].connect(function () {}); });
@@ -71,6 +73,9 @@ pub const RUNTIME: &str = r#"
     var me = { id: uid() };
     var lastError = null;
     var pending = {}, tabsPending = {}, alarms = {}, seen = {};
+    // Events fired from the browser by name ("bookmarks.onCreated", ...).
+    var evts = {};
+    function evt(name) { return evts[name] || (evts[name] = makeEvent()); }
     var ev = {
       message: makeEvent(), installed: makeEvent(), startup: makeEvent(), connect: makeEvent(),
       storage: makeEvent(), tabCreated: makeEvent(), tabUpdated: makeEvent(), tabActivated: makeEvent(),
@@ -337,8 +342,200 @@ pub const RUNTIME: &str = r#"
       }
     };
     chrome.browserAction = action;
-    chrome.pageAction = action;
+    chrome.pageAction = Object.assign({}, action, { show: api(function () {}), hide: api(function () {}) });
     chrome.menus = chrome.contextMenus;
+
+    // ── The rest of the WebExtensions API (Manifest V2 and V3) ──────────
+    // Each call goes to OyNIx as "namespace.method" with its arguments; the
+    // browser checks the manifest permission (and, for powerful APIs,
+    // Settings › Extensions › Developer mode › Allow powerful extension APIs).
+    function globMatch(pattern, url) {
+      if (pattern === '<all_urls>') return /^(https?|wss?|file|ftp):/.test(url);
+      var m = /^(\*|https?|wss?|file|ftp):\/\/([^\/]*)(\/.*)$/.exec(pattern);
+      if (!m) return false;
+      var u; try { u = new URL(url); } catch (e) { return false; }
+      var scheme = u.protocol.slice(0, -1);
+      if (m[1] === '*' ? !/^(https?|wss?)$/.test(scheme) : m[1] !== scheme) return false;
+      var host = m[2];
+      if (host !== '*' && host !== '') {
+        if (host.indexOf('*.') === 0) { var base = host.slice(2); if (u.hostname !== base && !u.hostname.endsWith('.' + base)) return false; }
+        else if (u.hostname !== host) return false;
+      }
+      var path = new RegExp('^' + m[3].replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$');
+      return path.test(u.pathname + u.search);
+    }
+    function H(op) { return api(function () { return tabsCall(op, Array.prototype.slice.call(arguments)); }); }
+    function events(ns, names) { var o = {}; names.forEach(function (n) { o[n] = evt(ns + '.' + n); }); return o; }
+    var unsupported = function (what) { return api(function () { throw new Error(what + ' is not supported in OyNIx'); }); };
+
+    // Native messaging ports.
+    var nativePorts = {};
+    function connectNative(host) {
+      var id = 'n' + uid();
+      var port = { name: host, sender: undefined, onMessage: makeEvent(), onDisconnect: makeEvent(), _closed: false, error: null };
+      port.postMessage = function (msg) {
+        if (port._closed) throw new Error('Attempting to use a disconnected port object');
+        call('nativePost', id, JSON.stringify(msg)).then(function (err) { if (err) close(err); });
+      };
+      function close(err) {
+        if (port._closed) return;
+        port._closed = true; delete nativePorts[id];
+        port.error = err ? { message: err } : null;
+        lastError = err ? { message: err } : null;
+        try { port.onDisconnect._fire(port); } finally { lastError = null; }
+      }
+      port.disconnect = function () { if (!port._closed) { port._closed = true; delete nativePorts[id]; call('nativeDisconnect', id); } };
+      port._deliver = function (json, err) { if (json !== null) { try { port.onMessage._fire(JSON.parse(json), port); } catch (e) { console.error(e); } } else close(err || ''); };
+      nativePorts[id] = port;
+      call('nativeConnect', ctx.ext, id, String(host)).then(function (err) { if (err) close(err); });
+      return port;
+    }
+    me._native = function (portId, json, err) { var p = nativePorts[portId]; if (p) p._deliver(json, err); };
+
+    var declared = [].concat((ctx.manifest && ctx.manifest.permissions) || [], (ctx.manifest && ctx.manifest.optional_permissions) || []);
+    function has(p) { return declared.indexOf(p) >= 0; }
+    if (ctx.kind !== 'content') {
+      Object.assign(chrome.runtime, {
+        connectNative: connectNative,
+        sendNativeMessage: api(function (host, msg) {
+          return new Promise(function (resolve, reject) {
+            var p = connectNative(host), done = false;
+            p.onMessage.addListener(function (m) { if (done) return; done = true; p.disconnect(); resolve(m); });
+            p.onDisconnect.addListener(function () { if (!done) { done = true; reject(new Error((p.error && p.error.message) || 'Native host has exited.')); } });
+            p.postMessage(msg);
+          });
+        }),
+        getBrowserInfo: api(function () { return { name: 'OyNIx', vendor: 'OyNIx', version: '5.2.1', buildID: '' }; }),
+        getPackageDirectoryEntry: unsupported('runtime.getPackageDirectoryEntry'),
+        onBrowserUpdateAvailable: makeEvent(), onRestartRequired: makeEvent()
+      });
+      if (has('bookmarks')) chrome.bookmarks = Object.assign({
+        get: H('bookmarks.get'), getChildren: H('bookmarks.getChildren'), getRecent: H('bookmarks.getRecent'),
+        getTree: H('bookmarks.getTree'), getSubTree: H('bookmarks.getSubTree'), search: H('bookmarks.search'),
+        create: H('bookmarks.create'), move: H('bookmarks.move'), update: H('bookmarks.update'),
+        remove: H('bookmarks.remove'), removeTree: H('bookmarks.removeTree')
+      }, events('bookmarks', ['onCreated', 'onRemoved', 'onChanged', 'onMoved', 'onChildrenReordered', 'onImportBegan', 'onImportEnded']));
+      if (has('history')) chrome.history = Object.assign({
+        search: H('history.search'), getVisits: H('history.getVisits'), addUrl: H('history.addUrl'),
+        deleteUrl: H('history.deleteUrl'), deleteRange: H('history.deleteRange'), deleteAll: H('history.deleteAll')
+      }, events('history', ['onVisited', 'onVisitRemoved', 'onTitleChanged']));
+      if (has('topSites')) chrome.topSites = { get: H('topSites.get') };
+      if (has('sessions')) chrome.sessions = Object.assign({ getRecentlyClosed: H('sessions.getRecentlyClosed'), getDevices: H('sessions.getDevices'), restore: H('sessions.restore'), MAX_SESSION_RESULTS: 25 },
+        events('sessions', ['onChanged']));
+      if (has('downloads')) chrome.downloads = Object.assign({
+        download: H('downloads.download'), search: H('downloads.search'), pause: H('downloads.pause'), resume: H('downloads.resume'),
+        cancel: H('downloads.cancel'), open: H('downloads.open'), show: H('downloads.show'), showDefaultFolder: H('downloads.showDefaultFolder'),
+        erase: H('downloads.erase'), removeFile: H('downloads.removeFile'), getFileIcon: H('downloads.getFileIcon'),
+        acceptDanger: api(function () {}), setShelfEnabled: function () {}, setUiOptions: api(function () {})
+      }, events('downloads', ['onCreated', 'onChanged', 'onErased', 'onDeterminingFilename']));
+      if (has('webNavigation')) chrome.webNavigation = Object.assign({ getFrame: H('webNavigation.getFrame'), getAllFrames: H('webNavigation.getAllFrames') },
+        events('webNavigation', ['onBeforeNavigate', 'onCommitted', 'onDOMContentLoaded', 'onCompleted', 'onErrorOccurred', 'onHistoryStateUpdated', 'onReferenceFragmentUpdated', 'onCreatedNavigationTarget', 'onTabReplaced']));
+      chrome.commands = Object.assign({ getAll: H('commands.getAll') }, events('commands', ['onCommand']));
+      var omniboxSuggestions = {};
+      chrome.omnibox = Object.assign({ setDefaultSuggestion: H('omnibox.setDefaultSuggestion') },
+        events('omnibox', ['onInputStarted', 'onInputChanged', 'onInputEntered', 'onInputCancelled', 'onDeleteSuggestion']));
+      if (has('idle')) chrome.idle = Object.assign({ queryState: H('idle.queryState'), setDetectionInterval: function () {}, getAutoLockDelay: api(function () { return 0; }), IdleState: { ACTIVE: 'active', IDLE: 'idle', LOCKED: 'locked' } },
+        events('idle', ['onStateChanged']));
+      if (has('tts')) chrome.tts = {
+        speak: api(function (text, opts) {
+          opts = opts || {};
+          if (!('speechSynthesis' in g)) throw new Error('Text to speech is not available on this system');
+          if (!opts.enqueue) g.speechSynthesis.cancel();
+          var u = new SpeechSynthesisUtterance(String(text));
+          if (opts.lang) u.lang = opts.lang; if (opts.rate) u.rate = opts.rate; if (opts.pitch) u.pitch = opts.pitch; if (opts.volume !== undefined) u.volume = opts.volume;
+          if (typeof opts.onEvent === 'function') { u.onstart = function () { opts.onEvent({ type: 'start' }); }; u.onend = function () { opts.onEvent({ type: 'end' }); }; u.onerror = function (e) { opts.onEvent({ type: 'error', errorMessage: String(e.error) }); }; }
+          g.speechSynthesis.speak(u);
+        }),
+        stop: function () { if ('speechSynthesis' in g) g.speechSynthesis.cancel(); },
+        pause: function () { if ('speechSynthesis' in g) g.speechSynthesis.pause(); },
+        resume: function () { if ('speechSynthesis' in g) g.speechSynthesis.resume(); },
+        isSpeaking: api(function () { return 'speechSynthesis' in g && g.speechSynthesis.speaking; }),
+        getVoices: api(function () { return 'speechSynthesis' in g ? g.speechSynthesis.getVoices().map(function (v) { return { voiceName: v.name, lang: v.lang, remote: !v.localService }; }) : []; }),
+        onEvent: makeEvent()
+      };
+      chrome.management = Object.assign({
+        getSelf: H('management.getSelf'), get: H('management.get'), getAll: H('management.getAll'),
+        setEnabled: H('management.setEnabled'), uninstall: H('management.uninstall'), uninstallSelf: H('management.uninstallSelf'),
+        getPermissionWarningsById: api(function () { return []; }), launchApp: unsupported('management.launchApp')
+      }, events('management', ['onEnabled', 'onDisabled', 'onInstalled', 'onUninstalled']));
+      if (has('cookies')) chrome.cookies = Object.assign({
+        get: H('cookies.get'), getAll: H('cookies.getAll'), set: H('cookies.set'), remove: H('cookies.remove'),
+        getAllCookieStores: api(function () { return [{ id: '0', tabIds: [] }]; })
+      }, events('cookies', ['onChanged']));
+      if (has('browsingData')) chrome.browsingData = {
+        remove: H('browsingData.remove'), settings: api(function () { return { options: { since: 0 }, dataToRemove: {}, dataRemovalPermitted: { cache: true, cookies: true, history: true, downloads: true } }; })
+      };
+      if (chrome.browsingData) ['Cache', 'Cookies', 'History', 'Downloads', 'LocalStorage', 'FormData', 'Passwords', 'IndexedDB', 'ServiceWorkers', 'CacheStorage', 'FileSystems', 'WebSQL', 'AppCache', 'PluginData'].forEach(function (k) {
+        chrome.browsingData['remove' + k] = api(function (opts) { var d = {}; d[k.charAt(0).toLowerCase() + k.slice(1)] = true; return tabsCall('browsingData.remove', [opts || {}, d]); });
+      });
+      var wrEvents = events('webRequest', ['onBeforeRequest', 'onBeforeSendHeaders', 'onSendHeaders', 'onHeadersReceived', 'onAuthRequired', 'onResponseStarted', 'onBeforeRedirect', 'onCompleted', 'onErrorOccurred', 'onActionIgnored']);
+      Object.keys(wrEvents).forEach(function (k) {
+        var e = wrEvents[k], add = e.addListener;
+        // Listeners see every request; "blocking" answers can't change it
+        // (Qt WebEngine decides synchronously, before an extension could reply).
+        e.addListener = function (f, filter, spec) {
+          if (spec && spec.indexOf('blocking') >= 0) console.warn('[OyNIx] webRequest "blocking" listeners are called, but their answers cannot cancel or change requests in OyNIx.');
+          var urls = filter && filter.urls, types = filter && filter.types;
+          var w = function (d) {
+            if (types && types.indexOf(d.type) < 0) return;
+            if (urls && !urls.some(function (p) { return globMatch(p, d.url); })) return;
+            return f(d);
+          };
+          w._orig = f; add.call(e, w);
+          tabsCall('webRequest.subscribe', []).catch(function (err) { console.warn('[OyNIx]', err.message); });
+        };
+        e.removeListener = function (f) { e._listeners.slice().forEach(function (w, i) { if (w._orig === f) e._listeners.splice(e._listeners.indexOf(w), 1); }); };
+        e.hasListener = function (f) { return e._listeners.some(function (w) { return w._orig === f; }); };
+      });
+      if (has('webRequest')) chrome.webRequest = Object.assign({ handlerBehaviorChanged: api(function () {}), MAX_HANDLER_BEHAVIOR_CHANGED_CALLS_PER_10_MINUTES: 20, ResourceType: {} }, wrEvents);
+      function setting(name) { return { get: H('contentSettings.get:' + name), set: H('contentSettings.set:' + name), clear: H('contentSettings.clear:' + name), getResourceIdentifiers: api(function () { return []; }) }; }
+      if (has('contentSettings')) chrome.contentSettings = {};
+      ['javascript', 'popups', 'cookies', 'images', 'notifications', 'location', 'camera', 'microphone', 'automaticDownloads', 'plugins', 'unsandboxedPlugins', 'clipboard', 'autoVerify'].forEach(function (n) { chrome.contentSettings[n] = setting(n); });
+      if (has('fontSettings')) chrome.fontSettings = Object.assign({
+        getFontList: H('fontSettings.getFontList'), getFont: api(function () { return { fontId: '', levelOfControl: 'not_controllable' }; }),
+        setFont: api(function () {}), clearFont: api(function () {}),
+        getDefaultFontSize: api(function () { return { pixelSize: 16, levelOfControl: 'not_controllable' }; }), setDefaultFontSize: api(function () {}),
+        getMinimumFontSize: api(function () { return { pixelSize: 0, levelOfControl: 'not_controllable' }; }), setMinimumFontSize: api(function () {})
+      }, events('fontSettings', ['onFontChanged', 'onDefaultFontSizeChanged', 'onMinimumFontSizeChanged']));
+      if (has('search')) chrome.search = { query: H('search.query') };
+      function privacySetting(key) { return { get: H('privacy.get:' + key), set: H('privacy.set:' + key), clear: H('privacy.clear:' + key), onChange: evt('privacy.onChange:' + key) }; }
+      if (has('privacy')) chrome.privacy = {
+        network: { networkPredictionEnabled: privacySetting('networkPredictionEnabled'), webRTCIPHandlingPolicy: privacySetting('webRTCIPHandlingPolicy') },
+        services: { searchSuggestEnabled: privacySetting('searchSuggestEnabled'), spellingServiceEnabled: privacySetting('spellingServiceEnabled') },
+        websites: { doNotTrackEnabled: privacySetting('doNotTrackEnabled'), thirdPartyCookiesAllowed: privacySetting('thirdPartyCookiesAllowed'), hyperlinkAuditingEnabled: privacySetting('hyperlinkAuditingEnabled'), referrersEnabled: privacySetting('referrersEnabled') }
+      };
+      if (has('proxy')) chrome.proxy = { settings: { get: api(function () { return { value: { mode: 'system' }, levelOfControl: 'not_controllable' }; }), set: unsupported('proxy.settings.set'), clear: api(function () {}) }, onProxyError: makeEvent() };
+      if (has('debugger')) chrome.debugger = { attach: unsupported('chrome.debugger'), detach: unsupported('chrome.debugger'), sendCommand: unsupported('chrome.debugger'), getTargets: api(function () { return []; }), onEvent: makeEvent(), onDetach: makeEvent() };
+      if (has('identity')) chrome.identity = {
+        getRedirectURL: function (path) { return 'https://' + ctx.ext + '.chromiumapp.org/' + String(path || ''); },
+        launchWebAuthFlow: H('identity.launchWebAuthFlow'),
+        getAuthToken: unsupported('identity.getAuthToken (Google sign-in)'), removeCachedAuthToken: api(function () {}), getProfileUserInfo: api(function () { return { email: '', id: '' }; }),
+        onSignInChanged: makeEvent()
+      };
+      Object.assign(chrome.permissions, { contains: H('permissions.contains'), getAll: H('permissions.getAll'), request: H('permissions.request'), remove: api(function () { return false; }) });
+      Object.assign(chrome.tabs, {
+        getSelected: api(function (windowId) { return tabsCall('query', { active: true, currentWindow: true }).then(function (t) { return t[0]; }); }),
+        getAllInWindow: api(function (windowId) { return tabsCall('query', typeof windowId === 'number' ? { windowId: windowId } : { currentWindow: true }); }),
+        captureVisibleTab: H('tabs.captureVisibleTab'), move: H('tabs.move'), highlight: H('tabs.highlight'), discard: H('tabs.discard'),
+        getZoom: H('tabs.getZoom'), setZoom: H('tabs.setZoom'),
+        getZoomSettings: api(function () { return { mode: 'automatic', scope: 'per-origin', defaultZoomFactor: 1 }; }), setZoomSettings: api(function () {}),
+        goBack: H('tabs.goBack'), goForward: H('tabs.goForward'), detectLanguage: H('tabs.detectLanguage'),
+        toggleReaderMode: H('tabs.toggleReaderMode'), group: unsupported('tabs.group'), ungroup: unsupported('tabs.ungroup'),
+        onSelectionChanged: evt('tabs.onSelectionChanged'), onActiveChanged: evt('tabs.onActiveChanged'), onZoomChange: evt('tabs.onZoomChange')
+      });
+      Object.assign(chrome.windows, {
+        get: H('windows.get'), create: H('windows.create'), update: H('windows.update'), remove: H('windows.remove'),
+        WINDOW_ID_NONE: -1, onFocusChanged: evt('windows.onFocusChanged'), onCreated: evt('windows.onCreated'), onRemoved: evt('windows.onRemoved')
+      });
+      Object.assign(chrome.extension, {
+        getBackgroundPage: function () { return ctx.kind === 'background' ? g : null; },
+        getViews: function (f) { return (!f || !f.type || f.type === ctx.kind) ? [g] : []; },
+        getExtensionTabs: function () { return []; },
+        isAllowedFileSchemeAccess: api(function () { return true; }),
+        setUpdateUrlData: function () {}, lastError: undefined,
+        sendRequest: chrome.runtime.sendMessage, onRequest: ev.message, onRequestExternal: makeEvent()
+      });
+    }
 
     me._deliver = function (ext, target, p) {
       if (ext !== ctx.ext || p.from === me.id || seen[p.id]) return;
@@ -406,6 +603,13 @@ pub const RUNTIME: &str = r#"
     };
     me._event = function (name, a) {
       if (ctx.kind === 'content') return;
+      // Events addressed to one extension: [extId, ...args].
+      if (name.indexOf('ext:') === 0) {
+        if (a[0] !== ctx.ext) return;
+        name = name.slice(4); a = a.slice(1);
+      }
+      if (name === 'omnibox.onInputChanged') a = a.concat([function () {}]);
+      if (evts[name]) evts[name]._fire.apply(null, a);
       var e = { 'tabs.onCreated': ev.tabCreated, 'tabs.onUpdated': ev.tabUpdated, 'tabs.onActivated': ev.tabActivated, 'tabs.onRemoved': ev.tabRemoved }[name];
       if (e) e._fire.apply(null, a);
       if (name === 'action.onClicked' && a[0] === ctx.ext) ev.actionClicked._fire(a[1]);

@@ -33,6 +33,12 @@ pub mod qobject {
         fn badge_changed(self: Pin<&mut ExtBridge>, ext: QString, text: QString, color: QString, title: QString);
         #[qsignal]
         fn options_requested(self: Pin<&mut ExtBridge>, ext: QString);
+        /// A message from a native messaging host (JSON text).
+        #[qsignal]
+        fn native_message(self: Pin<&mut ExtBridge>, port: QString, json: QString);
+        /// The host connection ended; `error` is "" for a normal close.
+        #[qsignal]
+        fn native_closed(self: Pin<&mut ExtBridge>, port: QString, error: QString);
 
         #[qinvokable]
         fn post(self: Pin<&mut ExtBridge>, ext: &QString, target: &QString, payload: &QString);
@@ -58,11 +64,21 @@ pub mod qobject {
         fn open_options(self: Pin<&mut ExtBridge>, ext: &QString) -> bool;
         #[qinvokable]
         fn forget(self: Pin<&mut ExtBridge>, ext: &QString);
+        /// runtime.connectNative: start `host` for extension `ext` (its id in
+        /// OyNIx). Returns "" or an error.
+        #[qinvokable]
+        fn native_connect(self: Pin<&mut ExtBridge>, ext: &QString, port: &QString, host: &QString) -> QString;
+        #[qinvokable]
+        fn native_post(self: Pin<&mut ExtBridge>, port: &QString, json: &QString) -> QString;
+        #[qinvokable]
+        fn native_disconnect(self: Pin<&mut ExtBridge>, port: &QString);
     }
+
+    impl cxx_qt::Threading for ExtBridge {}
 }
 
 use core::pin::Pin;
-use cxx_qt::CxxQtType;
+use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
@@ -73,6 +89,97 @@ use crate::core::paths;
 pub struct ExtBridgeRust {
     /// (extension id, area) -> items
     stores: HashMap<(String, String), Map<String, Value>>,
+    /// Native messaging connections by port id.
+    native: HashMap<String, crate::core::nativemsg::Connection>,
+}
+
+/// Can this extension use a powerful API right now? Checks the browser
+/// settings (Developer mode + Allow powerful extension APIs) and the
+/// extension's own manifest permissions.
+pub fn powerful_allowed(web_id: &str, permission: &str) -> Result<serde_json::Value, String> {
+    let st = crate::core::settings::Settings::load();
+    if !(st.ext_developer_mode && st.ext_powerful_apis) {
+        return Err(format!("{permission} needs Settings › Extensions › Developer mode › Allow powerful extension APIs"));
+    }
+    let list = crate::core::extensions::load();
+    let e = list.iter().find(|e| e.web_id == web_id || e.id == web_id).ok_or("Unknown extension")?;
+    if !e.enabled {
+        return Err("The extension is turned off".into());
+    }
+    let manifest: serde_json::Value = std::fs::read_to_string(std::path::Path::new(&e.path).join("manifest.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default();
+    let declared = ["permissions", "optional_permissions"]
+        .iter()
+        .flat_map(|k| manifest[*k].as_array().cloned().unwrap_or_default())
+        .any(|p| p.as_str() == Some(permission));
+    if !declared {
+        return Err(format!("The extension's manifest doesn't ask for the \"{permission}\" permission"));
+    }
+    Ok(manifest)
+}
+
+impl qobject::ExtBridge {
+    pub fn native_connect(mut self: Pin<&mut Self>, ext: &QString, port: &QString, host: &QString) -> QString {
+        use crate::core::nativemsg;
+        let (ext, port, host) = (s(ext), s(port), s(host));
+        let manifest = match powerful_allowed(&ext, "nativeMessaging") {
+            Ok(m) => m,
+            Err(e) => return QString::from(&e),
+        };
+        let h = match nativemsg::find_host(&host) {
+            Ok(h) => h,
+            Err(e) => return QString::from(&e),
+        };
+        let ids = nativemsg::extension_ids(&ext, &manifest);
+        if !nativemsg::allowed(&h, &ids) {
+            return QString::from(&format!("Access to the specified native messaging host is forbidden (its manifest doesn't list this extension: {})", ids.join(", ")));
+        }
+        // Start it as the id its manifest knows the extension by.
+        let as_id = ids
+            .iter()
+            .find(|id| h.allowed_origins.iter().any(|o| o.contains(id.as_str())) || h.allowed_extensions.contains(id))
+            .cloned()
+            .unwrap_or(ext.clone());
+        let thread = self.qt_thread();
+        let p2 = port.clone();
+        let conn = nativemsg::start(&h, &as_id, move |m| {
+            let p = QString::from(&p2);
+            let _ = match m {
+                Ok(json) => thread.queue(move |o: Pin<&mut qobject::ExtBridge>| o.native_message(p, QString::from(&json))),
+                Err(e) => thread.queue(move |mut o: Pin<&mut qobject::ExtBridge>| {
+                    if let Some(mut c) = o.as_mut().rust_mut().native.remove(&String::from(&p)) {
+                        let _ = c.child.wait();
+                    }
+                    o.native_closed(p, QString::from(&e))
+                }),
+            };
+        });
+        match conn {
+            Ok(c) => {
+                self.as_mut().rust_mut().native.insert(port, c);
+                QString::default()
+            }
+            Err(e) => QString::from(&e),
+        }
+    }
+
+    pub fn native_post(mut self: Pin<&mut Self>, port: &QString, json: &QString) -> QString {
+        let mut this = self.as_mut().rust_mut();
+        let Some(c) = this.native.get_mut(&s(port)) else { return QString::from("Attempting to use a disconnected port object") };
+        match crate::core::nativemsg::send(&mut c.stdin, &s(json)) {
+            Ok(()) => QString::default(),
+            Err(e) => QString::from(&e),
+        }
+    }
+
+    pub fn native_disconnect(mut self: Pin<&mut Self>, port: &QString) {
+        if let Some(mut c) = self.as_mut().rust_mut().native.remove(&s(port)) {
+            let _ = c.child.kill();
+            let _ = c.child.wait();
+        }
+    }
 }
 
 fn s(q: &QString) -> String {

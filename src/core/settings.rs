@@ -82,6 +82,11 @@ pub struct Settings {
     pub update_channel: String,
     /// Extension id whose theme.json styles the browser ("" = OyNIx's own style).
     pub browser_style: String,
+    /// Settings › Extensions › Developer mode.
+    pub ext_developer_mode: bool,
+    /// Developer mode › Allow powerful extension APIs (native messaging,
+    /// cookies, webRequest observation, browsingData, management changes).
+    pub ext_powerful_apis: bool,
 
     // ── Claude for OyNIx ──────────────────────────────────────────
     /// Allow Claude (MCP clients and the built-in panel) to control the browser.
@@ -160,6 +165,8 @@ impl Default for Settings {
             update_download: true,
             update_channel: "stable".into(),
             browser_style: String::new(),
+            ext_developer_mode: false,
+            ext_powerful_apis: false,
             agent_enabled: false,
             agent_mode: "ask".into(),
             agent_allowed_sites: Vec::new(),

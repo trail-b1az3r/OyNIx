@@ -118,6 +118,8 @@ pub enum Kind {
     Pacman,
     /// Built from source, `install.sh`, or anything else OyNIx can't update.
     Manual,
+    /// Installed from the AUR (`oynix-bin`); the AUR helper owns updates.
+    Aur,
 }
 
 impl Kind {
@@ -126,6 +128,7 @@ impl Kind {
             Kind::Deb => "deb",
             Kind::Pacman => "pacman",
             Kind::Manual => "manual",
+            Kind::Aur => "aur",
         }
     }
 }
@@ -135,6 +138,7 @@ pub fn install_kind() -> Kind {
         Ok("deb") => return Kind::Deb,
         Ok("pacman") => return Kind::Pacman,
         Ok("manual") => return Kind::Manual,
+        Ok("aur") => return Kind::Aur,
         _ => {}
     }
     let exe = std::env::current_exe().ok().and_then(|p| p.canonicalize().ok()).unwrap_or_default();
@@ -144,13 +148,28 @@ pub fn install_kind() -> Kind {
     if Path::new("/var/lib/dpkg/info/oynix.list").exists() {
         return Kind::Deb;
     }
-    let pacman_owned = std::fs::read_dir("/var/lib/pacman/local")
-        .map(|d| d.flatten().any(|e| e.file_name().to_string_lossy().starts_with("oynix-") && !e.file_name().to_string_lossy().starts_with("oynix-debug")))
-        .unwrap_or(false);
-    if pacman_owned {
-        return Kind::Pacman;
+    let names: Vec<String> = std::fs::read_dir("/var/lib/pacman/local")
+        .map(|d| d.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect())
+        .unwrap_or_default();
+    pacman_kind(&names)
+}
+
+/// Which OyNIx package, if any, pacman's local database entries
+/// (`<name>-<ver>-<rel>`) show. The AUR's `oynix-bin` conflicts with the
+/// release's `oynix`, so `pacman -U` on the release would fail there.
+fn pacman_kind(entries: &[String]) -> Kind {
+    let named = |pkg: &str| {
+        entries.iter().any(|e| {
+            e.strip_prefix(pkg).and_then(|r| r.strip_prefix('-')).is_some_and(|r| r.starts_with(|c: char| c.is_ascii_digit()))
+        })
+    };
+    if named("oynix-bin") || named("oynix-git") {
+        Kind::Aur
+    } else if named("oynix") {
+        Kind::Pacman
+    } else {
+        Kind::Manual
     }
-    Kind::Manual
 }
 
 // ── Releases ─────────────────────────────────────────────────────────
@@ -182,7 +201,7 @@ impl Release {
                 && match kind {
                     Kind::Deb => n.ends_with(".deb") && (n.contains("amd64") || n.contains("x86_64")),
                     Kind::Pacman => n.ends_with(".pkg.tar.zst") && n.contains("x86_64"),
-                    Kind::Manual => false,
+                    Kind::Manual | Kind::Aur => false,
                 }
         })
     }
@@ -342,7 +361,7 @@ pub fn install_command(kind: Kind, pkg: &Path) -> Option<Vec<String>> {
         // apt (not dpkg -i) so new dependencies are pulled in too.
         Kind::Deb => cmd.extend(["apt-get", "install", "-y", "--allow-downgrades"].map(String::from).into_iter().chain([p])),
         Kind::Pacman => cmd.extend(["pacman", "-U", "--noconfirm"].map(String::from).into_iter().chain([p])),
-        Kind::Manual => return None,
+        Kind::Manual | Kind::Aur => return None,
     }
     Some(cmd)
 }
@@ -460,5 +479,16 @@ mod tests {
         assert_eq!(install_command(Kind::Deb, p).unwrap().join(" "), "pkexec apt-get install -y --allow-downgrades /tmp/u/oynix.deb");
         assert_eq!(manual_command(Kind::Pacman, p), "sudo pacman -U --noconfirm /tmp/u/oynix.deb");
         assert!(install_command(Kind::Manual, p).is_none());
+        assert!(install_command(Kind::Aur, p).is_none());
+    }
+
+    #[test]
+    fn pacman_entries() {
+        let k = |v: &[&str]| pacman_kind(&v.iter().map(|s| s.to_string()).collect::<Vec<_>>()).name();
+        assert_eq!(k(&["glibc-2.41-1", "oynix-5.2.1-1"]), "pacman");
+        assert_eq!(k(&["oynix-bin-5.2.1-1"]), "aur");
+        assert_eq!(k(&["oynix-git-5.2.1.r3.gabc-1"]), "aur");
+        assert_eq!(k(&["oynix-debug-5.2.1-1", "oynixtools-1-1"]), "manual");
+        assert_eq!(k(&[]), "manual");
     }
 }

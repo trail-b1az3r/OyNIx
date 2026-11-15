@@ -205,6 +205,18 @@ ApplicationWindow {
     }
 
     function navigate(text) {
+        // Extension keywords (manifest "omnibox"): "kw some text".
+        if (!privateMode) {
+            var kws = JSON.parse(Core.webextOmnibox())
+            for (var k = 0; k < kws.length; k++) {
+                var kw = kws[k].keyword + " "
+                if (String(text).indexOf(kw) === 0) {
+                    app.extensionHost.tabEvent("ext:omnibox.onInputEntered", [kws[k].ext, String(text).slice(kw.length), "currentTab"])
+                    focusContent()
+                    return
+                }
+            }
+        }
         var u = Core.resolveInput(text)
         if (u.indexOf("oynix://settings") === 0) { app.openSettings(u.replace(/^oynix:\/\/settings\/?/, "")); return }
         if (u.indexOf("oynix://privacy") === 0) { openPrivacyReport(); return }
@@ -258,6 +270,57 @@ ApplicationWindow {
         var p = anchor.mapToItem(win.contentItem, 0, anchor.height + 6)
         navMenu.x = p.x; navMenu.y = p.y
         navMenu.open()
+    }
+
+    readonly property var reservedKeys: ["alt+d", "alt+home", "alt+left", "alt+right", "ctrl++", "ctrl+-", "ctrl+0", "ctrl+1", "ctrl+2", "ctrl+3", "ctrl+4",
+        "ctrl+5", "ctrl+6", "ctrl+7", "ctrl+8", "ctrl+9", "ctrl+=", "ctrl+alt+i", "ctrl+alt+s", "ctrl+b", "ctrl+d", "ctrl+e", "ctrl+f", "ctrl+f4", "ctrl+f5",
+        "ctrl+g", "ctrl+h", "ctrl+j", "ctrl+k", "ctrl+l", "ctrl+n", "ctrl+p", "ctrl+pgdown", "ctrl+pgup", "ctrl+q", "ctrl+r", "ctrl+s", "ctrl+shift+=",
+        "ctrl+shift+a", "ctrl+shift+b", "ctrl+shift+d", "ctrl+shift+f", "ctrl+shift+g", "ctrl+shift+h", "ctrl+shift+i", "ctrl+shift+l", "ctrl+shift+n",
+        "ctrl+shift+p", "ctrl+shift+pgdown", "ctrl+shift+pgup", "ctrl+shift+r", "ctrl+shift+t", "ctrl+shift+tab", "ctrl+shift+w", "ctrl+shift+y",
+        "ctrl+shift+\\", "ctrl+t", "ctrl+tab", "ctrl+u", "ctrl+w", "ctrl+,", "escape", "f11", "f12", "f3", "f5", "f6", "shift+f3", "shift+f5"]
+    // Extension keyboard shortcuts (manifest "commands").
+    // (Inside items, so each Shortcut belongs to this window.)
+    Repeater {
+        model: {
+            Core.extensionsRevision
+            if (win.privateMode) return []
+            // OyNIx's own shortcuts win: two bindings on one key would make
+            // Qt fire neither, so a clashing extension shortcut is skipped.
+            return JSON.parse(Core.webextCommands()).filter(function (c) {
+                var k = String(c.key).replace(/\s+/g, "").toLowerCase()
+                var clash = win.reservedKeys.indexOf(k) >= 0
+                if (clash) console.warn("OyNIx: extension shortcut " + c.key + " (" + c.name + ") is already used by OyNIx and was skipped")
+                return !clash
+            })
+        }
+        delegate: Item {
+            id: cmdItem
+            required property var modelData
+            Shortcut {
+                sequence: cmdItem.modelData.key
+                context: Qt.WindowShortcut
+                onActivated: win.runExtensionCommand(cmdItem.modelData)
+            }
+        }
+    }
+    function runExtensionCommand(c) {
+        if (/^_execute_(browser_|page_)?action$/.test(c.name)) {
+            var e = JSON.parse(Core.extensions()).filter(function (x) { return x.webId === c.ext })[0]
+            var u = e ? app.extensionHost.popupUrl(e.id) : ""
+            if (u) {
+                extPopup.url = u
+                var p = extMenuBtn.mapToItem(win.contentItem, extMenuBtn.width, extMenuBtn.height + 6)
+                extPopup.x = Math.max(8, p.x - extPopup.width); extPopup.y = p.y
+                extPopup.open()
+            } else app.extBridge.dispatch("action.onClicked", JSON.stringify([c.ext, app.extensionHost.tabInfo(win, currentIndex)]))
+            return
+        }
+        app.extensionHost.tabEvent("ext:commands.onCommand", [c.ext, c.name, app.extensionHost.tabInfo(win, currentIndex)])
+    }
+
+    // chrome.idle: note when the person last used the window.
+    HoverHandler {
+        onPointChanged: { var n = Date.now(); if (n - win.app.extensionHost.apis.lastInput > 5000) win.app.extensionHost.apis.lastInput = n }
     }
 
     function openPrivacyReport() { openInternal("oynix://privacy") }
@@ -508,6 +571,7 @@ ApplicationWindow {
                     Layout.preferredWidth: win.compactTabs ? Math.min(380, toolbar.width * 0.3) : Math.min(700, Math.max(280, toolbar.width * 0.46))
                     Layout.minimumWidth: 200
                     onSiteInfoRequested: function (anchor) {
+                        if (sitePopover.recentlyClosed()) return
                         var p = anchor.mapToItem(win.contentItem, 0, anchor.height + 6)
                         sitePopover.x = p.x - 8; sitePopover.y = p.y
                         sitePopover.open()
@@ -546,6 +610,7 @@ ApplicationWindow {
                         onTriggered: shieldBtn.count = JSON.parse(Core.siteReport(win.currentTab.host)).blocked
                     }
                     onClicked: {
+                        if (privacyPopover.recentlyClosed()) return
                         var p = shieldBtn.mapToItem(win.contentItem, shieldBtn.width - privacyPopover.width, shieldBtn.height + 6)
                         privacyPopover.x = p.x; privacyPopover.y = p.y
                         privacyPopover.open()
@@ -556,13 +621,14 @@ ApplicationWindow {
                     visible: win.app.downloads.length > 0
                     glyph: "download"; tip: qsTr("Downloads")
                     badge: win.app.activeDownloads
-                    onClicked: downloadsPopover.open()
+                    onClicked: { if (!downloadsPopover.recentlyClosed()) downloadsPopover.open() }
                 }
                 IconButton {
                     id: shareBtn
                     glyph: "share"; tip: qsTr("Share")
                     enabled: win.currentTab !== null && !win.currentTab.internal
                     onClicked: {
+                        if (shareMenu.recentlyClosed()) return
                         var p = shareBtn.mapToItem(win.contentItem, shareBtn.width - shareMenu.width, shareBtn.height + 6)
                         shareMenu.x = p.x; shareMenu.y = p.y
                         shareMenu.open()
@@ -618,6 +684,7 @@ ApplicationWindow {
                                 win.app.extBridge.dispatch("action.onClicked", JSON.stringify([modelData.webId, info]))
                                 return
                             }
+                            if (extPopup.recentlyClosed() && extPopup.lastUrl === u) return
                             extPopup.url = u
                             var p = extBtn.mapToItem(win.contentItem, extBtn.width, extBtn.height + 6)
                             extPopup.x = Math.max(8, p.x - extPopup.width); extPopup.y = p.y
@@ -630,6 +697,7 @@ ApplicationWindow {
                     glyph: "puzzle"; tip: qsTr("Extensions")
                     visible: !win.privateMode && Core.extensionsRevision >= 0 && JSON.parse(Core.extensions()).length > 0
                     onClicked: {
+                        if (extMenu.recentlyClosed()) return
                         var p = extMenuBtn.mapToItem(win.contentItem, extMenuBtn.width - extMenu.width, extMenuBtn.height + 6)
                         extMenu.x = p.x; extMenu.y = p.y
                         extMenu.open()
@@ -646,6 +714,7 @@ ApplicationWindow {
                     id: moreBtn
                     glyph: "more"; tip: qsTr("Menu")
                     onClicked: {
+                        if (mainMenu.recentlyClosed()) return
                         var p = moreBtn.mapToItem(win.contentItem, moreBtn.width - mainMenu.width, moreBtn.height + 6)
                         mainMenu.x = p.x; mainMenu.y = p.y
                         mainMenu.open()
@@ -919,9 +988,10 @@ ApplicationWindow {
                     id: updateBanner
                     readonly property var u: win.app.updater
                     readonly property var rel: u.release ? JSON.parse(u.release) : null
+                    readonly property bool external: u.kind === "manual" || u.kind === "aur"
                     property string dismissed: ""
                     readonly property bool wanted: rel !== null && dismissed !== rel.version && !win.privateMode
-                        && (u.state === "ready" || u.state === "installing" || u.state === "installed" || (u.state === "available" && u.kind === "manual"))
+                        && (u.state === "ready" || u.state === "installing" || u.state === "installed" || (u.state === "available" && external))
                     z: 40
                     visible: wanted && win.active
                     anchors.right: parent.right; anchors.bottom: parent.bottom
@@ -952,6 +1022,7 @@ ApplicationWindow {
                                     text: updateBanner.u.error !== "" ? updateBanner.u.error
                                         : updateBanner.u.state === "installed" ? qsTr("Restart to start using it. Your tabs will come back.")
                                         : updateBanner.u.state === "installing" ? qsTr("Installing… your system may ask for your password.")
+                                        : updateBanner.u.kind === "aur" ? qsTr("Update it with your AUR helper, for example: yay -Syu oynix-bin")
                                         : updateBanner.u.kind === "manual" ? qsTr("This copy wasn’t installed from a package, so update it the way you installed it.")
                                         : qsTr("Downloaded and checked. Installing asks for your password and takes a few seconds.")
                                 }
@@ -975,12 +1046,12 @@ ApplicationWindow {
                                 primary: true
                                 enabled: updateBanner.u.state !== "installing"
                                 text: updateBanner.u.state === "installed" ? qsTr("Restart")
-                                    : updateBanner.u.kind === "manual" ? qsTr("Release Page")
+                                    : updateBanner.external ? qsTr("Release Page")
                                     : updateBanner.u.state === "installing" ? qsTr("Installing…") : qsTr("Install")
                                 onClicked: {
                                     var u = updateBanner.u
                                     if (u.state === "installed") { if (!win.app.restartForUpdate()) win.toastMessage(qsTr("Couldn’t restart OyNIx; please start it again yourself.")) }
-                                    else if (u.kind === "manual") win.openTab(updateBanner.rel.page, {})
+                                    else if (updateBanner.external) win.openTab(updateBanner.rel.page, {})
                                     else u.install()
                                 }
                             }
@@ -1018,28 +1089,42 @@ ApplicationWindow {
                             }
                             Rectangle {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: Math.min(240, Math.max(64, usbList.contentHeight + 8))
+                                Layout.preferredHeight: Math.min(300, Math.max(72, usbList.contentHeight + 16))
                                 radius: Theme.shapeL
                                 color: Theme.surfaceContainerLow
                                 ListView {
                                     id: usbList
-                                    anchors.fill: parent; anchors.margins: 4
+                                    anchors.fill: parent; anchors.margins: 8
                                     clip: true
+                                    spacing: 8
                                     model: win.usbAsk ? win.usbAsk.devices : []
+                                    // Each device is its own card, so neighbours never run together.
                                     delegate: Rectangle {
+                                        id: devCard
                                         required property var modelData
-                                        width: usbList.width; height: 52
-                                        radius: Theme.shapeM
-                                        color: win.usbPick === modelData.key ? Theme.secondaryContainer : (devHover.hovered ? Theme.alpha(Theme.text, 0.06) : "transparent")
-                                        HoverHandler { id: devHover }
-                                        TapHandler { onTapped: win.usbPick = modelData.key; onDoubleTapped: win.answerUsb(modelData.key) }
-                                        ColumnLayout {
-                                            anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 14
-                                            spacing: 0
-                                            Item { Layout.fillHeight: true }
-                                            Txt { Layout.fillWidth: true; text: modelData.name; font.weight: Font.Medium }
-                                            Txt { Layout.fillWidth: true; text: modelData.ids + (modelData.paired ? " · " + qsTr("allowed before") : ""); color: Theme.textDim; font.pixelSize: 12 }
-                                            Item { Layout.fillHeight: true }
+                                        readonly property bool picked: win.usbPick === modelData.key
+                                        width: usbList.width; height: 64
+                                        radius: picked ? Theme.shapeL : Theme.shapeM
+                                        color: picked ? Theme.secondaryContainer : (devHover.hovered ? Theme.surfaceContainerHighest : Theme.surfaceContainer)
+                                        border.width: picked ? 0 : 1
+                                        border.color: Theme.alpha(Theme.outlineVariant, 0.7)
+                                        Behavior on radius { SpringAnimation { spring: Theme.springFast; damping: Theme.damping } }
+                                        HoverHandler { id: devHover; cursorShape: Qt.PointingHandCursor }
+                                        TapHandler { onTapped: win.usbPick = devCard.modelData.key; onDoubleTapped: win.answerUsb(devCard.modelData.key) }
+                                        RowLayout {
+                                            anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 14
+                                            spacing: 12
+                                            MShape {
+                                                size: 36; shape: devCard.picked ? "cookie9" : "circle"
+                                                color: devCard.picked ? Theme.secondary : Theme.surfaceContainerHigh
+                                                Icon { anchors.centerIn: parent; name: devCard.picked ? "check" : "usb"; size: 18; color: devCard.picked ? Theme.secondaryFg : Theme.surfaceVariantFg }
+                                            }
+                                            ColumnLayout {
+                                                Layout.fillWidth: true
+                                                spacing: 2
+                                                Txt { Layout.fillWidth: true; text: devCard.modelData.name; font.weight: Font.Medium; color: devCard.picked ? Theme.secondaryContainerFg : Theme.text }
+                                                Txt { Layout.fillWidth: true; text: devCard.modelData.ids + (devCard.modelData.paired ? " · " + qsTr("allowed before") : ""); color: devCard.picked ? Theme.secondaryContainerFg : Theme.textDim; opacity: devCard.picked ? 0.8 : 1; font.pixelSize: 12 }
+                                            }
                                         }
                                     }
                                 }
@@ -1159,6 +1244,8 @@ ApplicationWindow {
 
     // ── OyNIx extension panels: graphics.qt (restricted QML) or extra.html ──
     function openOynixPanel(ext, anchor) {
+        // A second click on the same button closes it.
+        if (anchor && oyPopup.recentlyClosed() && oyPopup.lastId === ext.id) return
         oyPopup.close()
         oyPopup.ext = ext
         var a = anchor || extMenuBtn
@@ -1170,6 +1257,8 @@ ApplicationWindow {
         id: oyPopup
         parent: win.contentItem
         property var ext: null
+        property string lastId: ""
+        onExtChanged: if (ext) lastId = ext.id
         property real anchorRight: 0
         property string error: ""
         readonly property bool qml: ext !== null && ext.hasPanel
@@ -1200,8 +1289,8 @@ ApplicationWindow {
             panelHost.implicitWidth = 0; panelHost.implicitHeight = 0
             ext = null
         }
-        contentItem: Item {
-            clip: true
+        contentItem: RoundedClip {
+            radius: Theme.shapeL
             Item {
                 id: panelHost
                 visible: oyPopup.qml
@@ -1257,18 +1346,18 @@ ApplicationWindow {
         id: extPopup
         parent: win.contentItem
         property string url: ""
+        property string lastUrl: ""
+        onUrlChanged: if (url) lastUrl = url
         padding: 0
         width: Math.max(220, Math.min(800, (popupView.contentsSize.width || 360) + 2))
         height: Math.max(60, Math.min(600, (popupView.contentsSize.height || 420) + 2))
         onClosed: url = ""
-        contentItem: Rectangle {
-            clip: true
+        contentItem: RoundedClip {
             radius: Theme.shapeL
-            color: "white"
+            Rectangle { anchors.fill: parent; color: "white" }
             WebEngineView {
                 id: popupView
                 anchors.fill: parent
-                anchors.margins: 1
                 profile: win.app.defaultProfile
                 url: extPopup.url
                 // Extension popups are designed for a white canvas (as in Chrome).

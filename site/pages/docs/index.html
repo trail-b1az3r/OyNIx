@@ -12,12 +12,16 @@ description: Install OyNIx on Debian, Ubuntu, Mint or Arch, import bookmarks and
 sudo apt install ./oynix_{{version}}_amd64.deb
 
 <span class="c"># Arch, Manjaro, EndeavourOS</span>
-sudo pacman -U oynix-{{version}}-1-x86_64.pkg.tar.zst</code></pre>
+sudo pacman -U oynix-{{version}}-1-x86_64.pkg.tar.zst
+
+<span class="c"># Arch, from the AUR (same files, kept up to date by your AUR helper)</span>
+yay -S oynix-bin</code></pre>
 <p>Each release also has a <code>SHA256SUMS</code> file. Put it next to the download and run <code>sha256sum -c SHA256SUMS --ignore-missing</code> to check the file arrived intact.</p>
 <p>To build it yourself instead, see <a href="{{root}}docs/reference/#building-from-source">Building from source</a>.</p>
 
 <h2>Updates</h2>
 <p>OyNIx updates itself. Once a day it checks for a new release; when there is one, it downloads the package in the background, checks it against the release’s published SHA-256, and offers to install it. Installing goes through your package manager (apt or pacman) and asks for your password, then <b>Restart</b> brings your tabs back in the new version.</p>
+<p>If you installed <code>oynix-bin</code> from the AUR, OyNIx still tells you about new releases, but leaves installing them to your AUR helper (<code>yay -Syu</code>), so the two never fight over the package.</p>
 <p><b>Settings › About › Updates</b> shows where things stand, the release notes, and a <b>Check Now</b> button. You can turn off the daily check or the background download there, or choose the beta channel to get pre-releases too. If you built OyNIx from source, it tells you about new versions but leaves updating to you.</p>
 <div class="note">{{shape:cookie9:warning}}<p>The password prompt comes from a polkit agent. Full desktops run one already; on a bare Hyprland or Sway setup, start one (for example <code>exec-once = systemctl --user start hyprpolkitagent</code>), or install updates from a terminal with the command OyNIx shows.</p></div>
 

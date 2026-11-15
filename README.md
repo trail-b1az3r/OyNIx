@@ -102,7 +102,7 @@ Install for the current user, or build packages. All of them bundle the Qt runti
 
 `build-pkg.sh` works on any distribution (it needs only `bsdtar` and `zstd`). On Arch you can also build from source with makepkg: `cd packaging/arch && makepkg -si`.
 
-Install the packages with `sudo apt install ./oynix_*.deb` or `sudo pacman -U oynix-*.pkg.tar.zst`.
+Install the packages with `sudo apt install ./oynix_*.deb` or `sudo pacman -U oynix-*.pkg.tar.zst`. On Arch, stable releases are also on the AUR as [`oynix-bin`](https://aur.archlinux.org/packages/oynix-bin): `yay -S oynix-bin`.
 
 ### Releases
 
@@ -163,7 +163,9 @@ Qt WebEngine 6.10–6.12 loads extensions and serves their pages, but doesn't ru
   - `action` / `browserAction`: badge and title, onClicked
   - `alarms` and `permissions`
 
-**Not supported:** `webRequest` blocking, `declarativeNetRequest`, `scripting.registerContentScripts`, devtools panels, native messaging, `commands` keyboard shortcuts and Firefox `sidebar_action`. Context-menu items are not persisted across restarts (extensions normally recreate them at startup). Calling these throws or does nothing. Extensions built mainly on them, such as network-filtering ad blockers, won't work fully; OyNIx's built-in blocker covers that need. Extensions don't run in private windows.
+**Manifest V2:** Chromium in Qt WebEngine no longer loads V2, so OyNIx converts V2 manifests to V3 on install, runs the background page itself (persistently) and provides the V2 APIs. Also implemented: `bookmarks`, `history`, `topSites`, `sessions`, `downloads`, `webNavigation`, `commands`, `omnibox`, `idle`, `tts`, `contentSettings`, `privacy`, `fontSettings`, `search`, `identity.launchWebAuthFlow`, and more of `tabs`/`windows`. **Powerful APIs** (`nativeMessaging`, `cookies`, `webRequest` observation, `browsingData`, `management`) need Settings › Extensions › Developer mode › Allow powerful extension APIs. `.crx` installs keep their Chrome Web Store id (from the CRX key) so native messaging hosts recognise them.
+
+**Not supported:** `webRequest` blocking (listeners run, but can't change requests), `declarativeNetRequest`, `scripting.registerContentScripts`, `proxy`, `debugger`, devtools panels and Firefox `sidebar_action`. Context-menu items are not persisted across restarts (extensions normally recreate them at startup). Calling these throws or does nothing. Extensions built mainly on them, such as network-filtering ad blockers, won't work fully; OyNIx's built-in blocker covers that need. Extensions don't run in private windows.
 
 ## Claude for OyNIx
 
@@ -269,7 +271,7 @@ OyNIx ships its own libusb, so no extra package is needed. In containers without
 
 ## Updates
 
-OyNIx checks GitHub for a new release once a day (Settings › About › Updates; switchable, with a beta channel). It downloads the package that matches how it was installed (`.deb` or pacman), verifies it against the release's `SHA256SUMS`, and installs it with `pkexec apt-get install` / `pkexec pacman -U` when you click **Install**; **Restart** reopens your tabs in the new version. Source builds are told about new versions but not changed. The release workflow already publishes the files the updater needs (both packages and `SHA256SUMS`).
+OyNIx checks GitHub for a new release once a day (Settings › About › Updates; switchable, with a beta channel). It downloads the package that matches how it was installed (`.deb` or pacman), verifies it against the release's `SHA256SUMS`, and installs it with `pkexec apt-get install` / `pkexec pacman -U` when you click **Install**; **Restart** reopens your tabs in the new version. Source builds are told about new versions but not changed, and AUR installs (`oynix-bin`) leave updating to the AUR helper. The release workflow already publishes the files the updater needs (both packages and `SHA256SUMS`).
 
 `OYNIX_UPDATE_URL` points the updater at another release feed (forks, testing); `OYNIX_UPDATE_DRY_RUN=1` prints the install command instead of running it.
 

@@ -210,8 +210,12 @@ QtObject {
         return new RegExp(re).test(url)
     }
 
+    // bookmarks.*, history.*, cookies.* … (anything namespaced)
+    property WebExtApis apis: WebExtApis { host: host; app: host.app }
+
     function handleTabs(ext, id, op, argsJson) {
         var args = JSON.parse(argsJson || "null")
+        if (op.indexOf(".") > 0) { apis.handle(ext, id, op, args); return }
         var value = null, error = ""
         try {
             if (op === "query") {

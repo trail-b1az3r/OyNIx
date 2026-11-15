@@ -309,11 +309,13 @@ QtObject {
                 if (!ok) { download.cancel(); return }
                 download.accept()
                 app.downloads = [download].concat(app.downloads)
+                app.extensionHost.apis.downloadStarted(download)
             })
             return
         }
         download.accept()
         downloads = [download].concat(downloads)
+        extensionHost.apis.downloadStarted(download)
         for (var i = 0; i < windows.length; i++) if (windows[i].active) windows[i].requestActivate()
     }
 

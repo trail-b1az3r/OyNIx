@@ -217,6 +217,35 @@ pub mod qobject {
         fn extension_page_url(self: &Core, id: &QString) -> QString;
         #[qinvokable]
         fn extension_has_permission(self: &Core, id: &QString, permission: &QString) -> bool;
+        /// For the WebExtension runtime: {id, name, permissions, origins,
+        /// developer, powerful} of the extension OyNIx knows as `web_id`.
+        #[qinvokable]
+        fn webext_info(self: &Core, web_id: &QString) -> QString;
+        /// [{ext, name, key, description}] keyboard shortcuts from manifests' "commands".
+        #[qinvokable]
+        fn webext_commands(self: &Core) -> QString;
+        /// [{ext, keyword}] address-field keywords from manifests' "omnibox".
+        #[qinvokable]
+        fn webext_omnibox(self: &Core) -> QString;
+        #[qinvokable]
+        fn webext_set_observing(self: &Core, requests: bool, cookies: bool);
+        #[qinvokable]
+        fn webext_drain_events(self: &Core) -> QString;
+        /// A file as a data: URL (deletes it if `consume`).
+        #[qinvokable]
+        fn file_data_url(self: &Core, path: &QString, mime: &QString, consume: bool) -> QString;
+        /// Delete a downloaded file (only inside the downloads folder).
+        #[qinvokable]
+        fn remove_download_file(self: &Core, path: &QString) -> bool;
+        /// Search the default engine for `text` (never treated as an address).
+        #[qinvokable]
+        fn search_url(self: &Core, text: &QString) -> QString;
+        #[qinvokable]
+        unsafe fn webext_cookies(self: &Core, web_id: &QString, profile: *mut QObject) -> QString;
+        #[qinvokable]
+        unsafe fn webext_cookie_set(self: &Core, web_id: &QString, profile: *mut QObject, cookie: &QString) -> QString;
+        #[qinvokable]
+        unsafe fn webext_cookie_remove(self: &Core, web_id: &QString, profile: *mut QObject, url: &QString, name: &QString) -> QString;
         /// The active browser style (validated theme.json of the chosen extension), or "{}".
         #[qinvokable]
         fn browser_style_json(self: &Core) -> QString;
@@ -273,6 +302,10 @@ pub mod qobject {
         fn extension_scripts(self: &Core, tab_id: i32) -> QString;
         #[qinvokable]
         fn extension_page_scripts(self: &Core, kind: &QString) -> QString;
+        /// For tabs: the chrome.* runtime for extension pages opened in a tab
+        /// (chrome-extension://…). Inert on any other page.
+        #[qinvokable]
+        fn extension_tab_page_scripts(self: &Core, tab_id: i32) -> QString;
 
         // ── system ──
         #[qinvokable]
@@ -1061,6 +1094,123 @@ impl qobject::Core {
         qs(crate::bridge::native::ffi::webchannel_js())
     }
 
+    fn webext_manifest(&self, web_id: &str) -> Option<(&extensions::Entry, Value)> {
+        let e = self.extensions.iter().find(|e| e.enabled && (e.web_id == web_id || e.id == web_id))?;
+        let m = std::fs::read_to_string(std::path::Path::new(&e.path).join("manifest.json")).ok().and_then(|t| serde_json::from_str(&t).ok())?;
+        Some((e, m))
+    }
+
+    pub fn webext_info(&self, web_id: &QString) -> QString {
+        let Some((e, m)) = self.webext_manifest(&s(web_id)) else { return qs("null") };
+        let list = |k: &str| m[k].as_array().cloned().unwrap_or_default();
+        let mut perms: Vec<Value> = list("permissions");
+        perms.extend(list("optional_permissions"));
+        let (named, mut origins): (Vec<Value>, Vec<Value>) = perms.into_iter().partition(|p| p.as_str().is_some_and(|x| !x.contains("://") && x != "<all_urls>"));
+        origins.extend(list("host_permissions"));
+        to_qjson(&json!({
+            "id": e.id, "name": e.name, "permissions": named, "origins": origins,
+            "developer": self.settings.ext_developer_mode,
+            "powerful": self.settings.ext_developer_mode && self.settings.ext_powerful_apis,
+        }))
+    }
+
+    pub fn webext_commands(&self) -> QString {
+        let mut out = vec![];
+        for e in self.extensions.iter().filter(|e| e.enabled && e.kind != "oynix" && !e.web_id.is_empty()) {
+            let Some((_, m)) = self.webext_manifest(&e.web_id) else { continue };
+            let Some(cmds) = m["commands"].as_object() else { continue };
+            for (name, c) in cmds {
+                let k = &c["suggested_key"];
+                let key = k["linux"].as_str().or_else(|| k["default"].as_str()).unwrap_or("");
+                if !key.is_empty() {
+                    out.push(json!({ "ext": e.web_id, "name": name, "key": key.replace("Command", "Ctrl").replace("MacCtrl", "Ctrl"), "description": c["description"] }));
+                }
+            }
+        }
+        to_qjson(&Value::Array(out))
+    }
+
+    pub fn webext_omnibox(&self) -> QString {
+        let mut out = vec![];
+        for e in self.extensions.iter().filter(|e| e.enabled && e.kind != "oynix" && !e.web_id.is_empty()) {
+            if let Some((_, m)) = self.webext_manifest(&e.web_id) {
+                if let Some(k) = m["omnibox"]["keyword"].as_str() {
+                    out.push(json!({ "ext": e.web_id, "name": e.name, "keyword": k }));
+                }
+            }
+        }
+        to_qjson(&Value::Array(out))
+    }
+
+    pub fn webext_set_observing(&self, requests: bool, cookies: bool) {
+        let on = self.settings.ext_developer_mode && self.settings.ext_powerful_apis;
+        crate::core::extevents::set_observing(requests && on, cookies && on);
+    }
+
+    pub fn file_data_url(&self, path: &QString, mime: &QString, consume: bool) -> QString {
+        let p = std::path::PathBuf::from(s(path));
+        let Ok(bytes) = std::fs::read(&p) else { return qs("") };
+        if consume {
+            let _ = std::fs::remove_file(&p);
+        }
+        const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let mut out = format!("data:{};base64,", s(mime));
+        for c in bytes.chunks(3) {
+            let n = (c[0] as u32) << 16 | (*c.get(1).unwrap_or(&0) as u32) << 8 | *c.get(2).unwrap_or(&0) as u32;
+            out.push(T[(n >> 18) as usize & 63] as char);
+            out.push(T[(n >> 12) as usize & 63] as char);
+            out.push(if c.len() > 1 { T[(n >> 6) as usize & 63] as char } else { '=' });
+            out.push(if c.len() > 2 { T[n as usize & 63] as char } else { '=' });
+        }
+        qs(out)
+    }
+
+    pub fn search_url(&self, text: &QString) -> QString {
+        qs(omnibox::search_url(&self.settings.search_engine, &s(text)))
+    }
+
+    pub fn remove_download_file(&self, path: &QString) -> bool {
+        let p = std::path::PathBuf::from(s(path));
+        let dir = std::path::PathBuf::from(&self.settings.download_dir);
+        match (p.canonicalize(), dir.canonicalize()) {
+            (Ok(f), Ok(d)) if f.starts_with(&d) && f.is_file() => std::fs::remove_file(f).is_ok(),
+            _ => false,
+        }
+    }
+
+    pub fn webext_drain_events(&self) -> QString {
+        to_qjson(&crate::core::extevents::drain())
+    }
+
+    /// # Safety
+    /// `profile` must be a live WebEngineProfile from QML.
+    pub unsafe fn webext_cookies(&self, web_id: &QString, profile: *mut cxx_qt::QObject) -> QString {
+        if let Err(e) = crate::bridge::extbridge::powerful_allowed(&s(web_id), "cookies") {
+            return to_qjson(&json!({ "error": e }));
+        }
+        let all: Value = serde_json::from_str(&crate::bridge::native::ffi::cookies_all(profile)).unwrap_or_default();
+        to_qjson(&json!({ "value": all }))
+    }
+
+    /// # Safety
+    /// `profile` must be a live WebEngineProfile from QML.
+    pub unsafe fn webext_cookie_set(&self, web_id: &QString, profile: *mut cxx_qt::QObject, cookie: &QString) -> QString {
+        if let Err(e) = crate::bridge::extbridge::powerful_allowed(&s(web_id), "cookies") {
+            return qs(e);
+        }
+        if crate::bridge::native::ffi::cookie_set(profile, &s(cookie)) { qs("") } else { qs("Invalid cookie (it needs at least a valid url)") }
+    }
+
+    /// # Safety
+    /// `profile` must be a live WebEngineProfile from QML.
+    pub unsafe fn webext_cookie_remove(&self, web_id: &QString, profile: *mut cxx_qt::QObject, url: &QString, name: &QString) -> QString {
+        if let Err(e) = crate::bridge::extbridge::powerful_allowed(&s(web_id), "cookies") {
+            return qs(e);
+        }
+        crate::bridge::native::ffi::cookie_remove(profile, &s(url), &s(name));
+        qs("")
+    }
+
     pub fn extension_has_permission(&self, id: &QString, permission: &QString) -> bool {
         let (id, p) = (s(id), s(permission));
         self.extensions.iter().any(|e| e.id == id && e.enabled && e.permissions.contains(&p))
@@ -1299,6 +1449,20 @@ impl qobject::Core {
         to_qjson(&json!([
             { "name": "oynix-webchannel", "source": crate::bridge::native::ffi::webchannel_js(), "main": true, "start": true, "allFrames": false },
             { "name": "oynix-ext-page", "source": boot, "main": true, "start": true, "allFrames": false }
+        ]))
+    }
+
+    pub fn extension_tab_page_scripts(&self, tab_id: i32) -> QString {
+        if !self.extensions.iter().any(|e| e.enabled && e.kind != "oynix" && !e.web_id.is_empty()) {
+            return qs("[]");
+        }
+        let ctx = extensions::page_contexts(&self.extensions, "page-tab");
+        let guard = "if (location.protocol === 'chrome-extension:')";
+        let channel = format!("{guard} {{ (function () {{\n{}\nwindow.QWebChannel = QWebChannel;\n}})(); }}", crate::bridge::native::ffi::webchannel_js());
+        let boot = format!("{guard} {{ window.__oynixTabId = {tab_id};\n{}\n__oynixExtPage({ctx}); }}", crate::core::ext_runtime::RUNTIME);
+        to_qjson(&json!([
+            { "name": "oynix-webchannel-page", "source": channel, "main": true, "start": true, "allFrames": false },
+            { "name": "oynix-ext-tab-page", "source": boot, "main": true, "start": true, "allFrames": false }
         ]))
     }
 
