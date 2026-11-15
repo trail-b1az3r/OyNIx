@@ -1491,7 +1491,7 @@ dependencies = [
 
 [[package]]
 name = "oynix"
-version = "5.1.0"
+version = "5.2.1"
 dependencies = [
  "aho-corasick",
  "ash",

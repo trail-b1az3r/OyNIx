@@ -508,6 +508,7 @@ ApplicationWindow {
                     Layout.preferredWidth: win.compactTabs ? Math.min(380, toolbar.width * 0.3) : Math.min(700, Math.max(280, toolbar.width * 0.46))
                     Layout.minimumWidth: 200
                     onSiteInfoRequested: function (anchor) {
+                        if (sitePopover.recentlyClosed()) return
                         var p = anchor.mapToItem(win.contentItem, 0, anchor.height + 6)
                         sitePopover.x = p.x - 8; sitePopover.y = p.y
                         sitePopover.open()
@@ -546,6 +547,7 @@ ApplicationWindow {
                         onTriggered: shieldBtn.count = JSON.parse(Core.siteReport(win.currentTab.host)).blocked
                     }
                     onClicked: {
+                        if (privacyPopover.recentlyClosed()) return
                         var p = shieldBtn.mapToItem(win.contentItem, shieldBtn.width - privacyPopover.width, shieldBtn.height + 6)
                         privacyPopover.x = p.x; privacyPopover.y = p.y
                         privacyPopover.open()
@@ -556,13 +558,14 @@ ApplicationWindow {
                     visible: win.app.downloads.length > 0
                     glyph: "download"; tip: qsTr("Downloads")
                     badge: win.app.activeDownloads
-                    onClicked: downloadsPopover.open()
+                    onClicked: { if (!downloadsPopover.recentlyClosed()) downloadsPopover.open() }
                 }
                 IconButton {
                     id: shareBtn
                     glyph: "share"; tip: qsTr("Share")
                     enabled: win.currentTab !== null && !win.currentTab.internal
                     onClicked: {
+                        if (shareMenu.recentlyClosed()) return
                         var p = shareBtn.mapToItem(win.contentItem, shareBtn.width - shareMenu.width, shareBtn.height + 6)
                         shareMenu.x = p.x; shareMenu.y = p.y
                         shareMenu.open()
@@ -618,6 +621,7 @@ ApplicationWindow {
                                 win.app.extBridge.dispatch("action.onClicked", JSON.stringify([modelData.webId, info]))
                                 return
                             }
+                            if (extPopup.recentlyClosed() && extPopup.lastUrl === u) return
                             extPopup.url = u
                             var p = extBtn.mapToItem(win.contentItem, extBtn.width, extBtn.height + 6)
                             extPopup.x = Math.max(8, p.x - extPopup.width); extPopup.y = p.y
@@ -630,6 +634,7 @@ ApplicationWindow {
                     glyph: "puzzle"; tip: qsTr("Extensions")
                     visible: !win.privateMode && Core.extensionsRevision >= 0 && JSON.parse(Core.extensions()).length > 0
                     onClicked: {
+                        if (extMenu.recentlyClosed()) return
                         var p = extMenuBtn.mapToItem(win.contentItem, extMenuBtn.width - extMenu.width, extMenuBtn.height + 6)
                         extMenu.x = p.x; extMenu.y = p.y
                         extMenu.open()
@@ -646,6 +651,7 @@ ApplicationWindow {
                     id: moreBtn
                     glyph: "more"; tip: qsTr("Menu")
                     onClicked: {
+                        if (mainMenu.recentlyClosed()) return
                         var p = moreBtn.mapToItem(win.contentItem, moreBtn.width - mainMenu.width, moreBtn.height + 6)
                         mainMenu.x = p.x; mainMenu.y = p.y
                         mainMenu.open()
@@ -1018,28 +1024,42 @@ ApplicationWindow {
                             }
                             Rectangle {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: Math.min(240, Math.max(64, usbList.contentHeight + 8))
+                                Layout.preferredHeight: Math.min(300, Math.max(72, usbList.contentHeight + 16))
                                 radius: Theme.shapeL
                                 color: Theme.surfaceContainerLow
                                 ListView {
                                     id: usbList
-                                    anchors.fill: parent; anchors.margins: 4
+                                    anchors.fill: parent; anchors.margins: 8
                                     clip: true
+                                    spacing: 8
                                     model: win.usbAsk ? win.usbAsk.devices : []
+                                    // Each device is its own card, so neighbours never run together.
                                     delegate: Rectangle {
+                                        id: devCard
                                         required property var modelData
-                                        width: usbList.width; height: 52
-                                        radius: Theme.shapeM
-                                        color: win.usbPick === modelData.key ? Theme.secondaryContainer : (devHover.hovered ? Theme.alpha(Theme.text, 0.06) : "transparent")
-                                        HoverHandler { id: devHover }
-                                        TapHandler { onTapped: win.usbPick = modelData.key; onDoubleTapped: win.answerUsb(modelData.key) }
-                                        ColumnLayout {
-                                            anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 14
-                                            spacing: 0
-                                            Item { Layout.fillHeight: true }
-                                            Txt { Layout.fillWidth: true; text: modelData.name; font.weight: Font.Medium }
-                                            Txt { Layout.fillWidth: true; text: modelData.ids + (modelData.paired ? " · " + qsTr("allowed before") : ""); color: Theme.textDim; font.pixelSize: 12 }
-                                            Item { Layout.fillHeight: true }
+                                        readonly property bool picked: win.usbPick === modelData.key
+                                        width: usbList.width; height: 64
+                                        radius: picked ? Theme.shapeL : Theme.shapeM
+                                        color: picked ? Theme.secondaryContainer : (devHover.hovered ? Theme.surfaceContainerHighest : Theme.surfaceContainer)
+                                        border.width: picked ? 0 : 1
+                                        border.color: Theme.alpha(Theme.outlineVariant, 0.7)
+                                        Behavior on radius { SpringAnimation { spring: Theme.springFast; damping: Theme.damping } }
+                                        HoverHandler { id: devHover; cursorShape: Qt.PointingHandCursor }
+                                        TapHandler { onTapped: win.usbPick = devCard.modelData.key; onDoubleTapped: win.answerUsb(devCard.modelData.key) }
+                                        RowLayout {
+                                            anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 14
+                                            spacing: 12
+                                            MShape {
+                                                size: 36; shape: devCard.picked ? "cookie9" : "circle"
+                                                color: devCard.picked ? Theme.secondary : Theme.surfaceContainerHigh
+                                                Icon { anchors.centerIn: parent; name: devCard.picked ? "check" : "usb"; size: 18; color: devCard.picked ? Theme.secondaryFg : Theme.surfaceVariantFg }
+                                            }
+                                            ColumnLayout {
+                                                Layout.fillWidth: true
+                                                spacing: 2
+                                                Txt { Layout.fillWidth: true; text: devCard.modelData.name; font.weight: Font.Medium; color: devCard.picked ? Theme.secondaryContainerFg : Theme.text }
+                                                Txt { Layout.fillWidth: true; text: devCard.modelData.ids + (devCard.modelData.paired ? " · " + qsTr("allowed before") : ""); color: devCard.picked ? Theme.secondaryContainerFg : Theme.textDim; opacity: devCard.picked ? 0.8 : 1; font.pixelSize: 12 }
+                                            }
                                         }
                                     }
                                 }
@@ -1159,6 +1179,8 @@ ApplicationWindow {
 
     // ── OyNIx extension panels: graphics.qt (restricted QML) or extra.html ──
     function openOynixPanel(ext, anchor) {
+        // A second click on the same button closes it.
+        if (anchor && oyPopup.recentlyClosed() && oyPopup.lastId === ext.id) return
         oyPopup.close()
         oyPopup.ext = ext
         var a = anchor || extMenuBtn
@@ -1170,6 +1192,8 @@ ApplicationWindow {
         id: oyPopup
         parent: win.contentItem
         property var ext: null
+        property string lastId: ""
+        onExtChanged: if (ext) lastId = ext.id
         property real anchorRight: 0
         property string error: ""
         readonly property bool qml: ext !== null && ext.hasPanel
@@ -1200,8 +1224,8 @@ ApplicationWindow {
             panelHost.implicitWidth = 0; panelHost.implicitHeight = 0
             ext = null
         }
-        contentItem: Item {
-            clip: true
+        contentItem: RoundedClip {
+            radius: Theme.shapeL
             Item {
                 id: panelHost
                 visible: oyPopup.qml
@@ -1257,18 +1281,18 @@ ApplicationWindow {
         id: extPopup
         parent: win.contentItem
         property string url: ""
+        property string lastUrl: ""
+        onUrlChanged: if (url) lastUrl = url
         padding: 0
         width: Math.max(220, Math.min(800, (popupView.contentsSize.width || 360) + 2))
         height: Math.max(60, Math.min(600, (popupView.contentsSize.height || 420) + 2))
         onClosed: url = ""
-        contentItem: Rectangle {
-            clip: true
+        contentItem: RoundedClip {
             radius: Theme.shapeL
-            color: "white"
+            Rectangle { anchors.fill: parent; color: "white" }
             WebEngineView {
                 id: popupView
                 anchors.fill: parent
-                anchors.margins: 1
                 profile: win.app.defaultProfile
                 url: extPopup.url
                 // Extension popups are designed for a white canvas (as in Chrome).
