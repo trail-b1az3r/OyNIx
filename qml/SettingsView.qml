@@ -26,6 +26,7 @@ Rectangle {
         { id: "websites", icon: "globe", title: qsTr("Websites") },
         { id: "extensions", icon: "puzzle", title: qsTr("Extensions") },
         { id: "profiles", icon: "user", title: qsTr("Profiles") },
+        { id: "misc", icon: "sparkles", title: qsTr("Misc") },
         { id: "advanced", icon: "code", title: qsTr("Advanced") },
         { id: "about", icon: "star", title: qsTr("About") }
     ]
@@ -200,7 +201,7 @@ Rectangle {
             width: scroll.availableWidth
             sourceComponent: ({
                 general: generalPage, appearance: appearancePage, tabs: tabsPage, search: searchPage,
-                privacy: privacyPage, websites: websitesPage, extensions: extensionsPage, profiles: profilesPage, advanced: advancedPage, about: aboutPage
+                privacy: privacyPage, websites: websitesPage, extensions: extensionsPage, profiles: profilesPage, misc: miscPage, advanced: advancedPage, about: aboutPage
             })[sw.page] || generalPage
         }
     }
@@ -936,12 +937,39 @@ Rectangle {
     }
 
     Component {
+        id: miscPage
+        Page {
+            Section {
+                title: qsTr("When You’re Offline")
+                ChoiceRow {
+                    label: qsTr("Offline game")
+                    hint: qsTr("When OyNIx can’t reach the internet, the error page lets you play instead. Both run entirely inside OyNIx.")
+                    key: "offlineGame"
+                    options: [{ v: "go", t: qsTr("Go against the computer") }, { v: "blackjack", t: qsTr("Blackjack against the dealer") }, { v: "off", t: qsTr("None") }]
+                }
+                Divider {}
+                Row_ {
+                    label: qsTr("Play now")
+                    hint: qsTr("The games are also at oynix://play.")
+                    PushButton { text: qsTr("Open Games"); onClicked: { var w = sw.app.windows[sw.app.windows.length - 1]; if (w) w.openInternal("oynix://play") } }
+                }
+            }
+            Section {
+                title: qsTr("Keyboard")
+                Row_ {
+                    label: qsTr("Keyboard shortcuts")
+                    hint: qsTr("Press Ctrl+/ or F1 in any window for the full list.")
+                    PushButton { text: qsTr("Show"); onClicked: { var w = sw.app.windows[sw.app.windows.length - 1]; if (w) w.showShortcuts() } }
+                }
+            }
+        }
+    }
+
+    Component {
         id: advancedPage
         Page {
             Section {
                 title: qsTr("Developer")
-                SwitchRow { label: qsTr("Show developer tools"); hint: qsTr("Adds Inspect Element and the Developer Tools menu item (F12)."); key: "developerMode" }
-                Divider {}
                 TextRow { label: qsTr("Custom user agent"); key: "userAgent"; placeholder: qsTr("Default") }
             }
             Section {

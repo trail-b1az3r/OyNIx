@@ -44,6 +44,8 @@ pub struct Settings {
     /// Vertical tabs show a tree under the current tab: the outline of a
     /// Markdown or PDF document, or the pages of the site visited in it.
     pub tree_tabs: bool,
+    /// Game on the "You're offline" page: "go" | "blackjack" | "off".
+    pub offline_game: String,
 
     // ── Search ────────────────────────────────────────────────────
     pub search_engine: String,
@@ -147,6 +149,7 @@ impl Default for Settings {
             close_window_with_last_tab: false,
             tab_hover_previews: true,
             tree_tabs: false,
+            offline_game: "go".into(),
             search_engine: "duckduckgo".into(),
             search_suggestions: true,
             bangs_enabled: true,

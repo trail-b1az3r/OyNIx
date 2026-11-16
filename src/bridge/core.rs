@@ -37,6 +37,7 @@ pub mod qobject {
         #[qproperty(bool, close_window_with_last_tab)]
         #[qproperty(bool, tab_hover_previews)]
         #[qproperty(bool, tree_tabs)]
+        #[qproperty(QString, offline_game)]
         #[qproperty(QString, search_engine)]
         #[qproperty(bool, search_suggestions)]
         #[qproperty(bool, content_blocker)]
@@ -299,6 +300,9 @@ pub mod qobject {
         /// Icon file of the extension a chrome-extension:// URL belongs to, or "".
         #[qinvokable]
         fn extension_icon_for(self: &Core, url: &QString) -> QString;
+        /// Does the computer have a route to the internet (a default route)?
+        #[qinvokable]
+        fn network_online(self: &Core) -> bool;
         /// Keep a copy of the icon a page shows (see core/favicons.rs).
         #[qinvokable]
         fn remember_favicon(self: &Core, page_url: &QString, icon: &QString);
@@ -369,6 +373,7 @@ pub struct CoreRust {
     close_window_with_last_tab: bool,
     tab_hover_previews: bool,
     tree_tabs: bool,
+    offline_game: QString,
     search_engine: QString,
     search_suggestions: bool,
     content_blocker: bool,
@@ -437,6 +442,7 @@ impl Default for CoreRust {
             close_window_with_last_tab: false,
             tab_hover_previews: true,
             tree_tabs: false,
+            offline_game: q("go"),
             search_engine: q(""),
             search_suggestions: true,
             content_blocker: true,
@@ -527,6 +533,7 @@ impl CoreRust {
         self.close_window_with_last_tab = st.close_window_with_last_tab;
         self.tab_hover_previews = st.tab_hover_previews;
         self.tree_tabs = st.tree_tabs;
+        self.offline_game = qs(&st.offline_game);
         self.search_engine = qs(&st.search_engine);
         self.search_suggestions = st.search_suggestions;
         self.content_blocker = st.content_blocker;
@@ -596,6 +603,7 @@ impl qobject::Core {
         self.as_mut().set_close_window_with_last_tab(st.close_window_with_last_tab);
         self.as_mut().set_tab_hover_previews(st.tab_hover_previews);
         self.as_mut().set_tree_tabs(st.tree_tabs);
+        self.as_mut().set_offline_game(qs(&st.offline_game));
         self.as_mut().set_search_engine(qs(&st.search_engine));
         self.as_mut().set_search_suggestions(st.search_suggestions);
         self.as_mut().set_content_blocker(st.content_blocker);
@@ -1422,6 +1430,10 @@ impl qobject::Core {
 
     pub fn cached_favicon(&self, url: &QString) -> QString {
         qs(crate::core::favicons::cached(&s(url)).map(|p| format!("file://{}", p.to_string_lossy())).unwrap_or_default())
+    }
+
+    pub fn network_online(&self) -> bool {
+        crate::core::paths::has_default_route()
     }
 
     pub fn extension_icon_for(&self, url: &QString) -> QString {

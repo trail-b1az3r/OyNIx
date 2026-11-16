@@ -373,6 +373,12 @@ ApplicationWindow {
     }
 
     function showContextMenu(view, request) {
+        // The invisible right-click from Ctrl+Shift+C: inspect, no menu.
+        if (silentContextMenu) {
+            silentContextMenu = false
+            view.triggerWebAction(WebEngineView.InspectElement)
+            return
+        }
         ctxMenu.req = request
         ctxMenu.view = view
         var p = view.mapToItem(win.contentItem, request.position.x, request.position.y)
@@ -384,6 +390,31 @@ ApplicationWindow {
     function openDevTools() {
         if (!currentView) return
         app.openDevTools(currentView)
+    }
+    // DevTools on the element under the pointer. Chromium inspects where
+    // the last context menu was asked for, so ask for one there, unseen.
+    property bool silentContextMenu: false
+    function inspectElement() {
+        if (!currentView || !currentTab) return
+        app.openDevTools(currentView)
+        if (!currentTab.pointerInside) return
+        silentContextMenu = true
+        Core.sendMouse(currentView, currentTab.pointerPos.x, currentTab.pointerPos.y, 2, 1, 0, 1)
+    }
+
+    // Open a file from this computer in a new tab.
+    FileDialog {
+        id: openFileDialog
+        title: qsTr("Open File")
+        fileMode: FileDialog.OpenFile
+        nameFilters: [qsTr("Web pages and documents (*.html *.htm *.xhtml *.svg *.pdf *.md *.txt *.json)"), qsTr("Images (*.png *.jpg *.jpeg *.gif *.webp *.avif)"), qsTr("All files (*)")]
+        onAccepted: win.openTab(selectedFile.toString(), {})
+    }
+
+    function showShortcuts() {
+        shortcutsSheet.x = Math.max(16, (win.width - shortcutsSheet.width) / 2)
+        shortcutsSheet.y = 70
+        shortcutsSheet.open()
     }
 
     function printPage() {
@@ -526,7 +557,14 @@ ApplicationWindow {
     Shortcut { sequences: ["Ctrl+P"]; onActivated: win.printPage() }
     Shortcut { sequences: ["Ctrl+S"]; onActivated: if (win.currentView) win.currentView.triggerWebAction(WebEngineView.SavePage) }
     Shortcut { sequences: ["Ctrl+U"]; onActivated: if (win.currentTab) win.openTab("view-source:" + win.currentTab.model.url, { afterCurrent: true }) }
-    Shortcut { sequences: ["F12", "Ctrl+Shift+I", "Ctrl+Alt+I"]; onActivated: win.openDevTools() }
+    Shortcut { sequences: ["F12", "Ctrl+Shift+I", "Ctrl+Alt+I", "Ctrl+Shift+J"]; onActivated: win.openDevTools() }
+    Shortcut { sequences: ["Ctrl+Shift+C"]; onActivated: win.inspectElement() }
+    Shortcut { sequences: ["Ctrl+Shift+M"]; onActivated: if (win.currentIndex >= 0) { win.toggleMute(win.currentIndex); toast.show(tabModel.get(win.currentIndex).muted ? qsTr("Tab muted") : qsTr("Tab unmuted")) } }
+    Shortcut { sequences: ["Ctrl+Shift+K"]; onActivated: if (win.currentIndex >= 0) win.duplicateTab(win.currentIndex) }
+    Shortcut { sequences: ["Ctrl+O"]; onActivated: openFileDialog.open() }
+    Shortcut { sequences: ["Ctrl+Shift+Del"]; onActivated: win.openInternal("oynix://history") }
+    Shortcut { sequences: ["Ctrl+Alt+G"]; onActivated: win.openInternal("oynix://play") }
+    Shortcut { sequences: ["Ctrl+/", "F1"]; onActivated: win.showShortcuts() }
     Shortcut { sequences: ["Ctrl+,"]; onActivated: win.app.openSettings("") }
     Shortcut { sequences: ["Ctrl+J", "Ctrl+Shift+Y"]; onActivated: downloadsPopover.open() }
 
@@ -1478,6 +1516,83 @@ ApplicationWindow {
         }
     }
 
+    // Ctrl+/ or F1: every keyboard shortcut, grouped.
+    Popover {
+        id: shortcutsSheet
+        parent: win.contentItem
+        width: Math.min(720, win.width - 32)
+        height: Math.min(sheetCol.implicitHeight + 40, win.height - 100)
+        padding: 20
+        readonly property var groups: [
+            { title: qsTr("Tabs & windows"), keys: [
+                ["Ctrl+T", qsTr("New tab")], ["Ctrl+W", qsTr("Close tab")], ["Ctrl+Shift+T", qsTr("Reopen closed tab")],
+                ["Ctrl+Tab", qsTr("Next tab")], ["Ctrl+Shift+Tab", qsTr("Previous tab")], ["Ctrl+1 … 8", qsTr("Go to tab")], ["Ctrl+9", qsTr("Last tab")],
+                ["Ctrl+Shift+PgUp/PgDn", qsTr("Move tab")], ["Ctrl+Shift+K", qsTr("Duplicate tab")], ["Ctrl+Shift+M", qsTr("Mute tab")],
+                ["Ctrl+N", qsTr("New window")], ["Ctrl+Shift+N", qsTr("Private window")], ["Ctrl+Shift+W", qsTr("Close window")],
+                ["Ctrl+Shift+\\", qsTr("Show all tabs")], ["Ctrl+Shift+L", qsTr("Sidebar")], ["Ctrl+Shift+F", qsTr("Focus mode")], ["F11", qsTr("Full screen")] ] },
+            { title: qsTr("Page"), keys: [
+                ["Ctrl+F", qsTr("Find on page")], ["Ctrl+G / F3", qsTr("Next match")], ["Ctrl+Shift+G", qsTr("Previous match")],
+                ["Ctrl+R / F5", qsTr("Reload")], ["Ctrl+F5", qsTr("Reload, skipping the cache")], ["Esc", qsTr("Stop loading")],
+                ["Alt+Left", qsTr("Back")], ["Alt+Right", qsTr("Forward")], ["Alt+Home", qsTr("Home page")],
+                ["Ctrl+= / Ctrl+-", qsTr("Zoom in / out")], ["Ctrl+0", qsTr("Reset zoom")], ["Ctrl+Shift+R", qsTr("Reader view")],
+                ["Ctrl+P", qsTr("Print to PDF")], ["Ctrl+S", qsTr("Save page")], ["Ctrl+O", qsTr("Open a file")] ] },
+            { title: qsTr("Address bar & lists"), keys: [
+                ["Ctrl+L / F6", qsTr("Edit the address")], ["Ctrl+K", qsTr("Search")], ["Ctrl+D", qsTr("Bookmark this page")],
+                ["Ctrl+Shift+D", qsTr("Add to Reading List")], ["Ctrl+B", qsTr("Bookmarks")], ["Ctrl+H", qsTr("History")], ["Ctrl+Shift+H", qsTr("History in the sidebar")],
+                ["Ctrl+J", qsTr("Downloads")], ["Ctrl+Shift+Del", qsTr("Clear browsing data")], ["Ctrl+,", qsTr("Settings")] ] },
+            { title: qsTr("Developer"), keys: [
+                ["F12 / Ctrl+Shift+I", qsTr("Developer tools")], ["Ctrl+Shift+J", qsTr("Developer tools (console)")],
+                ["Ctrl+Shift+C", qsTr("Inspect the element under the pointer")], ["Ctrl+U", qsTr("View page source")] ] },
+            { title: qsTr("Other"), keys: [
+                ["Ctrl+Alt+G", qsTr("Games (Go, Blackjack)")], ["Ctrl+/ or F1", qsTr("This list")], ["Ctrl+Q", qsTr("Quit")] ] }
+        ]
+        contentItem: Flickable {
+            contentHeight: sheetCol.implicitHeight
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            ColumnLayout {
+                id: sheetCol
+                width: parent.width
+                spacing: 6
+                RowLayout {
+                    Layout.fillWidth: true
+                    Txt { text: qsTr("Keyboard Shortcuts"); font.family: Theme.displayFont; font.pixelSize: 24; Layout.fillWidth: true }
+                    IconButton { glyph: "close"; onClicked: shortcutsSheet.close() }
+                }
+                GridLayout {
+                    Layout.fillWidth: true
+                    columns: shortcutsSheet.width > 560 ? 2 : 1
+                    columnSpacing: 28; rowSpacing: 14
+                    Repeater {
+                        model: shortcutsSheet.groups
+                        delegate: ColumnLayout {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            Layout.alignment: Qt.AlignTop
+                            spacing: 3
+                            Txt { text: modelData.title; color: Theme.accent; font.weight: Font.DemiBold; font.pixelSize: 13; Layout.bottomMargin: 2 }
+                            Repeater {
+                                model: modelData.keys
+                                delegate: RowLayout {
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    spacing: 10
+                                    Txt { text: modelData[1]; font.pixelSize: 12; Layout.fillWidth: true }
+                                    Rectangle {
+                                        implicitWidth: keyText.implicitWidth + 12; implicitHeight: 20; radius: 5
+                                        color: Theme.surfaceContainerHigh
+                                        border.width: 1; border.color: Theme.separator
+                                        Txt { id: keyText; anchors.centerIn: parent; text: modelData[0]; font.pixelSize: 11; font.family: "monospace"; color: Theme.textDim }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     Popover {
         id: navMenu
         parent: win.contentItem
@@ -1554,7 +1669,7 @@ ApplicationWindow {
             MenuRow { text: qsTr("Privacy Report"); glyph: "shieldCheck"; onClicked: { mainMenu.close(); win.openPrivacyReport() } }
             MenuRow { text: qsTr("Extensions"); glyph: "puzzle"; onClicked: { mainMenu.close(); win.app.openSettings("extensions") } }
             MenuRow { text: qsTr("Profiles"); glyph: "user"; onClicked: { mainMenu.close(); win.app.openSettings("profiles") } }
-            MenuRow { text: qsTr("Developer Tools"); glyph: "code"; shortcut: "F12"; visible: Core.developerMode; enabled: win.currentView !== null; onClicked: { mainMenu.close(); win.openDevTools() } }
+            MenuRow { text: qsTr("Developer Tools"); glyph: "code"; shortcut: "F12"; enabled: win.currentView !== null; onClicked: { mainMenu.close(); win.openDevTools() } }
             Rectangle { Layout.fillWidth: true; height: 1; color: Theme.separator; Layout.topMargin: 4; Layout.bottomMargin: 4 }
             MenuRow { text: qsTr("Settings"); glyph: "sliders"; shortcut: "Ctrl+,"; onClicked: { mainMenu.close(); win.app.openSettings("") } }
             MenuRow { text: qsTr("Quit OyNIx"); glyph: "close"; shortcut: "Ctrl+Q"; onClicked: { mainMenu.close(); win.app.quit() } }
@@ -1635,8 +1750,8 @@ ApplicationWindow {
                     }
                 }
             }
-            Rectangle { visible: Core.developerMode; Layout.fillWidth: true; height: 1; color: Theme.separator; Layout.topMargin: 4; Layout.bottomMargin: 4 }
-            MenuRow { visible: Core.developerMode; text: qsTr("Inspect Element"); glyph: "code"; onClicked: { ctxMenu.close(); win.app.openDevTools(ctxMenu.view); ctxMenu.view.triggerWebAction(WebEngineView.InspectElement) } }
+            Rectangle { Layout.fillWidth: true; height: 1; color: Theme.separator; Layout.topMargin: 4; Layout.bottomMargin: 4 }
+            MenuRow { text: qsTr("Inspect Element"); glyph: "code"; shortcut: "Ctrl+Shift+C"; onClicked: { ctxMenu.close(); win.app.openDevTools(ctxMenu.view); ctxMenu.view.triggerWebAction(WebEngineView.InspectElement) } }
         }
     }
 }
