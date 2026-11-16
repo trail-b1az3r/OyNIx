@@ -66,7 +66,7 @@ ApplicationWindow {
     function privateProfileInstance() {
         if (!privateProfile) {
             privateProfile = privatePrototype.instance()
-            if (Core.userAgent !== "") privateProfile.httpUserAgent = Core.userAgent
+            privateProfile.httpUserAgent = win.app.userAgentFor(privateProfile)
             privateProfile.downloadRequested.connect(function (d) { win.app.handleDownload(d) })
             Core.attachProfile(privateProfile)
         }

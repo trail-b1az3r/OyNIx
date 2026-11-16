@@ -391,7 +391,10 @@ Item {
                     snapTimer.restart()
                 } else if (info.status === WebEngineView.LoadFailedStatus && info.errorCode !== -3) {
                     // -3 = ERR_ABORTED (user stopped / replaced navigation)
-                    if (info.errorDomain !== WebEngineView.CertificateErrorDomain) {
+                    // An HTTP error status (401, 403, 404, 503…) still comes with
+                    // the server's own page, often a bot check that has to run to
+                    // let you in, so leave it on screen instead of covering it.
+                    if (info.errorDomain !== WebEngineView.CertificateErrorDomain && info.errorDomain !== WebEngineLoadingInfo.HttpStatusCodeDomain) {
                         tab.loadErrorCode = info.errorCode
                         tab.loadErrorUrl = info.url.toString()
                         tab.loadError = info.errorString + " (" + Core.hostOf(info.url.toString()) + ")"

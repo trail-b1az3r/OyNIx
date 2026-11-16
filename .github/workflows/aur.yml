@@ -92,10 +92,16 @@ jobs:
         id: sum
         env:
           V: ${{ steps.ver.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           base="https://github.com/$REPO/releases/download/v$V"
           asset="oynix-$V-1-x86_64.pkg.tar.zst"
           mkdir -p /tmp/rel && cd /tmp/rel
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$REPO/releases/tags/v$V")
+          if [ "$code" = 404 ]; then
+            echo "::error::There is no published GitHub release v$V yet (drafts don't count). Run the Build workflow with version $V to create it; it publishes to the AUR by itself afterwards."
+            exit 1
+          fi
           # The release job may have only just finished; give the CDN a moment.
           for i in 1 2 3 4 5; do
             curl -fsSL --retry 3 -o "$asset" "$base/$asset" && curl -fsSL -o SHA256SUMS "$base/SHA256SUMS" && break
@@ -141,7 +147,32 @@ jobs:
             echo "::error::$msg"; exit 1
           fi
           install -d -m 700 ~/.ssh
-          printf '%s\n' "$AUR_KEY" > ~/.ssh/aur && chmod 600 ~/.ssh/aur
+          # Tolerate keys pasted with Windows line endings or stray indentation.
+          printf '%s\n' "$AUR_KEY" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' > ~/.ssh/aur && chmod 600 ~/.ssh/aur
+          first=$(head -n1 ~/.ssh/aur)
+          case "$first" in
+            ssh-*|ecdsa-*|sk-*)
+              echo "::error::AUR_SSH_PRIVATE_KEY holds a PUBLIC key (it starts with '${first%% *}'). The secret needs the private half: the file WITHOUT .pub, starting with -----BEGIN OPENSSH PRIVATE KEY-----. The .pub file is what goes on your AUR account."
+              exit 1 ;;
+            PuTTY-User-Key-File*)
+              echo "::error::AUR_SSH_PRIVATE_KEY is a PuTTY .ppk key. Export it as an OpenSSH key (PuTTYgen → Conversions → Export OpenSSH key) or make a new one with ssh-keygen."
+              exit 1 ;;
+            -----BEGIN*PRIVATE\ KEY-----) ;;
+            *)
+              echo "::error::AUR_SSH_PRIVATE_KEY doesn't look like a private key: its first line should be -----BEGIN OPENSSH PRIVATE KEY-----. Paste the whole file, including the BEGIN and END lines."
+              exit 1 ;;
+          esac
+          if ! pub=$(ssh-keygen -y -P '' -f ~/.ssh/aur 2>/tmp/keyerr); then
+            if grep -qi passphrase /tmp/keyerr; then
+              echo "::error::The key in AUR_SSH_PRIVATE_KEY has a passphrase, which a workflow can't type. Make one without: ssh-keygen -t ed25519 -N '' -f aur_oynix"
+            else
+              echo "::error::ssh couldn't read AUR_SSH_PRIVATE_KEY ($(cat /tmp/keyerr)). Paste the whole private key file again, including the BEGIN and END lines."
+            fi
+            exit 1
+          fi
+          echo "This key's public half (it must be on your AUR account, under My Account → SSH Public Key):"
+          echo "  $pub"
+          printf '%s\n' "$pub" | ssh-keygen -lf -
           # Trust only the host keys whose fingerprints the AUR publishes on aur.archlinux.org.
           ssh-keyscan -t ed25519,ecdsa,rsa aur.archlinux.org 2>/dev/null > /tmp/scanned
           : > ~/.ssh/known_hosts
@@ -167,6 +198,16 @@ jobs:
           git config --global init.defaultBranch master
           # Cloning a package that doesn't exist yet gives an empty repository;
           # the first push creates it (and makes this key's account its maintainer).
+          # Check the AUR accepts the key before trying to clone, to give a useful error.
+          if ! ssh aur.archlinux.org list-repos > /tmp/sshout 2>&1; then
+            cat /tmp/sshout
+            if grep -q "Permission denied" /tmp/sshout; then
+              echo "::error::The AUR refused this key. Put exactly this line in My Account → SSH Public Key on aur.archlinux.org, then click Update: $pub"
+            else
+              echo "::error::Couldn't connect to aur.archlinux.org over SSH (see above)."
+            fi
+            exit 1
+          fi
           git clone "ssh://aur@aur.archlinux.org/$PKG.git" /tmp/aur
           cp /tmp/pkg/PKGBUILD /tmp/pkg/.SRCINFO /tmp/aur/
           cd /tmp/aur

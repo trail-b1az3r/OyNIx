@@ -743,6 +743,30 @@ pub fn loading() -> bool {
     LOADING.load(Ordering::Relaxed)
 }
 
+/// Bot checks and CAPTCHAs. Sites such as the Wall Street Journal answer
+/// with a challenge page (HTTP 401/403) until one of these runs; filter lists
+/// list some of them as trackers, and blocking them locks you out of the site
+/// ("Verification required", then refused connections), so they always load.
+const BOT_CHECKS: &[&str] = &[
+    "datadome.co",
+    "captcha-delivery.com",
+    "challenges.cloudflare.com",
+    "hcaptcha.com",
+    "recaptcha.net",
+    "px-cdn.net",
+    "px-cloud.net",
+    "perimeterx.net",
+    "pxchk.net",
+    "arkoselabs.com",
+    "funcaptcha.com",
+    "geetest.com",
+    "friendlycaptcha.com",
+];
+
+fn is_bot_check(host: &str) -> bool {
+    BOT_CHECKS.iter().any(|d| host == *d || host.strip_suffix(d).is_some_and(|r| r.ends_with('.')))
+}
+
 /// Decide whether a request should be blocked.
 pub fn classify(url: &str, first_party: &str, resource_type: i32) -> Option<Kind> {
     if !ENABLED.load(Ordering::Relaxed) {
@@ -765,6 +789,9 @@ pub fn classify(url: &str, first_party: &str, resource_type: i32) -> Option<Kind
     let (hs, he) = host_range(url)?;
     let host = &url[hs..he];
     if host.is_empty() {
+        return None;
+    }
+    if is_bot_check(host) {
         return None;
     }
     let fp_host = omnibox::host_of(first_party).to_ascii_lowercase();
@@ -952,6 +979,15 @@ pub fn reset_stats() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bot_checks_are_recognised() {
+        assert!(is_bot_check("js.datadome.co"));
+        assert!(is_bot_check("geo.captcha-delivery.com"));
+        assert!(is_bot_check("challenges.cloudflare.com"));
+        assert!(!is_bot_check("cloudflare.com"));
+        assert!(!is_bot_check("notdatadome.co"));
+    }
 
     fn rs(list: &str) -> Rules {
         let mut r = Rules::default();

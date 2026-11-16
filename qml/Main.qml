@@ -97,9 +97,17 @@ QtObject {
         onTriggered: { var g = Core.blockerGeneration(); if (g !== app.filterGeneration) app.filterGeneration = g }
     }
 
+    // Qt's default user agent says "QtWebEngine/x.y"; bot checks (DataDome,
+    // used by the Wall Street Journal and others) treat that token as a
+    // headless scraper and lock the browser out. Send Chrome's own form.
+    function userAgentFor(profile) {
+        if (Core.userAgent !== "") return Core.userAgent
+        return profile.httpUserAgent.replace(/ QtWebEngine\/\S+/, "")
+    }
+
     function setupProfile() {
         defaultProfile = profilePrototype.instance()
-        if (Core.userAgent !== "") defaultProfile.httpUserAgent = Core.userAgent
+        defaultProfile.httpUserAgent = userAgentFor(defaultProfile)
         defaultProfile.spellCheckEnabled = false
         Core.attachProfile(defaultProfile)
         Core.applyColorScheme(Theme.dark)
