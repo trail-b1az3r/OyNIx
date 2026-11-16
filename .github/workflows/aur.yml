@@ -220,13 +220,17 @@ jobs:
             esac
           done < /tmp/scanned
           [ -s ~/.ssh/known_hosts ] || { echo "::error::None of aur.archlinux.org's host keys matched the published fingerprints"; exit 1; }
-          cat > ~/.ssh/config <<CFG
+          # In the job container $HOME is /github/home, but OpenSSH looks in the
+          # passwd home (/root) for ~/.ssh, so name every file explicitly.
+          cat > "$HOME/.ssh/config" <<CFG
           Host aur.archlinux.org
             User aur
-            IdentityFile ~/.ssh/aur
+            IdentityFile $HOME/.ssh/aur
             IdentitiesOnly yes
+            UserKnownHostsFile $HOME/.ssh/known_hosts
             StrictHostKeyChecking yes
           CFG
+          export GIT_SSH_COMMAND="ssh -F $HOME/.ssh/config"
 
           # Attribute AUR package commits to the intended maintainer identity.
           git config --global user.name "ray0rfire"
@@ -235,7 +239,7 @@ jobs:
           # Cloning a package that doesn't exist yet gives an empty repository;
           # the first push creates it (and makes this key's account its maintainer).
           # Check the AUR accepts the key before trying to clone, to give a useful error.
-          if ! ssh aur.archlinux.org list-repos > /tmp/sshout 2>&1; then
+          if ! ssh -F "$HOME/.ssh/config" aur.archlinux.org list-repos > /tmp/sshout 2>&1; then
             cat /tmp/sshout
             if grep -q "Permission denied" /tmp/sshout; then
               echo "::error::The AUR refused this key. Register the key on ray0rfire's AUR account and ensure that account is a maintainer of $PKG."
