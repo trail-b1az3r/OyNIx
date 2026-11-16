@@ -77,7 +77,429 @@ jobs:
           fi
           V="${V#v}"
           REL="${INPUT_PKGREL:-1}"
-          if ! [[ "$V" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+          if ! printf '%s\n' "$V" | grep -Eq '^[0-9]+(\.[0-9]+)*
+            echo "::notice::Skipping '$V': only plain release versions (like 5.2.1) go to the AUR."
+            echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          printf '%s\n' "$REL" | grep -Eq '^[1-9][0-9]*
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "pkgrel=$REL" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "Publishing $PKG $V-$REL"
+
+      - name: Fetch the release and check it against SHA256SUMS
+        if: steps.ver.outputs.skip != 'true'
+        id: sum
+        env:
+          V: ${{ steps.ver.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          base="https://github.com/$REPO/releases/download/v$V"
+          asset="oynix-$V-1-x86_64.pkg.tar.zst"
+          mkdir -p /tmp/rel && cd /tmp/rel
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$REPO/releases/tags/v$V")
+          if [ "$code" = 404 ]; then
+            echo "::error::There is no published GitHub release v$V yet (drafts don't count). Run the Build workflow with version $V to create it; it publishes to the AUR by itself afterwards."
+            exit 1
+          fi
+          # The release job may have only just finished; give the CDN a moment.
+          for i in 1 2 3 4 5; do
+            curl -fsSL --retry 3 -o "$asset" "$base/$asset" && curl -fsSL -o SHA256SUMS "$base/SHA256SUMS" && break
+            echo "Not available yet, retrying in 20s…"; sleep 20
+          done
+          [ -s "$asset" ] || { echo "::error::$base/$asset could not be downloaded"; exit 1; }
+          grep " $asset\\$" SHA256SUMS | sha256sum -c -
+          echo "sha256=$(sha256sum "$asset" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Fill in the PKGBUILD and build it
+        if: steps.ver.outputs.skip != 'true'
+        env:
+          V: ${{ steps.ver.outputs.version }}
+          REL: ${{ steps.ver.outputs.pkgrel }}
+          SUM: ${{ steps.sum.outputs.sha256 }}
+        run: |
+          useradd -m builder
+          install -d -o builder /tmp/pkg
+          cp packaging/aur/$PKG/PKGBUILD /tmp/pkg/
+          cd /tmp/pkg
+          sed -i -e "s/^pkgver=.*/pkgver=$V/" -e "s/^pkgrel=.*/pkgrel=$REL/" -e "s/^sha256sums=.*/sha256sums=('$SUM')/" PKGBUILD
+          cp /tmp/rel/oynix-$V-1-x86_64.pkg.tar.zst .
+          chown -R builder /tmp/pkg
+          # Build without installing dependencies: this checks the source,
+          # checksum and package() step, which is everything this PKGBUILD does.
+          sudo -u builder makepkg --nodeps --noconfirm --cleanbuild
+          sudo -u builder makepkg --printsrcinfo > .SRCINFO
+          ls -l *.pkg.tar.zst
+          echo "--- .SRCINFO"; cat .SRCINFO
+          bsdtar -tf $PKG-$V-$REL-x86_64.pkg.tar.zst | grep -qx 'usr/bin/oynix' || { echo "::error::usr/bin/oynix is missing from the package"; exit 1; }
+
+      - name: Push to aur.archlinux.org
+        if: steps.ver.outputs.skip != 'true' && !inputs.dry_run
+        env:
+          V: ${{ steps.ver.outputs.version }}
+          REL: ${{ steps.ver.outputs.pkgrel }}
+          AUR_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          AUTOMATIC: ${{ github.event_name == 'release' || inputs.automatic == true }}
+        run: |
+          if [ -z "$AUR_KEY" ]; then
+            msg="The AUR_SSH_PRIVATE_KEY secret isn't set, so $PKG wasn't published. See packaging/aur/README.md."
+            if [ "$AUTOMATIC" = true ]; then echo "::warning::$msg"; exit 0; fi
+            echo "::error::$msg"; exit 1
+          fi
+          install -d -m 700 ~/.ssh
+          # Tolerate keys pasted with Windows line endings or stray indentation.
+          printf '%s\n' "$AUR_KEY" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' > ~/.ssh/aur && chmod 600 ~/.ssh/aur
+          first=$(head -n1 ~/.ssh/aur)
+          case "$first" in
+            ssh-*|ecdsa-*|sk-*)
+              echo "::error::AUR_SSH_PRIVATE_KEY holds a PUBLIC key (it starts with '${first%% *}'). The secret needs the private half: the file WITHOUT .pub, starting with -----BEGIN OPENSSH PRIVATE KEY-----. The .pub file is what goes on your AUR account."
+              exit 1 ;;
+            PuTTY-User-Key-File*)
+              echo "::error::AUR_SSH_PRIVATE_KEY is a PuTTY .ppk key. Export it as an OpenSSH key (PuTTYgen → Conversions → Export OpenSSH key) or make a new one with ssh-keygen."
+              exit 1 ;;
+            -----BEGIN*PRIVATE\ KEY-----) ;;
+            *)
+              echo "::error::AUR_SSH_PRIVATE_KEY doesn't look like a private key: its first line should be -----BEGIN OPENSSH PRIVATE KEY-----. Paste the whole file, including the BEGIN and END lines."
+              exit 1 ;;
+          esac
+          if ! pub=$(ssh-keygen -y -P '' -f ~/.ssh/aur 2>/tmp/keyerr); then
+            if grep -qi passphrase /tmp/keyerr; then
+              echo "::error::The key in AUR_SSH_PRIVATE_KEY has a passphrase, which a workflow can't type. Make one without: ssh-keygen -t ed25519 -N '' -f aur_oynix"
+            else
+              echo "::error::ssh couldn't read AUR_SSH_PRIVATE_KEY ($(cat /tmp/keyerr)). Paste the whole private key file again, including the BEGIN and END lines."
+            fi
+            exit 1
+          fi
+          echo "AUR SSH key fingerprint (register this public key on the ray0rfire AUR account):"
+          echo "  $pub"
+          printf '%s\n' "$pub" | ssh-keygen -lf -
+          # Trust only the host keys whose fingerprints the AUR publishes on aur.archlinux.org.
+          ssh-keyscan -t ed25519,ecdsa,rsa aur.archlinux.org 2>/dev/null > /tmp/scanned
+          : > ~/.ssh/known_hosts
+          while read -r line; do
+            fp=$(printf '%s\n' "$line" | ssh-keygen -lf - | awk '{print $2}')
+            case "$fp" in
+              SHA256:RFzBCUItH9LZS0cKB5UE6ceAYhBD5C8GeOBip8Z11+4|SHA256:uTa/0PndEgPZTf76e1DFqXKJEXKsn7m9ivhLQtzGOCI|SHA256:5s5cIyReIfNNVGRFdDbe3hdYiI5OelHGpw2rOUud3Q8)
+                printf '%s\n' "$line" >> ~/.ssh/known_hosts ;;
+              *) echo "::warning::Ignoring unexpected AUR host key $fp" ;;
+            esac
+          done < /tmp/scanned
+          [ -s ~/.ssh/known_hosts ] || { echo "::error::None of aur.archlinux.org's host keys matched the published fingerprints"; exit 1; }
+          cat > ~/.ssh/config <<CFG
+          Host aur.archlinux.org
+            User aur
+            IdentityFile ~/.ssh/aur
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+          CFG
+
+          # Attribute AUR package commits to the intended maintainer identity.
+          git config --global user.name "ray0rfire"
+          git config --global user.email "ray0rfire@users.noreply.github.com"
+          git config --global init.defaultBranch master
+          # Cloning a package that doesn't exist yet gives an empty repository;
+          # the first push creates it (and makes this key's account its maintainer).
+          # Check the AUR accepts the key before trying to clone, to give a useful error.
+          if ! ssh aur.archlinux.org list-repos > /tmp/sshout 2>&1; then
+            cat /tmp/sshout
+            if grep -q "Permission denied" /tmp/sshout; then
+              echo "::error::The AUR refused this key. Register the key on ray0rfire's AUR account and ensure that account is a maintainer of $PKG."
+            else
+              echo "::error::Couldn't connect to aur.archlinux.org over SSH (see above)."
+            fi
+            exit 1
+          fi
+          git clone "ssh://aur@aur.archlinux.org/$PKG.git" /tmp/aur
+          cp /tmp/pkg/PKGBUILD /tmp/pkg/.SRCINFO /tmp/aur/
+          cd /tmp/aur
+          git add PKGBUILD .SRCINFO
+          if git diff --cached --quiet; then
+            echo "The AUR already has $PKG $V-$REL; nothing to push."; exit 0
+          fi
+          git commit -q -m "Update to $V-$REL"
+          git push origin HEAD:master
+          echo "### Published [$PKG $V-$REL](https://aur.archlinux.org/packages/$PKG)" >> "$GITHUB_STEP_SUMMARY"
+; then
+            echo "::notice::Skipping '$V': only plain release versions (like 5.2.1) go to the AUR."
+            echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          [[ "$REL" =~ ^[1-9][0-9]*$ ]] || { echo "::error::pkgrel must be a positive whole number, not '$REL'"; exit 1; }
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "pkgrel=$REL" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "Publishing $PKG $V-$REL"
+
+      - name: Fetch the release and check it against SHA256SUMS
+        if: steps.ver.outputs.skip != 'true'
+        id: sum
+        env:
+          V: ${{ steps.ver.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          base="https://github.com/$REPO/releases/download/v$V"
+          asset="oynix-$V-1-x86_64.pkg.tar.zst"
+          mkdir -p /tmp/rel && cd /tmp/rel
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$REPO/releases/tags/v$V")
+          if [ "$code" = 404 ]; then
+            echo "::error::There is no published GitHub release v$V yet (drafts don't count). Run the Build workflow with version $V to create it; it publishes to the AUR by itself afterwards."
+            exit 1
+          fi
+          # The release job may have only just finished; give the CDN a moment.
+          for i in 1 2 3 4 5; do
+            curl -fsSL --retry 3 -o "$asset" "$base/$asset" && curl -fsSL -o SHA256SUMS "$base/SHA256SUMS" && break
+            echo "Not available yet, retrying in 20s…"; sleep 20
+          done
+          [ -s "$asset" ] || { echo "::error::$base/$asset could not be downloaded"; exit 1; }
+          grep " $asset\\$" SHA256SUMS | sha256sum -c -
+          echo "sha256=$(sha256sum "$asset" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Fill in the PKGBUILD and build it
+        if: steps.ver.outputs.skip != 'true'
+        env:
+          V: ${{ steps.ver.outputs.version }}
+          REL: ${{ steps.ver.outputs.pkgrel }}
+          SUM: ${{ steps.sum.outputs.sha256 }}
+        run: |
+          useradd -m builder
+          install -d -o builder /tmp/pkg
+          cp packaging/aur/$PKG/PKGBUILD /tmp/pkg/
+          cd /tmp/pkg
+          sed -i -e "s/^pkgver=.*/pkgver=$V/" -e "s/^pkgrel=.*/pkgrel=$REL/" -e "s/^sha256sums=.*/sha256sums=('$SUM')/" PKGBUILD
+          cp /tmp/rel/oynix-$V-1-x86_64.pkg.tar.zst .
+          chown -R builder /tmp/pkg
+          # Build without installing dependencies: this checks the source,
+          # checksum and package() step, which is everything this PKGBUILD does.
+          sudo -u builder makepkg --nodeps --noconfirm --cleanbuild
+          sudo -u builder makepkg --printsrcinfo > .SRCINFO
+          ls -l *.pkg.tar.zst
+          echo "--- .SRCINFO"; cat .SRCINFO
+          bsdtar -tf $PKG-$V-$REL-x86_64.pkg.tar.zst | grep -qx 'usr/bin/oynix' || { echo "::error::usr/bin/oynix is missing from the package"; exit 1; }
+
+      - name: Push to aur.archlinux.org
+        if: steps.ver.outputs.skip != 'true' && !inputs.dry_run
+        env:
+          V: ${{ steps.ver.outputs.version }}
+          REL: ${{ steps.ver.outputs.pkgrel }}
+          AUR_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          AUTOMATIC: ${{ github.event_name == 'release' || inputs.automatic == true }}
+        run: |
+          if [ -z "$AUR_KEY" ]; then
+            msg="The AUR_SSH_PRIVATE_KEY secret isn't set, so $PKG wasn't published. See packaging/aur/README.md."
+            if [ "$AUTOMATIC" = true ]; then echo "::warning::$msg"; exit 0; fi
+            echo "::error::$msg"; exit 1
+          fi
+          install -d -m 700 ~/.ssh
+          # Tolerate keys pasted with Windows line endings or stray indentation.
+          printf '%s\n' "$AUR_KEY" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' > ~/.ssh/aur && chmod 600 ~/.ssh/aur
+          first=$(head -n1 ~/.ssh/aur)
+          case "$first" in
+            ssh-*|ecdsa-*|sk-*)
+              echo "::error::AUR_SSH_PRIVATE_KEY holds a PUBLIC key (it starts with '${first%% *}'). The secret needs the private half: the file WITHOUT .pub, starting with -----BEGIN OPENSSH PRIVATE KEY-----. The .pub file is what goes on your AUR account."
+              exit 1 ;;
+            PuTTY-User-Key-File*)
+              echo "::error::AUR_SSH_PRIVATE_KEY is a PuTTY .ppk key. Export it as an OpenSSH key (PuTTYgen → Conversions → Export OpenSSH key) or make a new one with ssh-keygen."
+              exit 1 ;;
+            -----BEGIN*PRIVATE\ KEY-----) ;;
+            *)
+              echo "::error::AUR_SSH_PRIVATE_KEY doesn't look like a private key: its first line should be -----BEGIN OPENSSH PRIVATE KEY-----. Paste the whole file, including the BEGIN and END lines."
+              exit 1 ;;
+          esac
+          if ! pub=$(ssh-keygen -y -P '' -f ~/.ssh/aur 2>/tmp/keyerr); then
+            if grep -qi passphrase /tmp/keyerr; then
+              echo "::error::The key in AUR_SSH_PRIVATE_KEY has a passphrase, which a workflow can't type. Make one without: ssh-keygen -t ed25519 -N '' -f aur_oynix"
+            else
+              echo "::error::ssh couldn't read AUR_SSH_PRIVATE_KEY ($(cat /tmp/keyerr)). Paste the whole private key file again, including the BEGIN and END lines."
+            fi
+            exit 1
+          fi
+          echo "AUR SSH key fingerprint (register this public key on the ray0rfire AUR account):"
+          echo "  $pub"
+          printf '%s\n' "$pub" | ssh-keygen -lf -
+          # Trust only the host keys whose fingerprints the AUR publishes on aur.archlinux.org.
+          ssh-keyscan -t ed25519,ecdsa,rsa aur.archlinux.org 2>/dev/null > /tmp/scanned
+          : > ~/.ssh/known_hosts
+          while read -r line; do
+            fp=$(printf '%s\n' "$line" | ssh-keygen -lf - | awk '{print $2}')
+            case "$fp" in
+              SHA256:RFzBCUItH9LZS0cKB5UE6ceAYhBD5C8GeOBip8Z11+4|SHA256:uTa/0PndEgPZTf76e1DFqXKJEXKsn7m9ivhLQtzGOCI|SHA256:5s5cIyReIfNNVGRFdDbe3hdYiI5OelHGpw2rOUud3Q8)
+                printf '%s\n' "$line" >> ~/.ssh/known_hosts ;;
+              *) echo "::warning::Ignoring unexpected AUR host key $fp" ;;
+            esac
+          done < /tmp/scanned
+          [ -s ~/.ssh/known_hosts ] || { echo "::error::None of aur.archlinux.org's host keys matched the published fingerprints"; exit 1; }
+          cat > ~/.ssh/config <<CFG
+          Host aur.archlinux.org
+            User aur
+            IdentityFile ~/.ssh/aur
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+          CFG
+
+          # Attribute AUR package commits to the intended maintainer identity.
+          git config --global user.name "ray0rfire"
+          git config --global user.email "ray0rfire@users.noreply.github.com"
+          git config --global init.defaultBranch master
+          # Cloning a package that doesn't exist yet gives an empty repository;
+          # the first push creates it (and makes this key's account its maintainer).
+          # Check the AUR accepts the key before trying to clone, to give a useful error.
+          if ! ssh aur.archlinux.org list-repos > /tmp/sshout 2>&1; then
+            cat /tmp/sshout
+            if grep -q "Permission denied" /tmp/sshout; then
+              echo "::error::The AUR refused this key. Register the key on ray0rfire's AUR account and ensure that account is a maintainer of $PKG."
+            else
+              echo "::error::Couldn't connect to aur.archlinux.org over SSH (see above)."
+            fi
+            exit 1
+          fi
+          git clone "ssh://aur@aur.archlinux.org/$PKG.git" /tmp/aur
+          cp /tmp/pkg/PKGBUILD /tmp/pkg/.SRCINFO /tmp/aur/
+          cd /tmp/aur
+          git add PKGBUILD .SRCINFO
+          if git diff --cached --quiet; then
+            echo "The AUR already has $PKG $V-$REL; nothing to push."; exit 0
+          fi
+          git commit -q -m "Update to $V-$REL"
+          git push origin HEAD:master
+          echo "### Published [$PKG $V-$REL](https://aur.archlinux.org/packages/$PKG)" >> "$GITHUB_STEP_SUMMARY"
+ || { echo "::error::pkgrel must be a positive whole number, not '$REL'"; exit 1; }
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "pkgrel=$REL" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "Publishing $PKG $V-$REL"
+
+      - name: Fetch the release and check it against SHA256SUMS
+        if: steps.ver.outputs.skip != 'true'
+        id: sum
+        env:
+          V: ${{ steps.ver.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          base="https://github.com/$REPO/releases/download/v$V"
+          asset="oynix-$V-1-x86_64.pkg.tar.zst"
+          mkdir -p /tmp/rel && cd /tmp/rel
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$REPO/releases/tags/v$V")
+          if [ "$code" = 404 ]; then
+            echo "::error::There is no published GitHub release v$V yet (drafts don't count). Run the Build workflow with version $V to create it; it publishes to the AUR by itself afterwards."
+            exit 1
+          fi
+          # The release job may have only just finished; give the CDN a moment.
+          for i in 1 2 3 4 5; do
+            curl -fsSL --retry 3 -o "$asset" "$base/$asset" && curl -fsSL -o SHA256SUMS "$base/SHA256SUMS" && break
+            echo "Not available yet, retrying in 20s…"; sleep 20
+          done
+          [ -s "$asset" ] || { echo "::error::$base/$asset could not be downloaded"; exit 1; }
+          grep " $asset\\$" SHA256SUMS | sha256sum -c -
+          echo "sha256=$(sha256sum "$asset" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Fill in the PKGBUILD and build it
+        if: steps.ver.outputs.skip != 'true'
+        env:
+          V: ${{ steps.ver.outputs.version }}
+          REL: ${{ steps.ver.outputs.pkgrel }}
+          SUM: ${{ steps.sum.outputs.sha256 }}
+        run: |
+          useradd -m builder
+          install -d -o builder /tmp/pkg
+          cp packaging/aur/$PKG/PKGBUILD /tmp/pkg/
+          cd /tmp/pkg
+          sed -i -e "s/^pkgver=.*/pkgver=$V/" -e "s/^pkgrel=.*/pkgrel=$REL/" -e "s/^sha256sums=.*/sha256sums=('$SUM')/" PKGBUILD
+          cp /tmp/rel/oynix-$V-1-x86_64.pkg.tar.zst .
+          chown -R builder /tmp/pkg
+          # Build without installing dependencies: this checks the source,
+          # checksum and package() step, which is everything this PKGBUILD does.
+          sudo -u builder makepkg --nodeps --noconfirm --cleanbuild
+          sudo -u builder makepkg --printsrcinfo > .SRCINFO
+          ls -l *.pkg.tar.zst
+          echo "--- .SRCINFO"; cat .SRCINFO
+          bsdtar -tf $PKG-$V-$REL-x86_64.pkg.tar.zst | grep -qx 'usr/bin/oynix' || { echo "::error::usr/bin/oynix is missing from the package"; exit 1; }
+
+      - name: Push to aur.archlinux.org
+        if: steps.ver.outputs.skip != 'true' && !inputs.dry_run
+        env:
+          V: ${{ steps.ver.outputs.version }}
+          REL: ${{ steps.ver.outputs.pkgrel }}
+          AUR_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          AUTOMATIC: ${{ github.event_name == 'release' || inputs.automatic == true }}
+        run: |
+          if [ -z "$AUR_KEY" ]; then
+            msg="The AUR_SSH_PRIVATE_KEY secret isn't set, so $PKG wasn't published. See packaging/aur/README.md."
+            if [ "$AUTOMATIC" = true ]; then echo "::warning::$msg"; exit 0; fi
+            echo "::error::$msg"; exit 1
+          fi
+          install -d -m 700 ~/.ssh
+          # Tolerate keys pasted with Windows line endings or stray indentation.
+          printf '%s\n' "$AUR_KEY" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' > ~/.ssh/aur && chmod 600 ~/.ssh/aur
+          first=$(head -n1 ~/.ssh/aur)
+          case "$first" in
+            ssh-*|ecdsa-*|sk-*)
+              echo "::error::AUR_SSH_PRIVATE_KEY holds a PUBLIC key (it starts with '${first%% *}'). The secret needs the private half: the file WITHOUT .pub, starting with -----BEGIN OPENSSH PRIVATE KEY-----. The .pub file is what goes on your AUR account."
+              exit 1 ;;
+            PuTTY-User-Key-File*)
+              echo "::error::AUR_SSH_PRIVATE_KEY is a PuTTY .ppk key. Export it as an OpenSSH key (PuTTYgen → Conversions → Export OpenSSH key) or make a new one with ssh-keygen."
+              exit 1 ;;
+            -----BEGIN*PRIVATE\ KEY-----) ;;
+            *)
+              echo "::error::AUR_SSH_PRIVATE_KEY doesn't look like a private key: its first line should be -----BEGIN OPENSSH PRIVATE KEY-----. Paste the whole file, including the BEGIN and END lines."
+              exit 1 ;;
+          esac
+          if ! pub=$(ssh-keygen -y -P '' -f ~/.ssh/aur 2>/tmp/keyerr); then
+            if grep -qi passphrase /tmp/keyerr; then
+              echo "::error::The key in AUR_SSH_PRIVATE_KEY has a passphrase, which a workflow can't type. Make one without: ssh-keygen -t ed25519 -N '' -f aur_oynix"
+            else
+              echo "::error::ssh couldn't read AUR_SSH_PRIVATE_KEY ($(cat /tmp/keyerr)). Paste the whole private key file again, including the BEGIN and END lines."
+            fi
+            exit 1
+          fi
+          echo "AUR SSH key fingerprint (register this public key on the ray0rfire AUR account):"
+          echo "  $pub"
+          printf '%s\n' "$pub" | ssh-keygen -lf -
+          # Trust only the host keys whose fingerprints the AUR publishes on aur.archlinux.org.
+          ssh-keyscan -t ed25519,ecdsa,rsa aur.archlinux.org 2>/dev/null > /tmp/scanned
+          : > ~/.ssh/known_hosts
+          while read -r line; do
+            fp=$(printf '%s\n' "$line" | ssh-keygen -lf - | awk '{print $2}')
+            case "$fp" in
+              SHA256:RFzBCUItH9LZS0cKB5UE6ceAYhBD5C8GeOBip8Z11+4|SHA256:uTa/0PndEgPZTf76e1DFqXKJEXKsn7m9ivhLQtzGOCI|SHA256:5s5cIyReIfNNVGRFdDbe3hdYiI5OelHGpw2rOUud3Q8)
+                printf '%s\n' "$line" >> ~/.ssh/known_hosts ;;
+              *) echo "::warning::Ignoring unexpected AUR host key $fp" ;;
+            esac
+          done < /tmp/scanned
+          [ -s ~/.ssh/known_hosts ] || { echo "::error::None of aur.archlinux.org's host keys matched the published fingerprints"; exit 1; }
+          cat > ~/.ssh/config <<CFG
+          Host aur.archlinux.org
+            User aur
+            IdentityFile ~/.ssh/aur
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+          CFG
+
+          # Attribute AUR package commits to the intended maintainer identity.
+          git config --global user.name "ray0rfire"
+          git config --global user.email "ray0rfire@users.noreply.github.com"
+          git config --global init.defaultBranch master
+          # Cloning a package that doesn't exist yet gives an empty repository;
+          # the first push creates it (and makes this key's account its maintainer).
+          # Check the AUR accepts the key before trying to clone, to give a useful error.
+          if ! ssh aur.archlinux.org list-repos > /tmp/sshout 2>&1; then
+            cat /tmp/sshout
+            if grep -q "Permission denied" /tmp/sshout; then
+              echo "::error::The AUR refused this key. Register the key on ray0rfire's AUR account and ensure that account is a maintainer of $PKG."
+            else
+              echo "::error::Couldn't connect to aur.archlinux.org over SSH (see above)."
+            fi
+            exit 1
+          fi
+          git clone "ssh://aur@aur.archlinux.org/$PKG.git" /tmp/aur
+          cp /tmp/pkg/PKGBUILD /tmp/pkg/.SRCINFO /tmp/aur/
+          cd /tmp/aur
+          git add PKGBUILD .SRCINFO
+          if git diff --cached --quiet; then
+            echo "The AUR already has $PKG $V-$REL; nothing to push."; exit 0
+          fi
+          git commit -q -m "Update to $V-$REL"
+          git push origin HEAD:master
+          echo "### Published [$PKG $V-$REL](https://aur.archlinux.org/packages/$PKG)" >> "$GITHUB_STEP_SUMMARY"
+; then
             echo "::notice::Skipping '$V': only plain release versions (like 5.2.1) go to the AUR."
             echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
