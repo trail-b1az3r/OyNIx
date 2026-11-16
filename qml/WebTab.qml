@@ -58,6 +58,42 @@ Item {
         else model.url = u   // activates the web loader, which loads model.url
     }
 
+    // ── Saved passwords (core/passwords.rs, PasswordScripts.qml) ─────
+    readonly property var prefs: JSON.parse(Core.settingsJson)
+    readonly property bool webPage: /^https?:/.test(model.url || "")
+    property string pwUser: ""          // last username typed on this site (two-step sign-ins)
+    property string pwUserOrigin: ""
+    function loginsHere() { return view && webPage ? JSON.parse(Core.loginsFor(String(view.url))) : [] }
+    function setupPasswords() {
+        if (!view || !webPage) return
+        view.runJavaScript(PasswordScripts.capture, PasswordScripts.world)
+        if (prefs.autofillPasswords !== false) fillLogins(loginsHere(), false)
+    }
+    function fillLogins(list, force) {
+        if (!view || !list.length) return
+        view.runJavaScript(PasswordScripts.fill(list, force), PasswordScripts.world, function (id) { if (id) Core.loginUsed(id) })
+    }
+    function pollPasswords() {
+        if (!view || !webPage) return
+        var url = String(view.url)
+        view.runJavaScript(PasswordScripts.poll, PasswordScripts.world, function (r) {
+            if (!r) return
+            var origin = Core.hostOf(url)
+            if (r.user) { tab.pwUser = r.user; tab.pwUserOrigin = origin }
+            if (r.needFill && tab.prefs.autofillPasswords !== false) tab.fillLogins(tab.loginsHere(), false)
+            if (r.submitted && r.pass && !tab.win.privateMode && tab.prefs.savePasswords !== false) {
+                var user = r.user || (tab.pwUserOrigin === origin ? tab.pwUser : "")
+                var would = Core.loginWould(url, user, r.pass)
+                if (would === "saved" || would === "updated") tab.win.offerSavePassword(url, user, r.pass, would)
+            }
+        })
+    }
+    Timer {
+        interval: 1000; repeat: true
+        running: tab.isCurrent && tab.view !== null && tab.webPage
+        onTriggered: tab.pollPasswords()
+    }
+
     // ── Tree tabs ────────────────────────────────────────────────────
     // Remember the pages of one site visited in this tab (a new site starts
     // a new list), for the tree under the tab in the vertical tab list.
@@ -316,6 +352,8 @@ Item {
         if (c === -20) return [qsTr("OyNIx blocked this page"), qsTr("%1 is on one of your filter lists, usually because it serves ads, tracking or malware.").arg(h), "burst", "shield"]
         if (c === -310) return [qsTr("This page keeps redirecting"), qsTr("%1 sent OyNIx round in circles. Clearing its cookies sometimes fixes this.").arg(h), "flower", "reload"]
         if (c === -312) return [qsTr("This port is off-limits"), qsTr("Browsers refuse to connect to port %1 because it belongs to services like mail or file transfer, which a web page could misuse.").arg(loadErrorUrl.replace(/^.*:(\d+).*$/, "$1")), "pentagon", "lock"]
+        if (c === -300) return [qsTr("This address is broken"), qsTr("The link that brought you here isn’t a valid web address. If this happened while signing in, go back and sign in again; OyNIx never rewrites sign-in addresses."), "pentagon", "warning"]
+        if (c === -301 || c === -302) return [qsTr("This link is for another app"), qsTr("Its address doesn’t start with https://, so it belongs to an app on your computer rather than to the web."), "pentagon", "external"]
         if (c === -6) return [qsTr("File not found"), qsTr("Nothing exists at this path on your computer."), "pentagon", "folder"]
         return [qsTr("Can’t open this page"), qsTr("Something went wrong while loading %1.").arg(h || qsTr("this address")), "cookie9", "globe"]
     }
@@ -427,6 +465,16 @@ Item {
                 // identity.launchWebAuthFlow ends at https://<id>.chromiumapp.org/…
                 if (request.isMainFrame && request.url.toString().indexOf(".chromiumapp.org/") > 0
                     && tab.win.app.extensionHost.apis.interceptAuthRedirect(request.url.toString())) { request.reject(); return }
+                // Links for other apps (mailto:, app sign-in redirects…) go
+                // to the desktop, after asking, instead of a broken page.
+                var su = request.url.toString(), scheme = su.split(":")[0].toLowerCase()
+                if (request.isMainFrame && ["http", "https", "file", "data", "blob", "about", "chrome-extension", "view-source", "oynix", "qrc", "chrome", "devtools", "javascript"].indexOf(scheme) < 0) {
+                    request.reject()
+                    tab.win.openInOtherApp(su)
+                    return
+                }
+                // A sign-in form being sent: read it before the page goes away.
+                if (request.isMainFrame && request.navigationType === WebEngineNavigationRequest.FormSubmittedNavigation) tab.pollPasswords()
                 if (request.isMainFrame) updateCosmetic(Core.hostOf(request.url.toString()))
             }
 
@@ -522,6 +570,7 @@ Item {
                     tab.probeReader()
                     tab.recordPage()
                     tab.readOutline()
+                    tab.setupPasswords()
                     snapTimer.restart()
                 } else if (info.status === WebEngineView.LoadFailedStatus && info.errorCode !== -3) {
                     // -3 = ERR_ABORTED (user stopped / replaced navigation)

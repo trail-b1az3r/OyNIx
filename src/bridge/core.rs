@@ -147,6 +147,42 @@ pub mod qobject {
         fn bookmark_folders(self: &Core) -> QString;
         #[qinvokable]
         fn import_bookmarks(self: Pin<&mut Core>, path_or_url: &QString) -> i32;
+
+        // ── passwords (core/passwords.rs, core/firefox.rs) ──
+        /// [{id, username, password}] saved for the page at `url`, most recent first.
+        #[qinvokable]
+        fn logins_for(self: &Core, url: &QString) -> QString;
+        /// What saving would do: "saved" | "updated" | "same" | "never".
+        #[qinvokable]
+        fn login_would(self: &Core, url: &QString, username: &QString, password: &QString) -> QString;
+        #[qinvokable]
+        fn save_login(self: Pin<&mut Core>, url: &QString, username: &QString, password: &QString) -> QString;
+        #[qinvokable]
+        fn login_used(self: Pin<&mut Core>, id: &QString);
+        #[qinvokable]
+        fn remove_login(self: Pin<&mut Core>, id: &QString) -> bool;
+        /// Every login without its password: [{id, origin, username, lastUsed, timesUsed}].
+        #[qinvokable]
+        fn login_list(self: &Core) -> QString;
+        #[qinvokable]
+        fn reveal_login(self: &Core, id: &QString) -> QString;
+        #[qinvokable]
+        fn never_save_login(self: Pin<&mut Core>, url: &QString);
+        #[qinvokable]
+        fn never_save_list(self: &Core) -> QString;
+        #[qinvokable]
+        fn forget_never_save(self: Pin<&mut Core>, origin: &QString);
+        /// Import a CSV of passwords. {ok, added, error}
+        #[qinvokable]
+        fn import_logins_csv(self: Pin<&mut Core>, path_or_url: &QString) -> QString;
+        /// Firefox profiles found on this computer.
+        #[qinvokable]
+        fn firefox_profiles(self: &Core) -> QString;
+        /// Import from a Firefox profile. {ok, passwords, bookmarks, errors: []}
+        #[qinvokable]
+        fn import_firefox(self: Pin<&mut Core>, profile: &QString, passwords: bool, bookmarks: bool) -> QString;
+        #[qsignal]
+        fn logins_changed(self: Pin<&mut Core>);
         #[qinvokable]
         fn export_bookmarks(self: &Core, path_or_url: &QString) -> bool;
 
@@ -854,6 +890,140 @@ impl qobject::Core {
 
     pub fn bookmark_folders(&self) -> QString {
         to_qjson(&json!(self.library.folders()))
+    }
+
+    // ── passwords ──
+    pub fn logins_for(&self, url: &QString) -> QString {
+        let st = crate::core::passwords::load();
+        let v: Vec<Value> = st.for_url(&s(url)).iter().map(|l| json!({ "id": l.id, "username": l.username, "password": l.password })).collect();
+        to_qjson(&Value::Array(v))
+    }
+
+    pub fn login_would(&self, url: &QString, username: &QString, password: &QString) -> QString {
+        let st = crate::core::passwords::load();
+        let o = crate::core::passwords::origin_of(&s(url));
+        if st.never.contains(&o) {
+            return qs("never");
+        }
+        qs(st.would(&s(url), &s(username), &s(password)))
+    }
+
+    pub fn save_login(self: Pin<&mut Self>, url: &QString, username: &QString, password: &QString) -> QString {
+        let mut st = crate::core::passwords::load();
+        let r = st.put(&s(url), &s(username), &s(password));
+        if r != "same" {
+            if let Err(e) = crate::core::passwords::save(&st) {
+                return qs(format!("error: {e}"));
+            }
+            self.logins_changed();
+        }
+        qs(r)
+    }
+
+    pub fn login_used(self: Pin<&mut Self>, id: &QString) {
+        let mut st = crate::core::passwords::load();
+        st.used(&s(id));
+        let _ = crate::core::passwords::save(&st);
+    }
+
+    pub fn remove_login(self: Pin<&mut Self>, id: &QString) -> bool {
+        let mut st = crate::core::passwords::load();
+        let ok = st.remove(&s(id)) && crate::core::passwords::save(&st).is_ok();
+        if ok {
+            self.logins_changed();
+        }
+        ok
+    }
+
+    pub fn login_list(&self) -> QString {
+        let mut st = crate::core::passwords::load();
+        st.logins.sort_by(|a, b| a.origin.cmp(&b.origin).then(a.username.cmp(&b.username)));
+        let v: Vec<Value> = st
+            .logins
+            .iter()
+            .map(|l| json!({ "id": l.id, "origin": l.origin, "username": l.username, "lastUsed": l.last_used, "timesUsed": l.times_used }))
+            .collect();
+        to_qjson(&Value::Array(v))
+    }
+
+    pub fn reveal_login(&self, id: &QString) -> QString {
+        let id = s(id);
+        qs(crate::core::passwords::load().logins.iter().find(|l| l.id == id).map(|l| l.password.as_str()).unwrap_or(""))
+    }
+
+    pub fn never_save_login(self: Pin<&mut Self>, url: &QString) {
+        let mut st = crate::core::passwords::load();
+        let o = crate::core::passwords::origin_of(&s(url));
+        if !o.is_empty() && !st.never.contains(&o) {
+            st.never.push(o);
+            let _ = crate::core::passwords::save(&st);
+            self.logins_changed();
+        }
+    }
+
+    pub fn never_save_list(&self) -> QString {
+        to_qjson(&json!(crate::core::passwords::load().never))
+    }
+
+    pub fn forget_never_save(self: Pin<&mut Self>, origin: &QString) {
+        let mut st = crate::core::passwords::load();
+        let o = s(origin);
+        st.never.retain(|x| *x != o);
+        let _ = crate::core::passwords::save(&st);
+        self.logins_changed();
+    }
+
+    pub fn import_logins_csv(self: Pin<&mut Self>, path_or_url: &QString) -> QString {
+        let text = match std::fs::read_to_string(to_path(&s(path_or_url))) {
+            Ok(t) => t,
+            Err(e) => return to_qjson(&json!({ "ok": false, "added": 0, "error": e.to_string() })),
+        };
+        match crate::core::passwords::parse_csv(&text) {
+            Ok(rows) => {
+                let mut st = crate::core::passwords::load();
+                let n = st.merge(rows);
+                if let Err(e) = crate::core::passwords::save(&st) {
+                    return to_qjson(&json!({ "ok": false, "added": 0, "error": e }));
+                }
+                self.logins_changed();
+                to_qjson(&json!({ "ok": true, "added": n, "error": "" }))
+            }
+            Err(e) => to_qjson(&json!({ "ok": false, "added": 0, "error": format!("This doesn’t look like a passwords CSV ({e}).") })),
+        }
+    }
+
+    pub fn firefox_profiles(&self) -> QString {
+        to_qjson(&json!(crate::core::firefox::profiles()))
+    }
+
+    pub fn import_firefox(mut self: Pin<&mut Self>, profile: &QString, passwords: bool, bookmarks: bool) -> QString {
+        let dir = std::path::PathBuf::from(s(profile));
+        let (mut np, mut nb, mut errors) = (0usize, 0usize, Vec::<String>::new());
+        if passwords {
+            match crate::core::firefox::logins(&dir) {
+                Ok(rows) => {
+                    let mut st = crate::core::passwords::load();
+                    np = st.merge(rows);
+                    if let Err(e) = crate::core::passwords::save(&st) {
+                        errors.push(e);
+                    }
+                }
+                Err(e) => errors.push(e),
+            }
+        }
+        if bookmarks {
+            match crate::core::firefox::bookmarks(&dir) {
+                Ok(rows) => nb = self.as_mut().rust_mut().library.import_list(rows),
+                Err(e) => errors.push(format!("Bookmarks: {e}")),
+            }
+        }
+        if np > 0 {
+            self.as_mut().logins_changed();
+        }
+        if nb > 0 {
+            self.as_mut().bump_bookmarks();
+        }
+        to_qjson(&json!({ "ok": errors.is_empty(), "passwords": np, "bookmarks": nb, "errors": errors }))
     }
 
     pub fn import_bookmarks(mut self: Pin<&mut Self>, path_or_url: &QString) -> i32 {

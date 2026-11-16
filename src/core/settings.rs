@@ -46,6 +46,10 @@ pub struct Settings {
     pub tree_tabs: bool,
     /// Game on the "You're offline" page: "go" | "blackjack" | "off".
     pub offline_game: String,
+    /// Offer to save passwords after signing in.
+    pub save_passwords: bool,
+    /// Fill saved passwords into sign-in forms automatically.
+    pub autofill_passwords: bool,
 
     // ── Search ────────────────────────────────────────────────────
     pub search_engine: String,
@@ -150,6 +154,8 @@ impl Default for Settings {
             tab_hover_previews: true,
             tree_tabs: false,
             offline_game: "go".into(),
+            save_passwords: true,
+            autofill_passwords: true,
             search_engine: "duckduckgo".into(),
             search_suggestions: true,
             bangs_enabled: true,

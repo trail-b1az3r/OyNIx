@@ -6,6 +6,7 @@ Rectangle {
     id: f
     property alias text: input.text
     property alias echoMode: input.echoMode
+    property alias readOnly: input.readOnly
     property string placeholder: ""
     signal accepted()
     implicitHeight: 44

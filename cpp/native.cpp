@@ -72,7 +72,14 @@ public:
 
         // Main-frame navigations: strip tracking parameters.
         if (type == QWebEngineUrlRequestInfo::ResourceTypeMainFrame) {
-            if (flags & 4u) {
+            // Only plain GET page loads: rewriting a server redirect or a form
+            // post would replay it differently (POST becomes GET), which is how
+            // sign-ins end on "malformed" or rejected addresses.
+            const auto nav = info.navigationType();
+            const bool plain = info.requestMethod() == "GET"
+                && nav != QWebEngineUrlRequestInfo::NavigationTypeRedirect
+                && nav != QWebEngineUrlRequestInfo::NavigationTypeFormSubmitted;
+            if ((flags & 4u) && plain) {
                 rust::String cleaned = strip_tracking(to_str(url));
                 if (cleaned.size() != static_cast<size_t>(url.size())) {
                     info.redirect(QUrl::fromEncoded(QByteArray(cleaned.data(), static_cast<qsizetype>(cleaned.size()))));

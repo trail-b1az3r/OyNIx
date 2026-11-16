@@ -466,6 +466,103 @@ ApplicationWindow {
     function answerUsb(key) { var a = usbAsk; usbAsk = null; if (a) a.cb(key) }
     function askInstallExtension(name, source, cb) { installAsk = { name: name, source: source, cb: cb } }
 
+    // "Save password for example.com?" under the address bar.
+    function offerSavePassword(url, user, pass, would) {
+        pwSave.url = url; pwSave.pass = pass; pwSave.would = would
+        pwSave.userText = user
+        var p = addressField.mapToItem(win.contentItem, addressField.width - pwSave.width, addressField.height + 6)
+        pwSave.x = Math.max(8, p.x); pwSave.y = p.y
+        pwSave.open()
+    }
+    Popover {
+        id: pwSave
+        parent: win.contentItem
+        width: 340
+        padding: 18
+        property string url: ""
+        property string pass: ""
+        property string would: "saved"
+        property string userText: ""
+        property bool shown: false
+        onClosed: { pass = ""; shown = false }
+        contentItem: ColumnLayout {
+            spacing: 12
+            RowLayout {
+                spacing: 12
+                MShape { size: 40; shape: "cookie4"; color: Theme.secondaryContainer
+                    Icon { anchors.centerIn: parent; name: "key"; size: 18; color: Theme.secondaryContainerFg } }
+                Txt {
+                    Layout.fillWidth: true; wrapMode: Text.WordWrap; elide: Text.ElideNone; font.weight: Font.DemiBold
+                    text: pwSave.would === "updated" ? qsTr("Update the password for %1?").arg(Core.hostOf(pwSave.url)) : qsTr("Save password for %1?").arg(Core.hostOf(pwSave.url))
+                }
+            }
+            MTextField { id: pwUserField; Layout.fillWidth: true; placeholder: qsTr("Username"); text: pwSave.userText }
+            RowLayout {
+                Layout.fillWidth: true
+                MTextField { Layout.fillWidth: true; readOnly: true; echoMode: pwSave.shown ? TextInput.Normal : TextInput.Password; text: pwSave.pass }
+                IconButton { glyph: "eye"; tip: pwSave.shown ? qsTr("Hide") : qsTr("Show"); onClicked: pwSave.shown = !pwSave.shown }
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                PushButton { textOnly: true; text: qsTr("Never"); visible: pwSave.would === "saved"; onClicked: { Core.neverSaveLogin(pwSave.url); pwSave.close() } }
+                Item { Layout.fillWidth: true }
+                PushButton { textOnly: true; text: qsTr("Not Now"); onClicked: pwSave.close() }
+                PushButton {
+                    primary: true; text: pwSave.would === "updated" ? qsTr("Update") : qsTr("Save")
+                    onClicked: {
+                        var r = Core.saveLogin(pwSave.url, pwUserField.text, pwSave.pass)
+                        pwSave.close()
+                        toast.show(r.indexOf("error") === 0 ? qsTr("Couldn’t save the password: %1").arg(r) : qsTr("Password saved"))
+                    }
+                }
+            }
+        }
+    }
+
+    // Saved logins for this site, from the key in the address bar.
+    function showLoginMenu(anchor) {
+        if (loginMenu.recentlyClosed()) return
+        var p = anchor.mapToItem(win.contentItem, 0, anchor.height + 6)
+        loginMenu.x = p.x - 8; loginMenu.y = p.y
+        loginMenu.open()
+    }
+    Popover {
+        id: loginMenu
+        parent: win.contentItem
+        width: 300
+        padding: 6
+        contentItem: ColumnLayout {
+            spacing: 1
+            Txt { text: qsTr("Saved logins for %1").arg(win.currentTab ? win.currentTab.host : ""); color: Theme.textDim; font.pixelSize: 12; Layout.margins: 8 }
+            Repeater {
+                model: loginMenu.opened && win.currentTab ? win.currentTab.loginsHere() : []
+                delegate: MenuRow {
+                    required property var modelData
+                    glyph: "user"
+                    text: modelData.username || qsTr("(no username)")
+                    onClicked: { loginMenu.close(); win.currentTab.fillLogins([modelData], true) }
+                }
+            }
+            Rectangle { Layout.fillWidth: true; height: 1; color: Theme.separator; Layout.topMargin: 4; Layout.bottomMargin: 4 }
+            MenuRow { text: qsTr("Manage Passwords…"); glyph: "key"; onClicked: { loginMenu.close(); win.app.openSettings("passwords") } }
+        }
+    }
+
+    // A yes/no question in a dialog over this window.
+    property var askState: null
+    function ask(o, cb) { askState = Object.assign({ cb: cb }, o) }
+    function answer(yes) { var a = askState; askState = null; if (a && a.cb) a.cb(yes) }
+
+    // Addresses for other apps (mailto:, zoommtg:, an app's sign-in
+    // redirect such as com.example.app:/oauth2redirect…): ask, then hand
+    // them to the desktop instead of failing with a broken-address error.
+    function openInOtherApp(u) {
+        var scheme = u.split(":")[0]
+        ask({ title: qsTr("Open in another app?"), icon: "external", ok: qsTr("Open App"),
+              body: qsTr("This page wants to open a “%1:” link, which belongs to an app on your computer, not to the web.\n\n%2").arg(scheme).arg(u.length > 300 ? u.slice(0, 300) + "…" : u) },
+            function (yes) { if (yes) Qt.openUrlExternally(u) })
+    }
+
     // "Ask where to save each file"
     FileDialog {
         id: downloadDialog
@@ -1261,6 +1358,48 @@ ApplicationWindow {
                                 Item { Layout.fillWidth: true }
                                 PushButton { textOnly: true; text: qsTr("Cancel"); onClicked: { var a = win.installAsk; win.installAsk = null; a.cb(false) } }
                                 PushButton { primary: true; text: qsTr("Add Extension"); onClicked: { var a = win.installAsk; win.installAsk = null; a.cb(true) } }
+                            }
+                        }
+                    }
+                }
+
+                // ── General question: win.ask({title, body, icon, ok, cancel}, cb) ──
+                Rectangle {
+                    z: 50
+                    anchors.fill: parent
+                    visible: win.askState !== null
+                    onVisibleChanged: if (visible) forceActiveFocus()
+                    color: Theme.alpha("#000000", 0.32)
+                    MouseArea { anchors.fill: parent }
+                    Keys.onEscapePressed: win.answer(false)
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: Math.min(440, parent.width - 48)
+                        height: askCol.implicitHeight + 48
+                        radius: Theme.shapeXL
+                        color: Theme.surfaceContainerHigh
+                        ColumnLayout {
+                            id: askCol
+                            anchors.fill: parent
+                            anchors.margins: 24
+                            spacing: 14
+                            MShape { Layout.alignment: Qt.AlignHCenter; shape: "cookie9"; size: 56; color: Theme.secondaryContainer
+                                Icon { anchors.centerIn: parent; name: win.askState ? win.askState.icon || "external" : "external"; size: 26; color: Theme.secondaryContainerFg } }
+                            Txt {
+                                Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; elide: Text.ElideNone
+                                font.pixelSize: 22; font.family: Theme.displayFont
+                                text: win.askState ? win.askState.title : ""
+                            }
+                            Txt {
+                                Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WrapAnywhere; elide: Text.ElideNone
+                                color: Theme.surfaceVariantFg
+                                text: win.askState ? win.askState.body : ""
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Item { Layout.fillWidth: true }
+                                PushButton { textOnly: true; text: win.askState && win.askState.cancel ? win.askState.cancel : qsTr("Cancel"); onClicked: win.answer(false) }
+                                PushButton { primary: true; text: win.askState && win.askState.ok ? win.askState.ok : qsTr("OK"); onClicked: win.answer(true) }
                             }
                         }
                     }
