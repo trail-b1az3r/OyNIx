@@ -127,7 +127,20 @@ jobs:
 
           # SHA256SUMS uses the standard format: "<hash>  <filename>".
           # Match the filename as a field (not a regex); the old grep pattern
-          # accidentally searched for a literal '
+          # accidentally searched for a literal '$' and passed no lines to sha256sum.
+          checksum_line=$(awk -v file="$asset" '$2 == file { print; found=1 } END { if (!found) exit 1 }' SHA256SUMS) || {
+            echo "::error::SHA256SUMS does not contain an entry for $asset"
+            echo "Available checksum entries:"
+            cat SHA256SUMS
+            exit 1
+          }
+          printf '%s\n' "$checksum_line" | sha256sum --check --status - || {
+            echo "::error::Checksum verification failed for $asset"
+            exit 1
+          }
+          echo "Verified SHA256 for $asset"
+          echo "sha256=$(sha256sum "$asset" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
       - name: Fill in the PKGBUILD and build it
         if: steps.ver.outputs.skip != 'true'
         env:
