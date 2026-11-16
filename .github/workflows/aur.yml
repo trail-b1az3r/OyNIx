@@ -225,15 +225,6 @@ jobs:
           git commit -q -m "Update to $V-$REL"
           git push origin HEAD:master
           echo "### Published [$PKG $V-$REL](https://aur.archlinux.org/packages/$PKG)" >> "$GITHUB_STEP_SUMMARY"
-; then
-            echo "::notice::Skipping '$V': only plain release versions (like 5.2.1) go to the AUR."
-            echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
-          fi
-          [[ "$REL" =~ ^[1-9][0-9]*$ ]] || { echo "::error::pkgrel must be a positive whole number, not '$REL'"; exit 1; }
-          echo "version=$V" >> "$GITHUB_OUTPUT"
-          echo "pkgrel=$REL" >> "$GITHUB_OUTPUT"
-          echo "skip=false" >> "$GITHUB_OUTPUT"
-          echo "Publishing $PKG $V-$REL"
 
       - name: Fetch the release and check it against SHA256SUMS
         if: steps.ver.outputs.skip != 'true'
