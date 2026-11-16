@@ -135,7 +135,7 @@ jobs:
             cat SHA256SUMS
             exit 1
           }
-          printf '%s\\n' "$checksum_line" | sha256sum --check --status - || {
+          printf '%s\n' "$checksum_line" | sha256sum --check --status - || {
             echo "::error::Checksum verification failed for $asset"
             exit 1
           }
