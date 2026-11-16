@@ -1,0 +1,22 @@
+! Wallbreaker: anti-adblock providers and ad-blocker detector scripts.
+! Added to OyNIx's content blocker while Wallbreaker is on.
+
+! Admiral ("visitor relationship management"; ad-block walls)
+||getadmiral.com^
+! PageFair (ad-block measurement and recovery)
+||pagefair.com^
+||pagefair.net^
+! BlockAdBlock, when served from its site
+||blockadblock.com^
+
+! Self-hosted copies of the common detector scripts
+/blockadblock.js$script
+/fuckadblock.js$script
+/sniffadblock.js$script
+/adblock-detector.$script
+/adblockdetector.$script
+/adblock-detect.$script
+/adblock-checker.$script
+/anti-adblock.$script
+/antiadblock.$script
+/adblocker-detect.$script

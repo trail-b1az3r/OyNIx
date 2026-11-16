@@ -16,6 +16,7 @@ pub const BUILTINS: &[(&str, &[(&str, &str)])] = &[
     ("firefox-addons", files!("firefox-addons": "oynix.json", "code.ts", "content.css")),
     ("scraper", files!("scraper": "oynix.json", "code.ts", "content.css", "graphics.qt")),
     ("graphite", files!("graphite": "oynix.json", "code.ts", "content.css", "theme.json")),
+    ("wallbreaker", files!("wallbreaker": "oynix.json", "code.ts", "content.css", "filters.txt")),
 ];
 
 fn version_of(files: &[(&str, &str)]) -> String {
@@ -55,7 +56,7 @@ pub fn sync(list: &mut Vec<Entry>) -> bool {
         for (f, text) in files.iter() {
             let _ = std::fs::write(tmp.join(f), text);
         }
-        match extensions::install(&tmp, list) {
+        match extensions::install_builtin(&tmp, list) {
             Ok(e) => {
                 if let Some(x) = list.iter_mut().find(|x| x.id == e.id) {
                     x.builtin = true;

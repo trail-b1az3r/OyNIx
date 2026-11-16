@@ -20,3 +20,4 @@ pub mod ocr;
 pub mod builtin;
 pub mod extevents;
 pub mod nativemsg;
+pub mod poweroynix;

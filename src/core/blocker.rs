@@ -7,7 +7,9 @@
 //!   * a small built-in list of ad / tracker hosts (works offline, first run);
 //!   * the subscribed filter lists (EasyList, EasyPrivacy, uBlock, AdGuard,
 //!     Fanboy… see `filterlists.rs`), downloaded and refreshed automatically;
-//!   * any `*.txt` in `~/.config/oynix/<profile>/filters/`.
+//!   * any `*.txt` in `~/.config/oynix/<profile>/filters/`;
+//!   * `filters.txt` of enabled power extensions with the "filters"
+//!     permission (verified `.poweroynix` packages and built-ins).
 //!
 //! Supported syntax (Adblock Plus / uBlock Origin): `||host^`, `|https://`,
 //! wildcards `*`, separators `^`, end anchors, `@@` exceptions, hosts-file
@@ -701,10 +703,39 @@ fn build(lists: &[(String, Category)]) -> Rules {
             }
         }
     }
+    let ext = super::extensions::filter_files(&super::extensions::load());
+    for p in &ext {
+        if let Ok(txt) = std::fs::read_to_string(p) {
+            parse_list(&txt, Category::Custom, &mut r);
+            r.lists_loaded += 1;
+        }
+    }
+    *EXT_FILTERS.lock().unwrap() = stamp(&ext);
     r.block.finish();
     r.allow.finish();
     r.cosmetic.finish();
     r
+}
+
+type Stamp = Vec<(std::path::PathBuf, u64, Option<std::time::SystemTime>)>;
+
+fn stamp(files: &[std::path::PathBuf]) -> Stamp {
+    files
+        .iter()
+        .map(|p| {
+            let m = std::fs::metadata(p).ok();
+            (p.clone(), m.as_ref().map(|m| m.len()).unwrap_or(0), m.and_then(|m| m.modified().ok()))
+        })
+        .collect()
+}
+
+/// Extension filter files (with size and time) the current rules were built with.
+static EXT_FILTERS: Mutex<Stamp> = Mutex::new(Vec::new());
+
+/// True when `files` differs from what the rules were built with, or one
+/// of them changed on disk since, so the blocker needs rebuilding.
+pub fn extension_filters_changed(files: &[std::path::PathBuf]) -> bool {
+    *EXT_FILTERS.lock().unwrap() != stamp(files)
 }
 
 /// Install the built-in rules immediately, then parse the subscribed lists

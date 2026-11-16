@@ -286,6 +286,15 @@ def zip_dir(src, dest):
                 z.writestr(info, f.read_bytes())
 
 
+def _poweroynix():
+    """scripts/poweroynix.py as a module (signature checks for power extensions)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("poweroynix", ROOT / "scripts" / "poweroynix.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
 def build_gallery(site):
     out = site.out / "extensions"
     (out / "packages").mkdir(parents=True, exist_ok=True)
@@ -296,9 +305,22 @@ def build_gallery(site):
         for f in ("code.ts", "content.css"):
             if not (d / f).exists():
                 sys.exit(f"{d.name}: {f} is missing")
+        # Power extensions (.poweroynix) must be verified to be listed, except
+        # the ones that ship inside OyNIx. Their files are covered by the
+        # signature, so any layout is allowed (e.g. a Chrome manifest.json).
+        power = meta.get("power") is True or (d / "oynix.sig").exists()
+        verified_by = ""
+        if power and not builtin:
+            po = _poweroynix()
+            try:
+                verified_by = po.verify_dir(d, po.trusted_keys(po.TRUSTED))
+            except ValueError as e:
+                sys.exit(f"{d.name}: a .poweroynix has to be verified before it can be listed: {e}")
         allowed = {"oynix.json", "code.ts", "content.css", "graphics.qt", "extra.html", "extra.jsonl", "theme.json", "icon.png", "icon.svg"}
+        if power:
+            allowed |= {"filters.txt", "oynix.sig"}
         extra_files = sorted(f.name for f in d.iterdir() if f.is_file() and f.name not in allowed)
-        if extra_files:
+        if extra_files and not (power and not builtin):
             sys.exit(f"{d.name}: unexpected files {extra_files} (allowed: {sorted(allowed)})")
         if (d / "extra.jsonl").exists():
             for n, line in enumerate((d / "extra.jsonl").read_text().splitlines(), 1):
@@ -311,10 +333,19 @@ def build_gallery(site):
         if builtin:
             g = {"category": "Built in", "author": "OyNIx", "shape": {"scraper": "burst", "graphite": "cookie4"}.get(d.name, "flower"),
                  "summary": "Comes with OyNIx.", "about": meta.get("description", "") + "\n\nThis extension comes with OyNIx: find it in Settings › Extensions, where you can turn it off. The download here is the same package, for reading or for other OyNIx installs."}
-        file = f'{meta["name"].replace(" ", "-")}-{meta["version"]}.oynix'
-        pkg = out / "packages" / file
-        zip_dir(d, pkg)
-        data = pkg.read_bytes()
+        if power and builtin:
+            # Trusted only because it ships with OyNIx; a download of it
+            # wouldn't verify anywhere else, so there's none.
+            file, data = None, b""
+            g["about"] = meta.get("description", "") + "\n\nThis power extension comes with OyNIx and can only be used there: find it in Settings › Extensions, where you can turn it off."
+        elif power:
+            file = f'{meta["name"].replace(" ", "-")}-{meta["version"]}.poweroynix'
+            _poweroynix().pack(d, out / "packages" / file)
+            data = (out / "packages" / file).read_bytes()
+        else:
+            file = f'{meta["name"].replace(" ", "-")}-{meta["version"]}.oynix'
+            zip_dir(d, out / "packages" / file)
+            data = (out / "packages" / file).read_bytes()
         items.append({
             "id": d.name, "name": meta["name"], "version": meta["version"],
             "description": meta.get("description", ""), "summary": g.get("summary", ""),
@@ -322,9 +353,10 @@ def build_gallery(site):
             "author": g.get("author", ""), "shape": g.get("shape", "cookie9"),
             "matches": meta.get("matches", []), "run_at": meta.get("run_at", "document_end"),
             "world": meta.get("world", "isolated"),
-            "package": f"packages/{file}", "size": len(data), "sha256": hashlib.sha256(data).hexdigest(),
+            "package": f"packages/{file}" if file else None, "size": len(data), "sha256": hashlib.sha256(data).hexdigest() if file else "",
+            "power": power, "verified_by": "OyNIx" if power and builtin else verified_by,
             "ts": (d / "code.ts").read_text(), "css": (d / "content.css").read_text(),
-            "extras": {f: (d / f).read_text() for f in ("graphics.qt", "extra.html", "extra.jsonl", "theme.json") if (d / f).exists()},
+            "extras": {f: (d / f).read_text() for f in ("graphics.qt", "extra.html", "extra.jsonl", "theme.json", "filters.txt") if (d / f).exists()},
             "permissions": meta.get("permissions", []),
         })
 
@@ -383,7 +415,18 @@ def build_gallery(site):
         ts_lines = it["ts"].count("\n") + 1
         extras_html = "".join(f'<details class="source"><summary>{html.escape(f)}</summary><pre><code>{html.escape(t)}</code></pre></details>' for f, t in it["extras"].items())
         panel = "graphics.qt (panel)" if "graphics.qt" in it["extras"] else ("extra.html (page)" if "extra.html" in it["extras"] else "None")
-        abilities = ", ".join(filter(None, ["Reads text from screenshots of the page (OCR)" if "ocr" in it["permissions"] else "", "Restyles the browser" if "theme.json" in it["extras"] else ""])) or "None"
+        abilities = ", ".join(filter(None, ["Reads text from screenshots of the page (OCR)" if "ocr" in it["permissions"] else "", "Restyles the browser" if "theme.json" in it["extras"] else "",
+                                            "Adds rules to the content blocker (filters.txt)" if "filters" in it["permissions"] else "",
+                                            f'Power extension, verified by {html.escape(it["verified_by"])}' if it["power"] else ""])) or "None"
+        if it["package"]:
+            get_html = f'''<a class="btn only-oynix" href="../{it["package"]}" download>{site.icon("plus")}Add to OyNIx</a>
+    <a class="btn not-oynix" href="../{it["package"]}" download>{site.icon("download")}Download</a>
+    <p class="hint not-oynix">Open this page in OyNIx to install with one click, or run<br><code>oynix --install-extension {html.escape(it["package"].split("/")[-1])}</code></p>
+    <p class="hint only-oynix">OyNIx will ask before installing. Remove it any time in Settings › Extensions.</p>'''
+            size_html = f'<dt>Size</dt><dd>{it["size"]:,} bytes</dd>\n      <dt>SHA-256</dt><dd><code style="font-size:11px">{it["sha256"]}</code></dd>'
+        else:
+            get_html = '<p class="hint">Already in OyNIx: Settings › Extensions.</p>'
+            size_html = ""
         all_sites = any(m in ("*://*/*", "<all_urls>") for m in it["matches"])
         if not it["matches"]:
             matches = "No pages"
@@ -403,10 +446,7 @@ def build_gallery(site):
     </div>
   </article>
   <aside class="facts">
-    <a class="btn only-oynix" href="../{it["package"]}" download>{site.icon("plus")}Add to OyNIx</a>
-    <a class="btn not-oynix" href="../{it["package"]}" download>{site.icon("download")}Download</a>
-    <p class="hint not-oynix">Open this page in OyNIx to install with one click, or run<br><code>oynix --install-extension {html.escape(it["package"].split("/")[-1])}</code></p>
-    <p class="hint only-oynix">OyNIx will ask before installing. Remove it any time in Settings › Extensions.</p>
+    {get_html}
     <dl>
       <dt>Version</dt><dd>{html.escape(it["version"])}</dd>
       <dt>Category</dt><dd>{html.escape(it["category"])}</dd>
@@ -415,8 +455,7 @@ def build_gallery(site):
       <dt>Network</dt><dd>None</dd>
       <dt>Toolbar</dt><dd>{panel}</dd>
       <dt>Extra abilities</dt><dd>{abilities}</dd>
-      <dt>Size</dt><dd>{it["size"]:,} bytes</dd>
-      <dt>SHA-256</dt><dd><code style="font-size:11px">{it["sha256"]}</code></dd>
+      {size_html}
     </dl>
   </aside>
 </div>'''

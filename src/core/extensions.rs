@@ -16,6 +16,11 @@
 //!   package with only `content.js` is converted to `code.ts` first.
 //!   OyNIx injects the result itself on matching pages.
 //!
+//! * **Power extensions** (`.poweroynix`, see `poweroynix.rs`) – an OyNIx
+//!   extension that may also carry a Chrome/Firefox `manifest.json` (MV2 or
+//!   MV3) and gets the powerful APIs without Developer mode. They must carry
+//!   a valid signature from a trusted key; built-ins are exempt.
+//!
 //! `manifest_version` values above 3 do not exist yet; they are accepted and
 //! treated as MV3 so forward-dated manifests still load, with a warning.
 
@@ -69,6 +74,27 @@ pub struct Entry {
     pub permissions: Vec<String>,
     /// Ships with OyNIx: can be turned off but not removed.
     pub builtin: bool,
+    /// A verified power extension (`.poweroynix`): full API access.
+    pub power: bool,
+    /// Who verified it ("OyNIx" for built-ins).
+    pub verified_by: String,
+}
+
+impl Entry {
+    /// Has a Chrome/Firefox half loaded by Chromium's extension system.
+    pub fn is_webext(&self) -> bool {
+        self.kind != "oynix" || self.manifest_version > 0
+    }
+}
+
+/// `filters.txt` of every enabled power extension with the "filters"
+/// permission, for the content blocker.
+pub fn filter_files(list: &[Entry]) -> Vec<PathBuf> {
+    list.iter()
+        .filter(|e| e.enabled && e.power && e.permissions.iter().any(|p| p == "filters"))
+        .map(|e| Path::new(&e.path).join("filters.txt"))
+        .filter(|p| p.exists())
+        .collect()
 }
 
 pub fn root() -> PathBuf {
@@ -649,7 +675,7 @@ pub fn runtime_context(e: &Entry, kind: &str) -> Value {
 /// Contexts for extension pages, keyed by Chromium extension id.
 pub fn page_contexts(list: &[Entry], kind: &str) -> Value {
     let mut m = Map::new();
-    for e in list.iter().filter(|e| e.enabled && e.kind != "oynix" && !e.web_id.is_empty()) {
+    for e in list.iter().filter(|e| e.enabled && e.is_webext() && !e.web_id.is_empty()) {
         m.insert(e.web_id.clone(), runtime_context(e, kind));
     }
     Value::Object(m)
@@ -872,7 +898,7 @@ pub fn read_theme(dir: &Path) -> Result<Option<Value>, String> {
 
 /// Validate an OyNIx extension folder: `oynix.json` + `code.ts` (or
 /// `content.js`, converted) + `content.css`, and the optional extras.
-fn prepare_oynix(dir: &Path, e: &mut Entry) -> Result<(), String> {
+fn prepare_oynix(dir: &Path, e: &mut Entry, power: bool) -> Result<(), String> {
     let meta = std::fs::read_to_string(dir.join("oynix.json")).map_err(|_| "oynix.json is missing".to_string())?;
     let v = parse_json_lenient(&meta)?;
     if let Some(w) = ensure_code_ts(dir)? {
@@ -897,7 +923,13 @@ fn prepare_oynix(dir: &Path, e: &mut Entry) -> Result<(), String> {
             for p in a {
                 match p.as_str() {
                     Some("ocr") => out.push("ocr".to_string()),
-                    Some(other) => return Err(format!("unknown permission “{other}” (OyNIx extensions can ask for: ocr)")),
+                    Some(x) if super::poweroynix::POWER_PERMISSIONS.contains(&x) => {
+                        if !power {
+                            return Err(format!("the “{x}” permission is only for verified .poweroynix extensions"));
+                        }
+                        out.push(x.to_string());
+                    }
+                    Some(other) => return Err(format!("unknown permission “{other}” (OyNIx extensions can ask for: ocr; power extensions also: filters)")),
                     None => return Err("permissions must be a list of strings".into()),
                 }
             }
@@ -943,7 +975,9 @@ fn prepare_oynix(dir: &Path, e: &mut Entry) -> Result<(), String> {
         other => return Err(format!("world must be \"isolated\" or \"main\" (got “{other}”)")),
     };
     e.kind = "oynix".into();
-    e.manifest_version = 0;
+    if e.permissions.iter().any(|p| p == "filters") && !dir.join("filters.txt").exists() {
+        return Err("the “filters” permission needs a filters.txt".into());
+    }
     for icon in ["icon.png", "icon.svg"] {
         if dir.join(icon).exists() {
             e.icon = dir.join(icon).to_string_lossy().into_owned();
@@ -1082,7 +1116,7 @@ pub fn oynix_script(e: &Entry) -> Option<String> {
         .replace("__MESSAGING__", if channel.is_empty() { "false" } else { "true" })
         .replace("__OCR__", if ocr && !channel.is_empty() { "true" } else { "false" });
     Some(format!(
-        "{header}{channel}\n(function () {{\n  var css = {css_js};\n  if (css.trim()) {{\n    var s = document.createElement('style');\n    s.dataset.oynixExtension = {id_js};\n    s.textContent = css;\n    (document.head || document.documentElement).appendChild(s);\n  }}\n}})();\n(function () {{\n{api}\n{js}\n}})();\n"
+        "{header}{channel}\n(function () {{\n  var css = {css_js};\n  if (!css.trim()) return;\n  var s = document.createElement('style');\n  s.dataset.oynixExtension = {id_js};\n  s.textContent = css;\n  // At document_start there may be no <html> element yet.\n  var add = function () {{ (document.head || document.documentElement).appendChild(s); }};\n  if (document.documentElement) add();\n  else new MutationObserver(function (_, o) {{ if (document.documentElement) {{ o.disconnect(); add(); }} }}).observe(document, {{ childList: true }});\n}})();\n(function () {{\n{api}\n{js}\n}})();\n"
     ))
 }
 
@@ -1091,18 +1125,28 @@ pub fn oynix_script(e: &Entry) -> Option<String> {
 /// Install from a folder, `.crx`, `.xpi` or `.zip`. Re-installing an
 /// extension with the same id replaces it (keeps its enabled state).
 pub fn install(source: &Path, list: &mut Vec<Entry>) -> Result<Entry, String> {
+    install_as(source, list, false)
+}
+
+/// Install an extension that ships inside OyNIx (exempt from .poweroynix
+/// verification: it came with the browser).
+pub fn install_builtin(source: &Path, list: &mut Vec<Entry>) -> Result<Entry, String> {
+    install_as(source, list, true)
+}
+
+fn install_as(source: &Path, list: &mut Vec<Entry>, builtin: bool) -> Result<Entry, String> {
     let base = root();
     static SEQ: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
     let n = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let staging = base.join(format!(".staging-{}-{}-{n}", std::process::id(), now()));
     let _ = std::fs::remove_dir_all(&staging);
     std::fs::create_dir_all(&staging).map_err(|e| e.to_string())?;
-    let result = install_inner(source, &staging, &base, list);
+    let result = install_inner(source, &staging, &base, list, builtin);
     let _ = std::fs::remove_dir_all(&staging);
     result
 }
 
-fn install_inner(source: &Path, staging: &Path, base: &Path, list: &mut Vec<Entry>) -> Result<Entry, String> {
+fn install_inner(source: &Path, staging: &Path, base: &Path, list: &mut Vec<Entry>, builtin: bool) -> Result<Entry, String> {
     let ext = source.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
     let from_xpi = ext == "xpi";
     let mut crx_key: Option<Vec<u8>> = None;
@@ -1119,13 +1163,38 @@ fn install_inner(source: &Path, staging: &Path, base: &Path, list: &mut Vec<Entr
     let dir = content_root(staging);
 
     let mut e = Entry { enabled: true, installed: now(), ..Default::default() };
-    if dir.join("oynix.json").exists() && !dir.join("manifest.json").exists() {
-        prepare_oynix(&dir, &mut e)?;
+    let power = ext == "poweroynix" || super::poweroynix::is_power_dir(&dir);
+    if power {
+        // Checked before anything below rewrites a file.
+        e.verified_by = if builtin { "OyNIx".into() } else { super::poweroynix::verify(&dir)? };
+        if !dir.join("oynix.json").exists() {
+            return Err("a .poweroynix needs oynix.json, code.ts and content.css, like any OyNIx extension".into());
+        }
+        if dir.join("manifest.json").exists() {
+            prepare_webext(&dir, &mut e, crx_key.as_deref(), from_xpi)?;
+        }
+        let icon = std::mem::take(&mut e.icon);
+        prepare_oynix(&dir, &mut e, true)?;
+        if e.icon.is_empty() {
+            e.icon = icon;
+        }
+        e.power = true;
+    } else if dir.join("oynix.json").exists() && !dir.join("manifest.json").exists() {
+        prepare_oynix(&dir, &mut e, false)?;
     } else {
+        prepare_webext(&dir, &mut e, crx_key.as_deref(), from_xpi)?;
+    }
+    finish_install(e, &dir, base, list)
+}
+
+/// The Chrome/Firefox half: normalise manifest.json and fill in `e`.
+fn prepare_webext(dir: &Path, e: &mut Entry, crx_key: Option<&[u8]>, from_xpi: bool) -> Result<(), String> {
+    let dir = dir.to_path_buf();
+    {
         let text = std::fs::read_to_string(dir.join("manifest.json")).map_err(|_| "no manifest.json or oynix.json found".to_string())?;
         let mut manifest = parse_json_lenient(&text)?;
         let Value::Object(ref mut m) = manifest else { return Err("manifest.json is not an object".into()) };
-        if let (Some(k), false) = (&crx_key, m.contains_key("key")) {
+        if let (Some(k), false) = (crx_key, m.contains_key("key")) {
             m.insert("key".into(), json!(b64_encode(k)));
         }
         let mv = m.get("manifest_version").and_then(Value::as_u64).unwrap_or(0);
@@ -1170,7 +1239,11 @@ fn install_inner(source: &Path, staging: &Path, base: &Path, list: &mut Vec<Entr
             .to_string();
         e.icon = best_icon(&dir, &manifest);
     }
+    Ok(())
+}
 
+fn finish_install(mut e: Entry, dir: &Path, base: &Path, list: &mut Vec<Entry>) -> Result<Entry, String> {
+    let dir = dir.to_path_buf();
     e.id = slug(&e.name);
     let target = base.join(&e.id);
     if let Some(old) = list.iter().find(|x| x.id == e.id) {
@@ -1378,6 +1451,44 @@ mod tests {
         std::fs::write(b.join("extra.jsonl"), "{\"ok\": 1}\nnot json\n").unwrap();
         let err = install(&b, &mut list).unwrap_err();
         assert!(err.starts_with("extra.jsonl:2:"), "{err}");
+    }
+
+    #[test]
+    fn power_extensions_need_verification() {
+        with_data_home();
+        let d = tmp("power");
+        std::fs::write(d.join("oynix.json"), r#"{"name": "Power Test", "power": true, "permissions": ["filters"], "matches": []}"#).unwrap();
+        std::fs::write(d.join("code.ts"), "export {};").unwrap();
+        std::fs::write(d.join("content.css"), "").unwrap();
+        std::fs::write(d.join("filters.txt"), "||tracker.example^\n").unwrap();
+        std::fs::write(
+            d.join("manifest.json"),
+            r#"{"manifest_version": 2, "name": "Power Test", "version": "1.0", "permissions": ["cookies", "nativeMessaging"], "background": {"scripts": ["bg.js"]}}"#,
+        )
+        .unwrap();
+        std::fs::write(d.join("bg.js"), "chrome.runtime.onInstalled.addListener(() => {});").unwrap();
+        let mut list = vec![];
+        // Unsigned: refused, whether it says "power" or arrives as .poweroynix.
+        let err = install(&d, &mut list).unwrap_err();
+        assert!(err.contains("has to be verified"), "{err}");
+        assert!(list.is_empty());
+
+        // The "filters" permission is power-only.
+        let plain = tmp("notpower");
+        std::fs::write(plain.join("oynix.json"), r#"{"name": "Not Power", "permissions": ["filters"]}"#).unwrap();
+        std::fs::write(plain.join("code.ts"), "export {};").unwrap();
+        std::fs::write(plain.join("content.css"), "").unwrap();
+        let err = install(&plain, &mut list).unwrap_err();
+        assert!(err.contains("only for verified .poweroynix"), "{err}");
+
+        // Built-ins are trusted: both halves install as one extension.
+        let e = install_builtin(&d, &mut list).unwrap();
+        assert!(e.power && e.kind == "oynix" && e.is_webext());
+        assert_eq!(e.manifest_version, 2);
+        assert_eq!(e.verified_by, "OyNIx");
+        assert!(!e.background_page.is_empty());
+        assert_eq!(filter_files(&list), vec![Path::new(&e.path).join("filters.txt")]);
+        remove(&e.id, &mut list);
     }
 }
 

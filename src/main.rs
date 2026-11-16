@@ -252,6 +252,8 @@ fn main() {
 
     // Content blocker + privacy defaults before any page loads.
     let settings = core::settings::Settings::load();
+    // Built-in extensions first: some add filter rules.
+    core::builtin::sync(&mut core::extensions::load());
     core::blocker::init(bridge::core::active_lists(&settings));
     bridge::core::apply_privacy(&settings);
 

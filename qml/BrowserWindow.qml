@@ -643,7 +643,9 @@ ApplicationWindow {
                         return JSON.parse(Core.extensions()).filter(function (e) {
                             if (!e.enabled) return false
                             // OyNIx extensions get a button when they have a panel or page.
-                            if (e.kind === "oynix") return e.hasPanel || e.hasPage
+                            if (e.kind === "oynix" && (e.hasPanel || e.hasPage)) return true
+                            // Power extensions may also have a Chrome/Firefox half.
+                            if (e.kind === "oynix" && !e.manifestVersion) return false
                             return host.isLoaded(e.id)
                         })
                     }
@@ -676,7 +678,7 @@ ApplicationWindow {
                         ToolTip.visible: hovered; ToolTip.delay: 600
                         ToolTip.text: { var b = win.app.extensionHost.badgeFor(modelData); return b && b.title ? b.title : modelData.name }
                         onClicked: {
-                            if (modelData.kind === "oynix") { win.openOynixPanel(modelData, extBtn); return }
+                            if (modelData.kind === "oynix" && (modelData.hasPanel || modelData.hasPage)) { win.openOynixPanel(modelData, extBtn); return }
                             var u = win.app.extensionHost.popupUrl(modelData.id)
                             if (!u) {
                                 // No popup: the extension handles clicks itself.

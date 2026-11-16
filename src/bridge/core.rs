@@ -1110,13 +1110,14 @@ impl qobject::Core {
         to_qjson(&json!({
             "id": e.id, "name": e.name, "permissions": named, "origins": origins,
             "developer": self.settings.ext_developer_mode,
-            "powerful": self.settings.ext_developer_mode && self.settings.ext_powerful_apis,
+            "powerful": e.power || (self.settings.ext_developer_mode && self.settings.ext_powerful_apis),
+            "power": e.power,
         }))
     }
 
     pub fn webext_commands(&self) -> QString {
         let mut out = vec![];
-        for e in self.extensions.iter().filter(|e| e.enabled && e.kind != "oynix" && !e.web_id.is_empty()) {
+        for e in self.extensions.iter().filter(|e| e.enabled && e.is_webext() && !e.web_id.is_empty()) {
             let Some((_, m)) = self.webext_manifest(&e.web_id) else { continue };
             let Some(cmds) = m["commands"].as_object() else { continue };
             for (name, c) in cmds {
@@ -1132,7 +1133,7 @@ impl qobject::Core {
 
     pub fn webext_omnibox(&self) -> QString {
         let mut out = vec![];
-        for e in self.extensions.iter().filter(|e| e.enabled && e.kind != "oynix" && !e.web_id.is_empty()) {
+        for e in self.extensions.iter().filter(|e| e.enabled && e.is_webext() && !e.web_id.is_empty()) {
             if let Some((_, m)) = self.webext_manifest(&e.web_id) {
                 if let Some(k) = m["omnibox"]["keyword"].as_str() {
                     out.push(json!({ "ext": e.web_id, "name": e.name, "keyword": k }));
@@ -1143,7 +1144,8 @@ impl qobject::Core {
     }
 
     pub fn webext_set_observing(&self, requests: bool, cookies: bool) {
-        let on = self.settings.ext_developer_mode && self.settings.ext_powerful_apis;
+        let on = (self.settings.ext_developer_mode && self.settings.ext_powerful_apis)
+            || self.extensions.iter().any(|e| e.enabled && e.power && e.is_webext());
         crate::core::extevents::set_observing(requests && on, cookies && on);
     }
 
@@ -1339,6 +1341,11 @@ impl qobject::Core {
 
     // ── extensions ──────────────────────────────────────────────────
     fn bump_extensions(mut self: Pin<&mut Self>) {
+        // Power extensions can add filter rules; rebuild the blocker when
+        // the set of those changes (installed, updated, switched on or off).
+        if blocker::extension_filters_changed(&extensions::filter_files(&self.extensions)) {
+            blocker::init(active_lists(&self.settings));
+        }
         let r = self.extensions_revision + 1;
         self.as_mut().set_extensions_revision(r);
     }
@@ -1427,7 +1434,7 @@ impl qobject::Core {
     /// enabled extension's content scripts. Empty when none are active.
     pub fn extension_scripts(&self, tab_id: i32) -> QString {
         let mut v: Vec<Value> = Vec::new();
-        for e in self.extensions.iter().filter(|e| e.enabled && e.kind != "oynix" && !e.web_id.is_empty()) {
+        for e in self.extensions.iter().filter(|e| e.enabled && e.is_webext() && !e.web_id.is_empty()) {
             v.extend(extensions::content_scripts(e));
         }
         if v.is_empty() {
@@ -1453,7 +1460,7 @@ impl qobject::Core {
     }
 
     pub fn extension_tab_page_scripts(&self, tab_id: i32) -> QString {
-        if !self.extensions.iter().any(|e| e.enabled && e.kind != "oynix" && !e.web_id.is_empty()) {
+        if !self.extensions.iter().any(|e| e.enabled && e.is_webext() && !e.web_id.is_empty()) {
             return qs("[]");
         }
         let ctx = extensions::page_contexts(&self.extensions, "page-tab");

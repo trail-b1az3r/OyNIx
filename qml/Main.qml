@@ -330,7 +330,7 @@ QtObject {
     // ── Extension packages (.xpi / .crx), e.g. from addons.mozilla.org ──
     function isExtensionPackage(d) {
         var n = String(d.downloadFileName || "").toLowerCase(), m = String(d.mimeType || "").toLowerCase()
-        return m === "application/x-xpinstall" || m === "application/x-chrome-extension" || /\.(xpi|crx|oynix)$/.test(n)
+        return m === "application/x-xpinstall" || m === "application/x-chrome-extension" || /\.(xpi|crx|oynix|poweroynix)$/.test(n)
     }
 
     function activeWindow() {
@@ -341,7 +341,7 @@ QtObject {
     function offerExtensionInstall(download) {
         var w = activeWindow()
         var source = Core.hostOf(download.url.toString())
-        var name = String(download.downloadFileName).replace(/\.(xpi|crx|oynix)$/i, "").replace(/[-_]\d[\d.]*$/, "").replace(/[_-]+/g, " ")
+        var name = String(download.downloadFileName).replace(/\.(xpi|crx|oynix|poweroynix)$/i, "").replace(/[-_]\d[\d.]*$/, "").replace(/[_-]+/g, " ")
         var go = function (ok) {
             if (!ok) { download.cancel(); return }
             download.downloadDirectory = Core.configPath("cache") + "/extension-downloads"
