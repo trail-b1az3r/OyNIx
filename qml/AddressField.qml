@@ -195,19 +195,35 @@ Rectangle {
                 }
             }
 
-            Txt {
-                id: shown
+            // The site's icon and domain, centred.
+            Row {
+                id: shownRow
+                anchors.centerIn: parent
+                visible: !field.editing
+                spacing: 7
+                Favicon {
+                    id: shownIcon
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: field.displayText() !== "" && field.tab !== null && field.url.indexOf("oynix://") !== 0
+                    size: 16
+                    source: field.tab ? (field.tab.model.icon || "") : ""
+                    url: field.url
+                    title: field.tab ? (field.tab.model.title || "") : ""
+                }
+                Txt {
+                    id: shown
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Math.min(implicitWidth, shownRow.parent.width - (shownIcon.visible ? shownIcon.width + shownRow.spacing : 0))
+                    text: field.displayText() !== "" ? field.displayText() : qsTr("Search or enter website name")
+                    color: field.displayText() !== "" ? Theme.text : Theme.textFaint
+                    font.weight: field.displayText() !== "" ? Font.Medium : Font.Normal
+                }
+            }
+            MouseArea {
                 anchors.fill: parent
                 visible: !field.editing
-                horizontalAlignment: Text.AlignHCenter
-                text: field.displayText() !== "" ? field.displayText() : qsTr("Search or enter website name")
-                color: field.displayText() !== "" ? Theme.text : Theme.textFaint
-                font.weight: field.displayText() !== "" ? Font.Medium : Font.Normal
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.IBeamCursor
-                    onClicked: field.focusField()
-                }
+                cursorShape: Qt.IBeamCursor
+                onClicked: field.focusField()
             }
         }
 

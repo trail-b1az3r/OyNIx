@@ -365,7 +365,7 @@ QtObject {
             // management
             case "management.getSelf": return reply(id, { id: ext, name: info.name, enabled: true, type: "extension", installType: "normal", mayDisable: true, permissions: info.permissions, hostPermissions: info.origins })
             case "management.getAll": case "management.get": {
-                list = JSON.parse(Core.extensions()).filter(function (e) { return e.kind !== "oynix" }).map(function (e) {
+                list = JSON.parse(Core.extensions()).filter(function (e) { return e.kind !== "oynix" || e.manifestVersion > 0 }).map(function (e) {
                     return { id: e.webId || e.id, name: e.name, version: e.version, description: e.description, enabled: e.enabled, type: "extension", installType: "normal", mayDisable: true }
                 })
                 if (op === "management.get") { var one = list.filter(function (e) { return e.id === a0 })[0]; if (!one) throw "No extension with that id"; return reply(id, one) }

@@ -1,0 +1,10 @@
+{
+  "name": "Wallbreaker",
+  "version": "1.0.0",
+  "description": "Gets you past “please turn off your ad blocker” walls. Admiral, BlockAdBlock and similar detectors are blocked or told there is no ad blocker, and any overlay that still appears is removed.",
+  "matches": ["*://*/*"],
+  "run_at": "document_start",
+  "world": "main",
+  "power": true,
+  "permissions": ["filters"]
+}

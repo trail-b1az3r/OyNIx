@@ -1,0 +1,5 @@
+# Ed25519 public keys allowed to verify .poweroynix packages, one per line:
+#   <64 hex digits>  <who holds the private key>
+# Compiled into OyNIx (src/core/poweroynix.rs). Make a key pair with
+#   python3 scripts/poweroynix.py keygen <name>
+# and add its public line here. See packaging/poweroynix/README.md.

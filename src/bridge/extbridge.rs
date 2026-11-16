@@ -94,15 +94,17 @@ pub struct ExtBridgeRust {
 }
 
 /// Can this extension use a powerful API right now? Checks the browser
-/// settings (Developer mode + Allow powerful extension APIs) and the
+/// settings (Developer mode + Allow powerful extension APIs, unless it's a
+/// verified power extension) and the
 /// extension's own manifest permissions.
 pub fn powerful_allowed(web_id: &str, permission: &str) -> Result<serde_json::Value, String> {
     let st = crate::core::settings::Settings::load();
-    if !(st.ext_developer_mode && st.ext_powerful_apis) {
-        return Err(format!("{permission} needs Settings › Extensions › Developer mode › Allow powerful extension APIs"));
-    }
     let list = crate::core::extensions::load();
     let e = list.iter().find(|e| e.web_id == web_id || e.id == web_id).ok_or("Unknown extension")?;
+    // Verified power extensions (.poweroynix) don't need Developer mode.
+    if !e.power && !(st.ext_developer_mode && st.ext_powerful_apis) {
+        return Err(format!("{permission} needs Settings › Extensions › Developer mode › Allow powerful extension APIs"));
+    }
     if !e.enabled {
         return Err("The extension is turned off".into());
     }

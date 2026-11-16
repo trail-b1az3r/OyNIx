@@ -90,7 +90,7 @@ QtObject {
         var list = entries(), wanted = {}
         for (var i = 0; i < list.length; i++) {
             var e = list[i]
-            if (e.kind === "oynix") continue
+            if (e.kind === "oynix" && !e.manifestVersion) continue  // no Chrome/Firefox half
             wanted[e.id] = true
             var info = infos[e.id]
             if (e.enabled && !info && !errors[e.id]) manager.loadExtension(e.path)
@@ -102,7 +102,7 @@ QtObject {
     /// Install from a file/folder URL or path. Returns {ok, error, extension}.
     function install(pathOrUrl) {
         var r = JSON.parse(Core.installExtension(String(pathOrUrl)))
-        if (r.ok && r.extension.kind !== "oynix" && supported) {
+        if (r.ok && (r.extension.kind !== "oynix" || r.extension.manifestVersion > 0) && supported) {
             setError(r.extension.id, "")
             if (infos[r.extension.id]) { pendingReload[r.extension.id] = true; manager.unloadExtension(infos[r.extension.id]) }
             else sync()

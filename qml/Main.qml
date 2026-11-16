@@ -97,9 +97,17 @@ QtObject {
         onTriggered: { var g = Core.blockerGeneration(); if (g !== app.filterGeneration) app.filterGeneration = g }
     }
 
+    // Qt's default user agent says "QtWebEngine/x.y"; bot checks (DataDome,
+    // used by the Wall Street Journal and others) treat that token as a
+    // headless scraper and lock the browser out. Send Chrome's own form.
+    function userAgentFor(profile) {
+        if (Core.userAgent !== "") return Core.userAgent
+        return profile.httpUserAgent.replace(/ QtWebEngine\/\S+/, "")
+    }
+
     function setupProfile() {
         defaultProfile = profilePrototype.instance()
-        if (Core.userAgent !== "") defaultProfile.httpUserAgent = Core.userAgent
+        defaultProfile.httpUserAgent = userAgentFor(defaultProfile)
         defaultProfile.spellCheckEnabled = false
         Core.attachProfile(defaultProfile)
         Core.applyColorScheme(Theme.dark)
@@ -154,6 +162,7 @@ QtObject {
     // Only the tab you're looking at can be read, only for extensions that
     // declared the "ocr" permission, and only the page that asked.
     property OcrService ocr: OcrService {}
+    property OutlineService outlines: OutlineService {}
     property var ocrRequests: ({})
     function answerOcr(ext, req, text, error) {
         extBridge.post(ext, "content", JSON.stringify({ __oynix: "ocr", req: req, text: text || "", error: error || "" }))
@@ -322,7 +331,7 @@ QtObject {
     // ── Extension packages (.xpi / .crx), e.g. from addons.mozilla.org ──
     function isExtensionPackage(d) {
         var n = String(d.downloadFileName || "").toLowerCase(), m = String(d.mimeType || "").toLowerCase()
-        return m === "application/x-xpinstall" || m === "application/x-chrome-extension" || /\.(xpi|crx|oynix)$/.test(n)
+        return m === "application/x-xpinstall" || m === "application/x-chrome-extension" || /\.(xpi|crx|oynix|poweroynix)$/.test(n)
     }
 
     function activeWindow() {
@@ -333,7 +342,7 @@ QtObject {
     function offerExtensionInstall(download) {
         var w = activeWindow()
         var source = Core.hostOf(download.url.toString())
-        var name = String(download.downloadFileName).replace(/\.(xpi|crx|oynix)$/i, "").replace(/[-_]\d[\d.]*$/, "").replace(/[_-]+/g, " ")
+        var name = String(download.downloadFileName).replace(/\.(xpi|crx|oynix|poweroynix)$/i, "").replace(/[-_]\d[\d.]*$/, "").replace(/[_-]+/g, " ")
         var go = function (ok) {
             if (!ok) { download.cancel(); return }
             download.downloadDirectory = Core.configPath("cache") + "/extension-downloads"
@@ -405,9 +414,12 @@ QtObject {
     property Timer updateTimer: Timer {
         interval: 60 * 1000; running: true; repeat: true
         onTriggered: {
+            // Once per launch too: what an earlier check found isn't kept,
+            // and the toolbar's red update icon should come back after a restart.
+            var first = interval < 60 * 60 * 1000
             interval = 60 * 60 * 1000
             if (Core.startPrivate || !app.updateSettings().updateCheck) return
-            if (app.updater.secondsSinceCheck() > 20 * 3600) app.checkForUpdate(false)
+            if (first || app.updater.secondsSinceCheck() > 20 * 3600) app.checkForUpdate(false)
         }
     }
     property Connections updateFlow: Connections {

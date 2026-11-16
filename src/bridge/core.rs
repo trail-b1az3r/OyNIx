@@ -36,6 +36,7 @@ pub mod qobject {
         #[qproperty(i32, suspend_after_minutes)]
         #[qproperty(bool, close_window_with_last_tab)]
         #[qproperty(bool, tab_hover_previews)]
+        #[qproperty(bool, tree_tabs)]
         #[qproperty(QString, search_engine)]
         #[qproperty(bool, search_suggestions)]
         #[qproperty(bool, content_blocker)]
@@ -290,6 +291,20 @@ pub mod qobject {
         fn remove_extension(self: Pin<&mut Core>, id: &QString) -> bool;
         #[qinvokable]
         fn set_extension_enabled(self: Pin<&mut Core>, id: &QString, enabled: bool);
+        /// Is the extension pinned to the toolbar?
+        #[qinvokable]
+        fn is_extension_pinned(self: &Core, id: &QString) -> bool;
+        #[qinvokable]
+        fn set_extension_pinned(self: Pin<&mut Core>, id: &QString, pinned: bool);
+        /// Icon file of the extension a chrome-extension:// URL belongs to, or "".
+        #[qinvokable]
+        fn extension_icon_for(self: &Core, url: &QString) -> QString;
+        /// Keep a copy of the icon a page shows (see core/favicons.rs).
+        #[qinvokable]
+        fn remember_favicon(self: &Core, page_url: &QString, icon: &QString);
+        /// "file://…" of the saved icon for the site of `url`, or "".
+        #[qinvokable]
+        fn cached_favicon(self: &Core, url: &QString) -> QString;
         #[qinvokable]
         fn create_extension(self: Pin<&mut Core>, name: &QString) -> QString;
         #[qinvokable]
@@ -353,6 +368,7 @@ pub struct CoreRust {
     suspend_after_minutes: i32,
     close_window_with_last_tab: bool,
     tab_hover_previews: bool,
+    tree_tabs: bool,
     search_engine: QString,
     search_suggestions: bool,
     content_blocker: bool,
@@ -420,6 +436,7 @@ impl Default for CoreRust {
             suspend_after_minutes: 30,
             close_window_with_last_tab: false,
             tab_hover_previews: true,
+            tree_tabs: false,
             search_engine: q(""),
             search_suggestions: true,
             content_blocker: true,
@@ -509,6 +526,7 @@ impl CoreRust {
         self.suspend_after_minutes = st.suspend_after_minutes;
         self.close_window_with_last_tab = st.close_window_with_last_tab;
         self.tab_hover_previews = st.tab_hover_previews;
+        self.tree_tabs = st.tree_tabs;
         self.search_engine = qs(&st.search_engine);
         self.search_suggestions = st.search_suggestions;
         self.content_blocker = st.content_blocker;
@@ -577,6 +595,7 @@ impl qobject::Core {
         self.as_mut().set_suspend_after_minutes(st.suspend_after_minutes);
         self.as_mut().set_close_window_with_last_tab(st.close_window_with_last_tab);
         self.as_mut().set_tab_hover_previews(st.tab_hover_previews);
+        self.as_mut().set_tree_tabs(st.tree_tabs);
         self.as_mut().set_search_engine(qs(&st.search_engine));
         self.as_mut().set_search_suggestions(st.search_suggestions);
         self.as_mut().set_content_blocker(st.content_blocker);
@@ -1110,13 +1129,14 @@ impl qobject::Core {
         to_qjson(&json!({
             "id": e.id, "name": e.name, "permissions": named, "origins": origins,
             "developer": self.settings.ext_developer_mode,
-            "powerful": self.settings.ext_developer_mode && self.settings.ext_powerful_apis,
+            "powerful": e.power || (self.settings.ext_developer_mode && self.settings.ext_powerful_apis),
+            "power": e.power,
         }))
     }
 
     pub fn webext_commands(&self) -> QString {
         let mut out = vec![];
-        for e in self.extensions.iter().filter(|e| e.enabled && e.kind != "oynix" && !e.web_id.is_empty()) {
+        for e in self.extensions.iter().filter(|e| e.enabled && e.is_webext() && !e.web_id.is_empty()) {
             let Some((_, m)) = self.webext_manifest(&e.web_id) else { continue };
             let Some(cmds) = m["commands"].as_object() else { continue };
             for (name, c) in cmds {
@@ -1132,7 +1152,7 @@ impl qobject::Core {
 
     pub fn webext_omnibox(&self) -> QString {
         let mut out = vec![];
-        for e in self.extensions.iter().filter(|e| e.enabled && e.kind != "oynix" && !e.web_id.is_empty()) {
+        for e in self.extensions.iter().filter(|e| e.enabled && e.is_webext() && !e.web_id.is_empty()) {
             if let Some((_, m)) = self.webext_manifest(&e.web_id) {
                 if let Some(k) = m["omnibox"]["keyword"].as_str() {
                     out.push(json!({ "ext": e.web_id, "name": e.name, "keyword": k }));
@@ -1143,7 +1163,8 @@ impl qobject::Core {
     }
 
     pub fn webext_set_observing(&self, requests: bool, cookies: bool) {
-        let on = self.settings.ext_developer_mode && self.settings.ext_powerful_apis;
+        let on = (self.settings.ext_developer_mode && self.settings.ext_powerful_apis)
+            || self.extensions.iter().any(|e| e.enabled && e.power && e.is_webext());
         crate::core::extevents::set_observing(requests && on, cookies && on);
     }
 
@@ -1339,6 +1360,11 @@ impl qobject::Core {
 
     // ── extensions ──────────────────────────────────────────────────
     fn bump_extensions(mut self: Pin<&mut Self>) {
+        // Power extensions can add filter rules; rebuild the blocker when
+        // the set of those changes (installed, updated, switched on or off).
+        if blocker::extension_filters_changed(&extensions::filter_files(&self.extensions)) {
+            blocker::init(active_lists(&self.settings));
+        }
         let r = self.extensions_revision + 1;
         self.as_mut().set_extensions_revision(r);
     }
@@ -1370,6 +1396,39 @@ impl qobject::Core {
         self.as_mut().rust_mut().extensions = list;
         self.bump_extensions();
         ok
+    }
+
+    pub fn is_extension_pinned(&self, id: &QString) -> bool {
+        let id = s(id);
+        self.settings.pinned_extensions.iter().any(|p| *p == id)
+    }
+
+    pub fn set_extension_pinned(mut self: Pin<&mut Self>, id: &QString, pinned: bool) {
+        let id = s(id);
+        {
+            let mut r = self.as_mut().rust_mut();
+            r.settings.pinned_extensions.retain(|p| *p != id);
+            if pinned {
+                r.settings.pinned_extensions.push(id);
+            }
+        }
+        self.rust().settings.save();
+        self.bump_extensions();
+    }
+
+    pub fn remember_favicon(&self, page_url: &QString, icon: &QString) {
+        crate::core::favicons::remember(&s(page_url), &s(icon));
+    }
+
+    pub fn cached_favicon(&self, url: &QString) -> QString {
+        qs(crate::core::favicons::cached(&s(url)).map(|p| format!("file://{}", p.to_string_lossy())).unwrap_or_default())
+    }
+
+    pub fn extension_icon_for(&self, url: &QString) -> QString {
+        let u = s(url);
+        let Some(rest) = u.strip_prefix("chrome-extension://") else { return qs("") };
+        let web_id = rest.split('/').next().unwrap_or("");
+        qs(self.extensions.iter().find(|e| !web_id.is_empty() && e.web_id == web_id).map(|e| e.icon.as_str()).unwrap_or(""))
     }
 
     pub fn set_extension_enabled(mut self: Pin<&mut Self>, id: &QString, enabled: bool) {
@@ -1427,7 +1486,7 @@ impl qobject::Core {
     /// enabled extension's content scripts. Empty when none are active.
     pub fn extension_scripts(&self, tab_id: i32) -> QString {
         let mut v: Vec<Value> = Vec::new();
-        for e in self.extensions.iter().filter(|e| e.enabled && e.kind != "oynix" && !e.web_id.is_empty()) {
+        for e in self.extensions.iter().filter(|e| e.enabled && e.is_webext() && !e.web_id.is_empty()) {
             v.extend(extensions::content_scripts(e));
         }
         if v.is_empty() {
@@ -1453,7 +1512,7 @@ impl qobject::Core {
     }
 
     pub fn extension_tab_page_scripts(&self, tab_id: i32) -> QString {
-        if !self.extensions.iter().any(|e| e.enabled && e.kind != "oynix" && !e.web_id.is_empty()) {
+        if !self.extensions.iter().any(|e| e.enabled && e.is_webext() && !e.web_id.is_empty()) {
             return qs("[]");
         }
         let ctx = extensions::page_contexts(&self.extensions, "page-tab");

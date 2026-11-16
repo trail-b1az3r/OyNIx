@@ -430,6 +430,20 @@ Rectangle {
                 }
             }
             Section {
+                title: qsTr("Tree Tabs")
+                Row_ {
+                    label: qsTr("Tree tabs")
+                    hint: qsTr("Vertical tabs that open into a tree under the tab you’re on: the contents of a Markdown or PDF document, to jump between sections, and the pages of the site you’ve moved through, to switch between them. Turning this on switches to vertical tabs.")
+                    Toggle {
+                        checked: sw.s.treeTabs === true
+                        onToggled: {
+                            sw.set("treeTabs", checked)
+                            if (checked && Core.tabLayout !== "vertical") sw.set("tabLayout", "vertical")
+                        }
+                    }
+                }
+            }
+            Section {
                 title: qsTr("Behaviour")
                 SwitchRow { label: qsTr("Open links in background"); hint: qsTr("Middle-click and Ctrl-click open tabs without switching to them."); key: "openLinksInBackground" }
                 Divider {}
@@ -831,14 +845,14 @@ Rectangle {
                                 RowLayout {
                                     spacing: 6
                                     Txt { text: ext.modelData.name; font.weight: Font.DemiBold; Layout.maximumWidth: 240 }
-                                    Txt { text: ext.modelData.version + (ext.modelData.builtin ? " · " + qsTr("Built in") : "") + (ext.modelData.hasTheme ? " · " + qsTr("Browser style") : "") + ((ext.modelData.permissions || []).indexOf("ocr") >= 0 ? " · " + qsTr("Reads text from page screenshots") : ""); color: Theme.textDim; font.pixelSize: 11 }
+                                    Txt { text: ext.modelData.version + (ext.modelData.builtin ? " · " + qsTr("Built in") : ext.modelData.power ? " · " + qsTr("Verified by %1").arg(ext.modelData.verifiedBy) : "") + (ext.modelData.hasTheme ? " · " + qsTr("Browser style") : "") + ((ext.modelData.permissions || []).indexOf("ocr") >= 0 ? " · " + qsTr("Reads text from page screenshots") : ""); color: Theme.textDim; font.pixelSize: 11 }
                                     Txt { visible: sw.s.extDeveloperMode === true; Layout.fillWidth: true; text: (ext.modelData.webId ? "ID " + ext.modelData.webId + " · " : "") + ext.modelData.path; color: Theme.textFaint; font.pixelSize: 11; font.family: "monospace"; elide: Text.ElideMiddle }
                                     Rectangle {
                                         implicitWidth: kindText.implicitWidth + 12; implicitHeight: 18; radius: 9
-                                        color: ext.modelData.kind === "firefox" ? "#33ff9f0a" : ext.modelData.kind === "oynix" ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.2) : "#330a84ff"
+                                        color: ext.modelData.power ? Qt.rgba(Theme.danger.r, Theme.danger.g, Theme.danger.b, 0.18) : ext.modelData.kind === "firefox" ? "#33ff9f0a" : ext.modelData.kind === "oynix" ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.2) : "#330a84ff"
                                         Txt {
                                             id: kindText; anchors.centerIn: parent; font.pixelSize: 10; font.weight: Font.DemiBold
-                                            text: ext.modelData.kind === "oynix" ? "OyNIx" : (ext.modelData.kind === "firefox" ? "Firefox" : "Chrome") + (ext.modelData.manifestVersion ? " · MV" + ext.modelData.manifestVersion : "")
+                                            text: ext.modelData.power ? qsTr("Power") + (ext.modelData.manifestVersion ? " · MV" + ext.modelData.manifestVersion : "") : ext.modelData.kind === "oynix" ? "OyNIx" : (ext.modelData.kind === "firefox" ? "Firefox" : "Chrome") + (ext.modelData.manifestVersion ? " · MV" + ext.modelData.manifestVersion : "")
                                         }
                                     }
                                 }
@@ -861,7 +875,8 @@ Rectangle {
                             }
                             IconButton {
                                 glyph: "reload"; tip: qsTr("Reload from disk")
-                                visible: ext.modelData.kind === "oynix"
+                                // A power extension's files are signed; editing them in place would break that.
+                                visible: ext.modelData.kind === "oynix" && !ext.modelData.power
                                 onClicked: sw.installExt(ext.modelData.path)
                             }
                             IconButton { glyph: "folder"; tip: qsTr("Show Files"); onClicked: Core.openExternally(ext.modelData.path) }

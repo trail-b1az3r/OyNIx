@@ -41,6 +41,9 @@ pub struct Settings {
     pub suspend_after_minutes: i32,
     pub close_window_with_last_tab: bool,
     pub tab_hover_previews: bool,
+    /// Vertical tabs show a tree under the current tab: the outline of a
+    /// Markdown or PDF document, or the pages of the site visited in it.
+    pub tree_tabs: bool,
 
     // ── Search ────────────────────────────────────────────────────
     pub search_engine: String,
@@ -87,6 +90,8 @@ pub struct Settings {
     /// Developer mode › Allow powerful extension APIs (native messaging,
     /// cookies, webRequest observation, browsingData, management changes).
     pub ext_powerful_apis: bool,
+    /// Extensions pinned to the toolbar (OyNIx ids, in order).
+    pub pinned_extensions: Vec<String>,
 
     // ── Claude for OyNIx ──────────────────────────────────────────
     /// Allow Claude (MCP clients and the built-in panel) to control the browser.
@@ -141,6 +146,7 @@ impl Default for Settings {
             suspend_after_minutes: 30,
             close_window_with_last_tab: false,
             tab_hover_previews: true,
+            tree_tabs: false,
             search_engine: "duckduckgo".into(),
             search_suggestions: true,
             bangs_enabled: true,
@@ -167,6 +173,7 @@ impl Default for Settings {
             browser_style: String::new(),
             ext_developer_mode: false,
             ext_powerful_apis: false,
+            pinned_extensions: Vec::new(),
             agent_enabled: false,
             agent_mode: "ask".into(),
             agent_allowed_sites: Vec::new(),
