@@ -9,27 +9,30 @@ addr: <b>oynix</b> / downloads
     <div class="section-head" style="margin-bottom:28px">
       <span class="eyebrow">OyNIx for Linux</span>
       <h1>Downloads</h1>
-      <p class="lede">Choose a release and download its package directly. Each version has its own download action; the legacy archive stays tucked away below.</p>
+      <p class="lede">Choose a stable release, try a pre-release, or build OyNIx yourself. Every version is listed separately and every package link downloads the release asset directly.</p>
     </div>
     <div class="seg" data-panels="install" role="tablist" aria-label="Release channel">
-      <button type="button" data-panel="get-stable" aria-selected="true">Stable</button>
-      <button type="button" data-panel="get-beta" aria-selected="false">Pre-release</button>
+      <button type="button" data-panel="get-stable" aria-selected="true">Stable releases</button>
+      <button type="button" data-panel="get-beta" aria-selected="false">Pre-releases</button>
       <button type="button" data-panel="get-src" aria-selected="false">From source</button>
     </div>
     <p class="release-status" id="release-status" role="status" aria-live="polite">Loading releases…</p>
     <div class="panel" id="get-stable"><div class="release-list" id="release-stable"></div></div>
     <div class="panel" id="get-beta" hidden><div class="release-list" id="release-beta"></div></div>
     <details class="legacy-releases">
-      <summary>Show legacy releases (v4.3 and older)</summary>
-      <p class="legacy-note">Older builds are kept here for compatibility and troubleshooting. This section stays collapsed until opened.</p>
-      <div class="release-list" id="release-legacy"></div>
+      <summary>Legacy archive — v4.3 and older</summary>
+      <p class="legacy-note">These older releases are retained for compatibility and recovery. Open a version to see its files. Links below go directly to the attached package assets.</p>
+      <div class="release-list" id="release-legacy"><p class="release-empty">Legacy releases will appear when release data has loaded.</p></div>
     </details>
     <div class="panel" id="get-src" hidden>
+      <h2>Build from source</h2>
+      <p>Clone the repository, install the required system dependencies and build the release binary.</p>
       <pre data-copy><code>git clone {{repo}}.git && cd OyNIx
 ./scripts/deps-ubuntu.sh      <span class="c"># system libraries, Rust and Qt 6.12</span>
 cargo build --release
 ./scripts/install.sh          <span class="c"># into ~/.local, with a desktop entry</span></code></pre>
+      <p>See the <a href="{{root}}docs/reference/#building-from-source">complete build instructions</a> for prerequisites and package-building options.</p>
     </div>
-    <p style="margin:22px 0 0;font-size:14px;color:var(--on-surface-variant)">Every release lists SHA-256 checksums. Download <code>SHA256SUMS</code> alongside a package and check it with <code>sha256sum -c SHA256SUMS</code>.</p>
+    <p style="margin:22px 0 0;font-size:14px;color:var(--on-surface-variant)">Every release lists SHA-256 checksums when available. Download <code>SHA256SUMS</code> alongside a package and check it with <code>sha256sum -c SHA256SUMS</code>.</p>
   </div>
 </section>
