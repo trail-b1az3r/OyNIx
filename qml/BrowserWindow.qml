@@ -772,7 +772,8 @@ ApplicationWindow {
     Shortcut { sequences: ["Ctrl+O"]; onActivated: openFileDialog.open() }
     Shortcut { sequences: ["Ctrl+Shift+Del"]; onActivated: win.openInternal("oynix://history") }
     Shortcut { sequences: ["Ctrl+Alt+G"]; onActivated: win.openInternal("oynix://play") }
-    Shortcut { sequences: ["Ctrl+/", "F1"]; onActivated: win.showShortcuts() }
+    Shortcut { sequences: ["Ctrl+/"]; onActivated: win.showShortcuts() }
+    Shortcut { sequences: ["F1"]; onActivated: win.openInternal("oynix://help") }
     Shortcut { sequences: ["Ctrl+,"]; onActivated: win.app.openSettings("") }
     Shortcut { sequences: ["Ctrl+J", "Ctrl+Shift+Y"]; onActivated: downloadsPopover.open() }
 
@@ -1815,7 +1816,7 @@ ApplicationWindow {
                 ["F12 / Ctrl+Shift+I", qsTr("Developer tools")], ["Ctrl+Shift+J", qsTr("Developer tools (console)")],
                 ["Ctrl+Shift+C", qsTr("Inspect the element under the pointer")], ["Ctrl+U", qsTr("View page source")] ] },
             { title: qsTr("Other"), keys: [
-                ["Ctrl+Alt+G", qsTr("Games (Go, Blackjack)")], ["Ctrl+/ or F1", qsTr("This list")], ["Ctrl+Q", qsTr("Quit")] ] }
+                ["Ctrl+Alt+G", qsTr("Games (Go, Blackjack)")], ["Ctrl+/", qsTr("This list")], ["F1", qsTr("Help")], ["Ctrl+Q", qsTr("Quit")] ] }
         ]
         contentItem: Flickable {
             contentHeight: sheetCol.implicitHeight
@@ -1943,6 +1944,7 @@ ApplicationWindow {
             MenuRow { text: qsTr("Developer Tools"); glyph: "code"; shortcut: "F12"; enabled: win.currentView !== null; onClicked: { mainMenu.close(); win.openDevTools() } }
             Rectangle { Layout.fillWidth: true; height: 1; color: Theme.separator; Layout.topMargin: 4; Layout.bottomMargin: 4 }
             MenuRow { text: qsTr("Settings"); glyph: "sliders"; shortcut: "Ctrl+,"; onClicked: { mainMenu.close(); win.app.openSettings("") } }
+            MenuRow { text: qsTr("Help"); glyph: "list"; shortcut: "F1"; onClicked: { mainMenu.close(); win.openInternal("oynix://help") } }
             MenuRow { text: qsTr("Quit OyNIx"); glyph: "close"; shortcut: "Ctrl+Q"; onClicked: { mainMenu.close(); win.app.quit() } }
         }
     }

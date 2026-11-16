@@ -103,6 +103,16 @@ Rectangle {
 <h2>extra.jsonl: data</h2>
 <p>Put word lists, rules or settings in <code>extra.jsonl</code>, one JSON value per line. Blank lines are skipped. The file is checked on install, and a malformed line stops the install with its line number. Your code sees the records as <code>oynix.data</code>, and a panel as <code>extension.data</code>. Because the data is sent to every page the extension runs on, keep it under 4 MB.</p>
 
+<h2>widget.tsx: a Start Page card</h2>
+<p>An extension with <code>widget.tsx</code> adds a card to the Start Page. Write it in TSX against OyNIx’s small built-in runtime — <code>h</code>, <code>Fragment</code>, <code>useState</code>, <code>useEffect</code>, <code>useRef</code> — and export the component as the default. No React to install; JSX compiles to <code>h(...)</code> on install, and a widget that doesn’t compile stops the install with its line number.</p>
+<pre data-copy><code>export default function Countdown() {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
+  const days = Math.ceil((Date.parse(oynix.data[0].date) - now) / 864e5);
+  return <div><b style={{ fontSize: "28px" }}>{days}</b> days to {oynix.data[0].name}</div>;
+}</code></pre>
+<p>The card uses the browser’s colours through CSS variables (<code>--fg</code>, <code>--muted</code>, <code>--accent</code>, <code>--on-accent</code>, <code>--field</code>, <code>--radius</code>, <code>--font</code>), and buttons and inputs are styled to match. Each widget runs in its own sandbox: it can use the network and keep things in <code>localStorage</code>, but can’t read your files or other sites’ data, and links open in a new tab. It sees <code>oynix.id</code> and <code>oynix.data</code>. Widgets don’t appear in private windows.</p>
+
 <h2>theme.json: styling the browser</h2>
 <p>An extension can restyle OyNIx itself. Choose it in <b>Settings › Appearance › Browser Style</b>; only one style is active at a time. Everything is optional:</p>
 <pre data-copy><code>{

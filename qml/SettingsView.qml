@@ -1077,7 +1077,7 @@ Rectangle {
                 title: qsTr("Keyboard")
                 Row_ {
                     label: qsTr("Keyboard shortcuts")
-                    hint: qsTr("Press Ctrl+/ or F1 in any window for the full list.")
+                    hint: qsTr("Press Ctrl+/ in any window for the full list; F1 opens Help.")
                     PushButton { text: qsTr("Show"); onClicked: { var w = sw.app.windows[sw.app.windows.length - 1]; if (w) w.showShortcuts() } }
                 }
             }

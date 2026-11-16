@@ -200,6 +200,7 @@ Item {
         if (u.indexOf("oynix://history") === 0) return qsTr("History")
         if (u.indexOf("oynix://privacy") === 0) return qsTr("Privacy Report")
         if (u.indexOf("oynix://play") === 0) return qsTr("Games")
+        if (u.indexOf("oynix://help") === 0) return qsTr("Help")
         return qsTr("Start Page")
     }
 
@@ -256,7 +257,12 @@ Item {
         sourceComponent: (tab.model.url || "").indexOf("oynix://history") === 0 ? historyPage
                        : (tab.model.url || "").indexOf("oynix://settings") === 0 ? settingsPage
                        : (tab.model.url || "").indexOf("oynix://privacy") === 0 ? privacyPage
-                       : (tab.model.url || "").indexOf("oynix://play") === 0 ? playPage : startPage
+                       : (tab.model.url || "").indexOf("oynix://play") === 0 ? playPage
+                       : (tab.model.url || "").indexOf("oynix://help") === 0 ? helpPage : startPage
+    }
+    Component {
+        id: helpPage
+        HelpPage { win: tab.win }
     }
     Component {
         id: playPage
