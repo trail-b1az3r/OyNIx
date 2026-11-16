@@ -9,7 +9,7 @@ name: Publish to the AUR
 #     or to check the package without pushing (dry run).
 #
 # Needs the repository secret AUR_SSH_PRIVATE_KEY: the private half of an SSH
-# key whose public half is on the AUR account that maintains oynix-bin.
+# key registered to the ray0rfire AUR account (which must maintain oynix-bin).
 # See packaging/aur/README.md.
 
 on:
@@ -77,7 +77,7 @@ jobs:
           fi
           V="${V#v}"
           REL="${INPUT_PKGREL:-1}"
-          if ! [[ "$V" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+          if ! [[ "$V" =~ ^[0-9]+(\\.[0-9]+)*$ ]]; then
             echo "::notice::Skipping '$V': only plain release versions (like 5.2.1) go to the AUR."
             echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
@@ -108,7 +108,7 @@ jobs:
             echo "Not available yet, retrying in 20s…"; sleep 20
           done
           [ -s "$asset" ] || { echo "::error::$base/$asset could not be downloaded"; exit 1; }
-          grep " $asset\$" SHA256SUMS | sha256sum -c -
+          grep " $asset\\$" SHA256SUMS | sha256sum -c -
           echo "sha256=$(sha256sum "$asset" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
       - name: Fill in the PKGBUILD and build it
@@ -148,7 +148,7 @@ jobs:
           fi
           install -d -m 700 ~/.ssh
           # Tolerate keys pasted with Windows line endings or stray indentation.
-          printf '%s\n' "$AUR_KEY" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' > ~/.ssh/aur && chmod 600 ~/.ssh/aur
+          printf '%s\\n' "$AUR_KEY" | tr -d '\\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' > ~/.ssh/aur && chmod 600 ~/.ssh/aur
           first=$(head -n1 ~/.ssh/aur)
           case "$first" in
             ssh-*|ecdsa-*|sk-*)
@@ -157,7 +157,7 @@ jobs:
             PuTTY-User-Key-File*)
               echo "::error::AUR_SSH_PRIVATE_KEY is a PuTTY .ppk key. Export it as an OpenSSH key (PuTTYgen → Conversions → Export OpenSSH key) or make a new one with ssh-keygen."
               exit 1 ;;
-            -----BEGIN*PRIVATE\ KEY-----) ;;
+            -----BEGIN*PRIVATE\\ KEY-----) ;;
             *)
               echo "::error::AUR_SSH_PRIVATE_KEY doesn't look like a private key: its first line should be -----BEGIN OPENSSH PRIVATE KEY-----. Paste the whole file, including the BEGIN and END lines."
               exit 1 ;;
@@ -170,17 +170,17 @@ jobs:
             fi
             exit 1
           fi
-          echo "This key's public half (it must be on your AUR account, under My Account → SSH Public Key):"
+          echo "AUR SSH key fingerprint (register this public key on the ray0rfire AUR account):"
           echo "  $pub"
-          printf '%s\n' "$pub" | ssh-keygen -lf -
+          printf '%s\\n' "$pub" | ssh-keygen -lf -
           # Trust only the host keys whose fingerprints the AUR publishes on aur.archlinux.org.
           ssh-keyscan -t ed25519,ecdsa,rsa aur.archlinux.org 2>/dev/null > /tmp/scanned
           : > ~/.ssh/known_hosts
           while read -r line; do
-            fp=$(printf '%s\n' "$line" | ssh-keygen -lf - | awk '{print $2}')
+            fp=$(printf '%s\\n' "$line" | ssh-keygen -lf - | awk '{print $2}')
             case "$fp" in
               SHA256:RFzBCUItH9LZS0cKB5UE6ceAYhBD5C8GeOBip8Z11+4|SHA256:uTa/0PndEgPZTf76e1DFqXKJEXKsn7m9ivhLQtzGOCI|SHA256:5s5cIyReIfNNVGRFdDbe3hdYiI5OelHGpw2rOUud3Q8)
-                printf '%s\n' "$line" >> ~/.ssh/known_hosts ;;
+                printf '%s\\n' "$line" >> ~/.ssh/known_hosts ;;
               *) echo "::warning::Ignoring unexpected AUR host key $fp" ;;
             esac
           done < /tmp/scanned
@@ -193,8 +193,9 @@ jobs:
             StrictHostKeyChecking yes
           CFG
 
-          git config --global user.name "OyNIx release bot"
-          git config --global user.email "${{ github.repository_owner_id }}+${{ github.repository_owner }}@users.noreply.github.com"
+          # Attribute AUR package commits to the intended maintainer identity.
+          git config --global user.name "ray0rfire"
+          git config --global user.email "ray0rfire@users.noreply.github.com"
           git config --global init.defaultBranch master
           # Cloning a package that doesn't exist yet gives an empty repository;
           # the first push creates it (and makes this key's account its maintainer).
@@ -202,7 +203,7 @@ jobs:
           if ! ssh aur.archlinux.org list-repos > /tmp/sshout 2>&1; then
             cat /tmp/sshout
             if grep -q "Permission denied" /tmp/sshout; then
-              echo "::error::The AUR refused this key. Put exactly this line in My Account → SSH Public Key on aur.archlinux.org, then click Update: $pub"
+              echo "::error::The AUR refused this key. Register the key on ray0rfire's AUR account and ensure that account is a maintainer of $PKG."
             else
               echo "::error::Couldn't connect to aur.archlinux.org over SSH (see above)."
             fi
