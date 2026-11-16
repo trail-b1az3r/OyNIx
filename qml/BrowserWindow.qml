@@ -466,6 +466,214 @@ ApplicationWindow {
     function answerUsb(key) { var a = usbAsk; usbAsk = null; if (a) a.cb(key) }
     function askInstallExtension(name, source, cb) { installAsk = { name: name, source: source, cb: cb } }
 
+    // "Save password for example.com?" under the address bar.
+    function offerSavePassword(url, user, pass, would) {
+        pwSave.url = url; pwSave.pass = pass; pwSave.would = would
+        pwSave.userText = user
+        var p = addressField.mapToItem(win.contentItem, addressField.width - pwSave.width, addressField.height + 6)
+        pwSave.x = Math.max(8, p.x); pwSave.y = p.y
+        pwSave.open()
+    }
+    Popover {
+        id: pwSave
+        parent: win.contentItem
+        width: 340
+        padding: 18
+        property string url: ""
+        property string pass: ""
+        property string would: "saved"
+        property string userText: ""
+        property bool shown: false
+        onClosed: { pass = ""; shown = false }
+        contentItem: ColumnLayout {
+            spacing: 12
+            RowLayout {
+                spacing: 12
+                MShape { size: 40; shape: "cookie4"; color: Theme.secondaryContainer
+                    Icon { anchors.centerIn: parent; name: "key"; size: 18; color: Theme.secondaryContainerFg } }
+                Txt {
+                    Layout.fillWidth: true; wrapMode: Text.WordWrap; elide: Text.ElideNone; font.weight: Font.DemiBold
+                    text: pwSave.would === "updated" ? qsTr("Update the password for %1?").arg(Core.hostOf(pwSave.url)) : qsTr("Save password for %1?").arg(Core.hostOf(pwSave.url))
+                }
+            }
+            MTextField { id: pwUserField; Layout.fillWidth: true; placeholder: qsTr("Username"); text: pwSave.userText }
+            RowLayout {
+                Layout.fillWidth: true
+                MTextField { Layout.fillWidth: true; readOnly: true; echoMode: pwSave.shown ? TextInput.Normal : TextInput.Password; text: pwSave.pass }
+                IconButton { glyph: "eye"; tip: pwSave.shown ? qsTr("Hide") : qsTr("Show"); onClicked: pwSave.shown = !pwSave.shown }
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                PushButton { textOnly: true; text: qsTr("Never"); visible: pwSave.would === "saved"; onClicked: { Core.neverSaveLogin(pwSave.url); pwSave.close() } }
+                Item { Layout.fillWidth: true }
+                PushButton { textOnly: true; text: qsTr("Not Now"); onClicked: pwSave.close() }
+                PushButton {
+                    primary: true; text: pwSave.would === "updated" ? qsTr("Update") : qsTr("Save")
+                    onClicked: {
+                        var r = Core.saveLogin(pwSave.url, pwUserField.text, pwSave.pass)
+                        pwSave.close()
+                        toast.show(r.indexOf("error") === 0 ? qsTr("Couldn’t save the password: %1").arg(r) : qsTr("Password saved"))
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Bookmarks: the star / Ctrl+D add the page, then show an editor ──
+    function editBookmark(anchor) {
+        if (!currentTab || !currentTab.model.url || currentTab.internal) return
+        var u = currentTab.model.url
+        if (!Core.isBookmarked(u)) {
+            Core.addBookmark(u, currentTab.model.title || u, "")
+            bmEdit.justAdded = true
+        } else bmEdit.justAdded = false
+        bmEdit.mark = JSON.parse(Core.bookmarkFor(u))
+        var a = anchor || addressField
+        var p = a.mapToItem(win.contentItem, a.width - bmEdit.width, a.height + 6)
+        bmEdit.x = Math.max(8, p.x); bmEdit.y = p.y
+        bmEdit.open()
+    }
+    Popover {
+        id: bmEdit
+        parent: win.contentItem
+        width: 320
+        padding: 18
+        property var mark: null
+        property bool justAdded: false
+        // "" = Bookmarks, "favorites" = favourites bar, else a folder
+        readonly property var folderChoices: {
+            Core.bookmarksRevision
+            var f = [{ v: "favorites", t: qsTr("Favourites bar") }, { v: "", t: qsTr("Bookmarks") }]
+            JSON.parse(Core.bookmarkFolders()).forEach(function (x) { f.push({ v: x, t: x }) })
+            f.push({ v: "\u0001new", t: qsTr("New folder…") })
+            return f
+        }
+        function save() {
+            if (!mark) return
+            var folder = bmFolder.currentValue === "\u0001new" ? (bmNewFolder.text.trim() || "") : bmFolder.currentValue
+            Core.editBookmark(mark.id, bmName.text.trim() || mark.url, mark.url, folder)
+        }
+        onAboutToShow: {
+            bmName.text = mark ? mark.title : ""
+            bmNewFolder.text = ""
+            for (var i = 0; i < folderChoices.length; i++) if (mark && folderChoices[i].v === mark.folder) bmFolder.currentIndex = i
+        }
+        contentItem: ColumnLayout {
+            spacing: 12
+            RowLayout {
+                spacing: 12
+                MShape { size: 40; shape: "cookie4"; color: Theme.tertiaryContainer
+                    Icon { anchors.centerIn: parent; name: "star"; filled: true; size: 18; color: Theme.tertiaryContainerFg } }
+                Txt { Layout.fillWidth: true; font.weight: Font.DemiBold; text: bmEdit.justAdded ? qsTr("Bookmark added") : qsTr("Edit bookmark") }
+            }
+            MTextField { id: bmName; Layout.fillWidth: true; placeholder: qsTr("Name"); onAccepted: { bmEdit.save(); bmEdit.close() } }
+            ComboBox {
+                id: bmFolder
+                Layout.fillWidth: true; implicitHeight: 36
+                model: bmEdit.folderChoices
+                textRole: "t"; valueRole: "v"
+            }
+            MTextField { id: bmNewFolder; visible: bmFolder.currentValue === "\u0001new"; Layout.fillWidth: true; placeholder: qsTr("Folder name") }
+            RowLayout {
+                Layout.fillWidth: true
+                PushButton { textOnly: true; text: qsTr("Remove"); onClicked: { if (bmEdit.mark) Core.removeBookmark(bmEdit.mark.id); bmEdit.mark = null; bmEdit.close(); toast.show(qsTr("Bookmark removed")) } }
+                Item { Layout.fillWidth: true }
+                PushButton { primary: true; text: qsTr("Done"); onClicked: { bmEdit.save(); bmEdit.close() } }
+            }
+        }
+    }
+
+    // Every bookmark by folder, from the end of the favourites bar.
+    Popover {
+        id: allBookmarks
+        parent: win.contentItem
+        width: 320
+        padding: 6
+        contentItem: Flickable {
+            implicitHeight: Math.min(allCol.implicitHeight, win.height - 160)
+            contentHeight: allCol.implicitHeight
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            ColumnLayout {
+                id: allCol
+                width: parent.width
+                spacing: 1
+                Repeater {
+                    model: {
+                        Core.bookmarksRevision
+                        if (!allBookmarks.opened) return []
+                        var groups = [{ name: qsTr("Bookmarks"), key: "" }].concat(JSON.parse(Core.bookmarkFolders()).map(function (f) { return { name: f, key: f } }))
+                        return groups.map(function (g) { return { name: g.name, items: JSON.parse(Core.bookmarks(g.key)) } }).filter(function (g) { return g.items.length })
+                    }
+                    delegate: ColumnLayout {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        spacing: 1
+                        RowLayout {
+                            Layout.margins: 8; spacing: 6
+                            Icon { name: "folder"; size: 13; color: Theme.textFaint }
+                            Txt { text: modelData.name; color: Theme.textDim; font.pixelSize: 12; font.weight: Font.DemiBold }
+                        }
+                        Repeater {
+                            model: modelData.items
+                            delegate: MenuRow {
+                                required property var modelData
+                                text: modelData.title || modelData.url
+                                glyph: "star"
+                                onClicked: { allBookmarks.close(); win.navigate(modelData.url) }
+                            }
+                        }
+                    }
+                }
+                Txt { visible: JSON.parse(Core.bookmarks("*")).length === 0; text: qsTr("No bookmarks yet. Press Ctrl+D on a page you like."); color: Theme.textDim; Layout.margins: 10; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+            }
+        }
+    }
+
+    // Saved logins for this site, from the key in the address bar.
+    function showLoginMenu(anchor) {
+        if (loginMenu.recentlyClosed()) return
+        var p = anchor.mapToItem(win.contentItem, 0, anchor.height + 6)
+        loginMenu.x = p.x - 8; loginMenu.y = p.y
+        loginMenu.open()
+    }
+    Popover {
+        id: loginMenu
+        parent: win.contentItem
+        width: 300
+        padding: 6
+        contentItem: ColumnLayout {
+            spacing: 1
+            Txt { text: qsTr("Saved logins for %1").arg(win.currentTab ? win.currentTab.host : ""); color: Theme.textDim; font.pixelSize: 12; Layout.margins: 8 }
+            Repeater {
+                model: loginMenu.opened && win.currentTab ? win.currentTab.loginsHere() : []
+                delegate: MenuRow {
+                    required property var modelData
+                    glyph: "user"
+                    text: modelData.username || qsTr("(no username)")
+                    onClicked: { loginMenu.close(); win.currentTab.fillLogins([modelData], true) }
+                }
+            }
+            Rectangle { Layout.fillWidth: true; height: 1; color: Theme.separator; Layout.topMargin: 4; Layout.bottomMargin: 4 }
+            MenuRow { text: qsTr("Manage Passwords…"); glyph: "key"; onClicked: { loginMenu.close(); win.app.openSettings("passwords") } }
+        }
+    }
+
+    // A yes/no question in a dialog over this window.
+    property var askState: null
+    function ask(o, cb) { askState = Object.assign({ cb: cb }, o) }
+    function answer(yes) { var a = askState; askState = null; if (a && a.cb) a.cb(yes) }
+
+    // Addresses for other apps (mailto:, zoommtg:, an app's sign-in
+    // redirect such as com.example.app:/oauth2redirect…): ask, then hand
+    // them to the desktop instead of failing with a broken-address error.
+    function openInOtherApp(u) {
+        var scheme = u.split(":")[0]
+        ask({ title: qsTr("Open in another app?"), icon: "external", ok: qsTr("Open App"),
+              body: qsTr("This page wants to open a “%1:” link, which belongs to an app on your computer, not to the web.\n\n%2").arg(scheme).arg(u.length > 300 ? u.slice(0, 300) + "…" : u) },
+            function (yes) { if (yes) Qt.openUrlExternally(u) })
+    }
+
     // "Ask where to save each file"
     FileDialog {
         id: downloadDialog
@@ -529,7 +737,7 @@ ApplicationWindow {
     Shortcut { sequences: ["Ctrl+F"]; onActivated: findBar.open() }
     Shortcut { sequences: ["Ctrl+G", "F3"]; onActivated: findBar.find(false) }
     Shortcut { sequences: ["Ctrl+Shift+G", "Shift+F3"]; onActivated: findBar.find(true) }
-    Shortcut { sequences: ["Ctrl+D"]; onActivated: if (win.currentTab) Core.toggleBookmark(win.currentTab.model.url, win.currentTab.model.title) }
+    Shortcut { sequences: ["Ctrl+D"]; onActivated: win.editBookmark(null) }
     Shortcut { sequences: ["Ctrl+Shift+D"]; onActivated: if (win.currentTab) { Core.addToReadingList(win.currentTab.model.url, win.currentTab.model.title); toast.show(qsTr("Added to Reading List")) } }
     Shortcut { sequences: ["Ctrl+Shift+L", "Ctrl+Alt+S"]; onActivated: win.sidebarOpen = !win.sidebarOpen }
     Shortcut { sequences: ["Ctrl+H"]; onActivated: win.openInternal("oynix://history") }
@@ -564,7 +772,8 @@ ApplicationWindow {
     Shortcut { sequences: ["Ctrl+O"]; onActivated: openFileDialog.open() }
     Shortcut { sequences: ["Ctrl+Shift+Del"]; onActivated: win.openInternal("oynix://history") }
     Shortcut { sequences: ["Ctrl+Alt+G"]; onActivated: win.openInternal("oynix://play") }
-    Shortcut { sequences: ["Ctrl+/", "F1"]; onActivated: win.showShortcuts() }
+    Shortcut { sequences: ["Ctrl+/"]; onActivated: win.showShortcuts() }
+    Shortcut { sequences: ["F1"]; onActivated: win.openInternal("oynix://help") }
     Shortcut { sequences: ["Ctrl+,"]; onActivated: win.app.openSettings("") }
     Shortcut { sequences: ["Ctrl+J", "Ctrl+Shift+Y"]; onActivated: downloadsPopover.open() }
 
@@ -831,6 +1040,7 @@ ApplicationWindow {
             Row {
                 anchors.fill: parent
                 anchors.leftMargin: 10
+                anchors.rightMargin: allBmBtn.width + 16
                 spacing: 2
                 clip: true
                 Repeater {
@@ -851,6 +1061,26 @@ ApplicationWindow {
                         }
                         onClicked: win.navigate(modelData.url)
                     }
+                }
+            }
+            AbstractButton {
+                id: allBmBtn
+                anchors.right: parent.right; anchors.rightMargin: 8
+                anchors.verticalCenter: parent.verticalCenter
+                height: 24; width: allBmRow.implicitWidth + 16
+                hoverEnabled: true
+                background: Rectangle { radius: 5; color: allBmBtn.hovered ? Theme.hover : "transparent" }
+                contentItem: Row {
+                    id: allBmRow
+                    spacing: 6; leftPadding: 2
+                    Icon { name: "folder"; size: 14; color: Theme.textDim; anchors.verticalCenter: parent.verticalCenter }
+                    Txt { text: qsTr("All Bookmarks"); font.pixelSize: 12; anchors.verticalCenter: parent.verticalCenter }
+                }
+                onClicked: {
+                    if (allBookmarks.recentlyClosed()) return
+                    var p = allBmBtn.mapToItem(win.contentItem, allBmBtn.width - allBookmarks.width, allBmBtn.height + 4)
+                    allBookmarks.x = Math.max(8, p.x); allBookmarks.y = p.y
+                    allBookmarks.open()
                 }
             }
         }
@@ -1266,6 +1496,48 @@ ApplicationWindow {
                     }
                 }
 
+                // ── General question: win.ask({title, body, icon, ok, cancel}, cb) ──
+                Rectangle {
+                    z: 50
+                    anchors.fill: parent
+                    visible: win.askState !== null
+                    onVisibleChanged: if (visible) forceActiveFocus()
+                    color: Theme.alpha("#000000", 0.32)
+                    MouseArea { anchors.fill: parent }
+                    Keys.onEscapePressed: win.answer(false)
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: Math.min(440, parent.width - 48)
+                        height: askCol.implicitHeight + 48
+                        radius: Theme.shapeXL
+                        color: Theme.surfaceContainerHigh
+                        ColumnLayout {
+                            id: askCol
+                            anchors.fill: parent
+                            anchors.margins: 24
+                            spacing: 14
+                            MShape { Layout.alignment: Qt.AlignHCenter; shape: "cookie9"; size: 56; color: Theme.secondaryContainer
+                                Icon { anchors.centerIn: parent; name: win.askState ? win.askState.icon || "external" : "external"; size: 26; color: Theme.secondaryContainerFg } }
+                            Txt {
+                                Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; elide: Text.ElideNone
+                                font.pixelSize: 22; font.family: Theme.displayFont
+                                text: win.askState ? win.askState.title : ""
+                            }
+                            Txt {
+                                Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WrapAnywhere; elide: Text.ElideNone
+                                color: Theme.surfaceVariantFg
+                                text: win.askState ? win.askState.body : ""
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Item { Layout.fillWidth: true }
+                                PushButton { textOnly: true; text: win.askState && win.askState.cancel ? win.askState.cancel : qsTr("Cancel"); onClicked: win.answer(false) }
+                                PushButton { primary: true; text: win.askState && win.askState.ok ? win.askState.ok : qsTr("OK"); onClicked: win.answer(true) }
+                            }
+                        }
+                    }
+                }
+
                 // Toast
                 Rectangle {
                     id: toast
@@ -1544,7 +1816,7 @@ ApplicationWindow {
                 ["F12 / Ctrl+Shift+I", qsTr("Developer tools")], ["Ctrl+Shift+J", qsTr("Developer tools (console)")],
                 ["Ctrl+Shift+C", qsTr("Inspect the element under the pointer")], ["Ctrl+U", qsTr("View page source")] ] },
             { title: qsTr("Other"), keys: [
-                ["Ctrl+Alt+G", qsTr("Games (Go, Blackjack)")], ["Ctrl+/ or F1", qsTr("This list")], ["Ctrl+Q", qsTr("Quit")] ] }
+                ["Ctrl+Alt+G", qsTr("Games (Go, Blackjack)")], ["Ctrl+/", qsTr("This list")], ["F1", qsTr("Help")], ["Ctrl+Q", qsTr("Quit")] ] }
         ]
         contentItem: Flickable {
             contentHeight: sheetCol.implicitHeight
@@ -1672,6 +1944,7 @@ ApplicationWindow {
             MenuRow { text: qsTr("Developer Tools"); glyph: "code"; shortcut: "F12"; enabled: win.currentView !== null; onClicked: { mainMenu.close(); win.openDevTools() } }
             Rectangle { Layout.fillWidth: true; height: 1; color: Theme.separator; Layout.topMargin: 4; Layout.bottomMargin: 4 }
             MenuRow { text: qsTr("Settings"); glyph: "sliders"; shortcut: "Ctrl+,"; onClicked: { mainMenu.close(); win.app.openSettings("") } }
+            MenuRow { text: qsTr("Help"); glyph: "list"; shortcut: "F1"; onClicked: { mainMenu.close(); win.openInternal("oynix://help") } }
             MenuRow { text: qsTr("Quit OyNIx"); glyph: "close"; shortcut: "Ctrl+Q"; onClicked: { mainMenu.close(); win.app.quit() } }
         }
     }

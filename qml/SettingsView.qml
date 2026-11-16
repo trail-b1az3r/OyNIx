@@ -23,6 +23,7 @@ Rectangle {
         { id: "tabs", icon: "tabs", title: qsTr("Tabs") },
         { id: "search", icon: "search", title: qsTr("Search") },
         { id: "privacy", icon: "shield", title: qsTr("Privacy") },
+        { id: "passwords", icon: "key", title: qsTr("Passwords") },
         { id: "websites", icon: "globe", title: qsTr("Websites") },
         { id: "extensions", icon: "puzzle", title: qsTr("Extensions") },
         { id: "profiles", icon: "user", title: qsTr("Profiles") },
@@ -201,7 +202,7 @@ Rectangle {
             width: scroll.availableWidth
             sourceComponent: ({
                 general: generalPage, appearance: appearancePage, tabs: tabsPage, search: searchPage,
-                privacy: privacyPage, websites: websitesPage, extensions: extensionsPage, profiles: profilesPage, misc: miscPage, advanced: advancedPage, about: aboutPage
+                privacy: privacyPage, passwords: passwordsPage, websites: websitesPage, extensions: extensionsPage, profiles: profilesPage, misc: miscPage, advanced: advancedPage, about: aboutPage
             })[sw.page] || generalPage
         }
     }
@@ -282,6 +283,28 @@ Rectangle {
         onAccepted: Core.exportBookmarks(selectedFile.toString())
     }
     MessageDialog { id: importResult; buttons: MessageDialog.Ok }
+
+    // ── Passwords ────────────────────────────────────────────────────
+    TextEdit { id: clipHelper; visible: false }
+    function copyText(t) { clipHelper.text = t; clipHelper.selectAll(); clipHelper.copy(); clipHelper.text = "" }
+    property int loginsRev: 0
+    Connections { target: Core; function onLoginsChanged() { sw.loginsRev++ } }
+    function showImport(r) {
+        var parts = []
+        if (r.passwords !== undefined) parts.push(r.passwords === 1 ? qsTr("1 password") : qsTr("%1 passwords").arg(r.passwords))
+        if (r.bookmarks !== undefined) parts.push(r.bookmarks === 1 ? qsTr("1 bookmark") : qsTr("%1 bookmarks").arg(r.bookmarks))
+        if (r.added !== undefined) parts.push(r.added === 1 ? qsTr("1 password") : qsTr("%1 passwords").arg(r.added))
+        var msg = qsTr("Imported %1.").arg(parts.join(qsTr(" and ")))
+        var errs = r.errors || (r.error ? [r.error] : [])
+        importResult.text = errs.length ? msg + "\n\n" + errs.join("\n\n") : msg
+        importResult.open()
+    }
+    FileDialog {
+        id: csvDialog
+        title: qsTr("Import Passwords")
+        nameFilters: [qsTr("Password exports (*.csv)"), qsTr("All files (*)")]
+        onAccepted: sw.showImport(JSON.parse(Core.importLoginsCsv(selectedFile.toString())))
+    }
 
     // ── Extensions ───────────────────────────────────────────────────
     property string extMessage: ""
@@ -937,6 +960,102 @@ Rectangle {
     }
 
     Component {
+        id: passwordsPage
+        Page {
+            Section {
+                title: qsTr("Passwords")
+                SwitchRow { label: qsTr("Offer to save passwords"); hint: qsTr("After you sign in, OyNIx asks whether to keep the password. Never in private windows."); key: "savePasswords" }
+                Divider {}
+                SwitchRow { label: qsTr("Fill passwords automatically"); hint: qsTr("Sign-in forms are filled from a part of OyNIx websites and extensions can’t see; pick another login from the key in the address bar."); key: "autofillPasswords" }
+            }
+            Section {
+                title: qsTr("Import")
+                Row_ {
+                    id: ffRow
+                    property var profiles: JSON.parse(Core.firefoxProfiles())
+                    label: qsTr("From Firefox")
+                    hint: profiles.length ? qsTr("Passwords and bookmarks, read straight from a Firefox profile. Firefox can stay open.")
+                                          : qsTr("No Firefox profile was found on this computer.")
+                    ComboBox {
+                        id: ffPick
+                        visible: ffRow.profiles.length > 1
+                        Layout.preferredWidth: 200; implicitHeight: 28
+                        model: ffRow.profiles.map(function (p) { return p.browser + " · " + p.name })
+                    }
+                    PushButton {
+                        enabled: ffRow.profiles.length > 0
+                        text: qsTr("Import")
+                        onClicked: {
+                            var p = ffRow.profiles[Math.max(0, ffPick.currentIndex)]
+                            sw.showImport(JSON.parse(Core.importFirefox(p.path, true, true)))
+                        }
+                    }
+                }
+                Divider {}
+                Row_ {
+                    label: qsTr("From a file")
+                    hint: qsTr("A CSV export from Firefox (about:logins › ⋯ › Export), Chrome, Edge, Bitwarden or 1Password. Delete the file afterwards: it isn’t encrypted.")
+                    PushButton { text: qsTr("Choose File…"); onClicked: csvDialog.open() }
+                }
+            }
+            Section {
+                id: savedSection
+                title: qsTr("Saved Passwords")
+                property string filter: ""
+                property var shown: ({})
+                readonly property var all: sw.loginsRev >= 0 ? JSON.parse(Core.loginList()) : []
+                readonly property var list: all.filter(function (l) { var f = filter.toLowerCase(); return !f || l.origin.toLowerCase().indexOf(f) >= 0 || l.username.toLowerCase().indexOf(f) >= 0 })
+                MTextField {
+                    visible: savedSection.all.length > 6
+                    Layout.fillWidth: true; Layout.margins: 10
+                    placeholder: qsTr("Search %1 saved passwords").arg(savedSection.all.length)
+                    onTextChanged: savedSection.filter = text
+                }
+                Txt { visible: savedSection.all.length === 0; text: qsTr("No saved passwords yet."); color: Theme.textDim; Layout.margins: 12 }
+                Repeater {
+                    model: savedSection.list
+                    delegate: RowLayout {
+                        id: lr
+                        required property var modelData
+                        required property int index
+                        property string revealed: ""
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 12; Layout.rightMargin: 8
+                        Layout.preferredHeight: 48
+                        spacing: 10
+                        Favicon { size: 20; url: lr.modelData.origin }
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 1
+                            Txt { Layout.fillWidth: true; text: lr.modelData.origin.replace(/^https:\/\//, ""); font.weight: Font.DemiBold; font.pixelSize: 13 }
+                            Txt { Layout.fillWidth: true; text: (lr.modelData.username || qsTr("(no username)")) + "  ·  " + (lr.revealed !== "" ? lr.revealed : "••••••••"); color: Theme.textDim; font.pixelSize: 12; font.family: lr.revealed !== "" ? "monospace" : Theme.font }
+                        }
+                        IconButton { glyph: "eye"; tip: lr.revealed ? qsTr("Hide") : qsTr("Show"); onClicked: lr.revealed = lr.revealed ? "" : Core.revealLogin(lr.modelData.id) }
+                        IconButton { glyph: "copy"; tip: qsTr("Copy password"); onClicked: sw.copyText(Core.revealLogin(lr.modelData.id)) }
+                        IconButton { glyph: "trash"; tip: qsTr("Delete"); onClicked: Core.removeLogin(lr.modelData.id) }
+                    }
+                }
+            }
+            Section {
+                id: neverSection
+                title: qsTr("Never Saved")
+                readonly property var list: sw.loginsRev >= 0 ? JSON.parse(Core.neverSaveList()) : []
+                visible: list.length > 0
+                Repeater {
+                    model: neverSection.list
+                    delegate: RowLayout {
+                        required property string modelData
+                        Layout.fillWidth: true; Layout.leftMargin: 12; Layout.rightMargin: 8; Layout.preferredHeight: 40
+                        Favicon { size: 18; url: modelData }
+                        Txt { Layout.fillWidth: true; text: modelData }
+                        IconButton { glyph: "close"; tip: qsTr("Allow saving again"); onClicked: Core.forgetNeverSave(modelData) }
+                    }
+                }
+            }
+        }
+    }
+
+    Component {
         id: miscPage
         Page {
             Section {
@@ -958,7 +1077,7 @@ Rectangle {
                 title: qsTr("Keyboard")
                 Row_ {
                     label: qsTr("Keyboard shortcuts")
-                    hint: qsTr("Press Ctrl+/ or F1 in any window for the full list.")
+                    hint: qsTr("Press Ctrl+/ in any window for the full list; F1 opens Help.")
                     PushButton { text: qsTr("Show"); onClicked: { var w = sw.app.windows[sw.app.windows.length - 1]; if (w) w.showShortcuts() } }
                 }
             }

@@ -260,6 +260,25 @@ impl Library {
 
     /// Import bookmarks from a Netscape-format HTML export (Firefox, Chrome,
     /// Safari and most browsers can produce one).
+    /// Add many bookmarks at once (url, title, folder), skipping addresses
+    /// already bookmarked. Returns how many were added.
+    pub fn import_list(&mut self, items: Vec<(String, String, String)>) -> usize {
+        let mut n = 0;
+        for (url, title, folder) in items {
+            if url.is_empty() || self.is_bookmarked(&url) {
+                continue;
+            }
+            let id = self.next_id.max(1);
+            self.next_id = id + 1;
+            self.bookmarks.push(Bookmark { id, title: if title.is_empty() { url.clone() } else { title }, url, folder, added: now() });
+            n += 1;
+        }
+        if n > 0 {
+            store("bookmarks.json", &self.bookmarks);
+        }
+        n
+    }
+
     pub fn import_html(&mut self, html: &str) -> usize {
         let mut n = 0;
         let mut folder = String::new();

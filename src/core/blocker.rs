@@ -711,6 +711,11 @@ fn build(lists: &[(String, Category)]) -> Rules {
         }
     }
     *EXT_FILTERS.lock().unwrap() = stamp(&ext);
+    // Rules power extensions' network.ts added while running.
+    let runtime = super::netrules::block_text();
+    if !runtime.is_empty() {
+        parse_list(&runtime, Category::Custom, &mut r);
+    }
     r.block.finish();
     r.allow.finish();
     r.cosmetic.finish();

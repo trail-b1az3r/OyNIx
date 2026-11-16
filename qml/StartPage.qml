@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
+import QtWebEngine
 import OyNIx
 
 // Native new-tab page: Favorites, Frequently Visited, Privacy Report,
@@ -45,6 +46,70 @@ Rectangle {
                     Repeater {
                         model: { Core.bookmarksRevision; return JSON.parse(Core.bookmarks("favorites")) }
                         delegate: Tile { required property var modelData; item: modelData; removable: true }
+                    }
+                }
+            }
+
+            // Widgets from extensions (widget.tsx)
+            ColumnLayout {
+                id: widgetSection
+                Layout.fillWidth: true
+                spacing: 14
+                visible: widgetRep.count > 0
+                Txt { text: qsTr("Widgets"); font.pixelSize: 22; font.family: Theme.displayFont }
+                // The browser's look, for widgets to use as CSS variables.
+                readonly property string themeCss: ":root{--bg:" + Theme.surfaceContainer + ";--fg:" + Theme.text + ";--muted:" + Theme.textDim
+                    + ";--accent:" + Theme.primary + ";--on-accent:" + Theme.primaryFg + ";--field:" + Theme.surfaceContainerHighest
+                    + ";--radius:" + Theme.shapeL + "px;--font:'" + Theme.font + "',sans-serif;color-scheme:" + (Theme.dark ? "dark" : "light") + "}"
+                Flow {
+                    id: widgetFlow
+                    Layout.fillWidth: true
+                    spacing: 16
+                    Repeater {
+                        id: widgetRep
+                        model: { Core.extensionsRevision; return page.win.privateMode ? [] : JSON.parse(Core.extensions()).filter(function (e) { return e.enabled && e.hasWidget }) }
+                        delegate: Rectangle {
+                            id: card
+                            required property var modelData
+                            width: widgetFlow.width >= 560 ? (widgetFlow.width - 16) / 2 : widgetFlow.width
+                            height: 40 + Math.max(60, Math.min(480, wv.contentH))
+                            radius: Theme.shapeL
+                            color: Theme.surfaceContainer
+                            clip: true
+                            RowLayout {
+                                x: 14; y: 10; width: parent.width - 28
+                                spacing: 8
+                                Image { Layout.preferredWidth: 16; Layout.preferredHeight: 16; sourceSize: Qt.size(32, 32); source: card.modelData.icon ? "file://" + card.modelData.icon : ""; visible: !!card.modelData.icon }
+                                Txt { Layout.fillWidth: true; text: card.modelData.name; color: Theme.textDim; font.pixelSize: 12; font.weight: Font.DemiBold }
+                            }
+                            WebEngineView {
+                                id: wv
+                                property real contentH: 80
+                                x: 0; y: 32; width: parent.width; height: parent.height - 32
+                                backgroundColor: "transparent"
+                                settings.localContentCanAccessFileUrls: false
+                                settings.localContentCanAccessRemoteUrls: false
+                                settings.javascriptCanOpenWindows: false
+                                settings.pluginsEnabled: false
+                                // Its own made-up origin: network and its own storage, no local files.
+                                readonly property string base: "https://" + card.modelData.id + ".widget.oynix.invalid/"
+                                Component.onCompleted: loadHtml(Core.widgetHtml(card.modelData.id, widgetSection.themeCss), base)
+                                onLoadingChanged: function (info) { if (info.status === WebEngineView.LoadSucceededStatus) sizer.restart() }
+                                onNavigationRequested: function (request) {
+                                    var u = request.url.toString()
+                                    if (request.isMainFrame && u.indexOf(base) !== 0 && u !== "about:blank" && u.indexOf("data:") !== 0) {
+                                        request.reject()
+                                        page.win.openTab(u, { afterCurrent: true })
+                                    }
+                                }
+                                onNewWindowRequested: function (request) { page.win.openTab(request.requestedUrl.toString(), { afterCurrent: true }) }
+                                Timer {
+                                    id: sizer
+                                    interval: 400; repeat: true; running: card.visible
+                                    onTriggered: wv.runJavaScript("(function(){var r=document.getElementById('root');return r?Math.ceil(r.getBoundingClientRect().height):0})()", function (h) { if (h > 0) wv.contentH = h })
+                                }
+                            }
+                        }
                     }
                 }
             }

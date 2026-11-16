@@ -1,0 +1,79 @@
+<!--
+title: Power extensions
+short: Power extensions
+order: 5
+icon: shield
+lede: A .poweroynix is an OyNIx extension that may shape network traffic, restyle every shape in the browser and use the powerful extension APIs. Because it can, it has to be verified first.
+description: The .poweroynix format: what power extensions can do, how verification works, and how to build, sign and test one.
+-->
+<h2>What a power extension is</h2>
+<p>A <code>.poweroynix</code> is an ordinary <a href="{{root}}docs/build-an-extension/">OyNIx extension</a> — <code>oynix.json</code>, <code>code.ts</code>, <code>content.css</code> and the optional files — with <code>"power": true</code> in <code>oynix.json</code> and a signature, <code>oynix.sig</code>. In exchange for being checked, it gets abilities ordinary extensions don’t:</p>
+<table>
+  <tr><th>File or setting</th><th>What it does</th></tr>
+  <tr><td><code>network.ts</code></td><td>Runs in the background with <code>oynix.network</code>: add blocker rules, add request headers, watch requests, fetch without cross-origin limits.</td></tr>
+  <tr><td><code>theme-shape.qml</code></td><td>Draws every expressive shape in the browser — start page tiles, badges, dialogs — while the extension’s browser style is chosen.</td></tr>
+  <tr><td><code>extra.md</code></td><td>A page written in Markdown. OyNIx renders it (tables, task lists, footnotes) in light and dark.</td></tr>
+  <tr><td><code>images/</code></td><td>Pictures (PNG, JPEG, GIF, WebP, SVG, AVIF; 2 MB in all) for pages, panels and code: <code>oynix.image("logo.png")</code> gives a <code>data:</code> URL.</td></tr>
+  <tr><td><code>filters.txt</code> with <code>"permissions": ["filters"]</code></td><td>Adblock/uBlock rules added to OyNIx’s blocker while the extension is on.</td></tr>
+  <tr><td><code>manifest.json</code> (Manifest V2 or V3)</td><td>A Chrome or Firefox extension half that runs alongside, and gets the <a href="{{root}}docs/extensions/">powerful APIs</a> — native messaging, webRequest, cookies, browsingData, management — without anyone turning on Developer mode. Its manifest still has to ask for each permission.</td></tr>
+</table>
+<p><b>Wallbreaker</b>, which gets you past “please turn off your ad blocker” walls, is a power extension that ships with OyNIx.</p>
+
+<h2>Verification</h2>
+<p>OyNIx installs a <code>.poweroynix</code> only when <code>oynix.sig</code> is a valid Ed25519 signature over every other file in the package, made by a key in <code>packaging/poweroynix/trusted-keys.txt</code>, which is compiled into OyNIx. A package changed after signing, signed by an unknown key, or not signed at all is refused with a message saying which. The Extension Gallery refuses to list one under the same rule.</p>
+<p>Signing <i>is</i> the review: the people who hold trusted keys read the whole extension before they sign it. Extensions that ship inside OyNIx are the one exception — they came with the browser.</p>
+
+<h2>network.ts</h2>
+<p><code>network.ts</code> runs in a hidden page of its own as long as the extension is on. Everything it asks for goes through OyNIx, checked against a secret only that page knows, so no website or other extension can speak for it. Requests from private windows never reach it, and its headers are never added there.</p>
+<pre data-copy><code>// Block a tracker the lists missed (Adblock syntax; replaces this extension's earlier list)
+oynix.network.block(["||metrics.example.com^", "/beacon.js$script"]);
+
+// Send an API key to one service
+oynix.network.setRequestHeader("https://api.example.com/*", "X-Api-Key", "…");
+
+// See requests as they happen
+oynix.network.onRequest(r => {
+  if (r.blocked) console.log("blocked", r.url, "on", r.firstParty);
+});
+
+// Fetch without cross-origin limits
+const res = await oynix.network.fetch("https://status.example.com/api.json");
+const status = await res.json();</code></pre>
+<table>
+  <tr><th>Call</th><th></th></tr>
+  <tr><td><code>block(rules)</code></td><td>An array or newline-separated string of blocker rules. Replaces what this extension set before; an empty list removes them.</td></tr>
+  <tr><td><code>setRequestHeader(pattern, name, value)</code></td><td>For addresses matching <code>pattern</code> (<code>*</code> wildcards over the whole URL). Headers the browser manages (<code>Cookie</code>, <code>Host</code>, <code>Origin</code>, <code>Referer</code>…) can’t be set.</td></tr>
+  <tr><td><code>clearRequestHeaders()</code></td><td>Removes this extension’s header rules.</td></tr>
+  <tr><td><code>onRequest(fn)</code></td><td><code>fn({url, firstParty, method, type, blocked, time})</code> for each request, delivered in small batches.</td></tr>
+  <tr><td><code>fetch(url, {method, headers, body})</code></td><td>Resolves to <code>{status, ok, headers, text(), json()}</code>. Up to 16 MB.</td></tr>
+</table>
+<p><code>network.ts</code> also has <code>oynix.data</code> (your <code>extra.jsonl</code>) and <code>oynix.image(name)</code>. When the extension is turned off, its rules and headers go away at once.</p>
+
+<h2>theme-shape.qml</h2>
+<p>A QML item that draws one shape, checked by the same rules as panels (Qt Quick imports only; no <code>parent</code>, <code>window</code>, loaders or network). It needs <code>shape</code> and <code>color</code> properties and may have <code>size</code>, <code>borderColor</code>, <code>borderWidth</code> and <code>rotationOffset</code>; OyNIx keeps them up to date. <code>shape</code> is the name the browser asked for (<code>"cookie9"</code>, <code>"flower"</code>, <code>"circle"</code>…), so you can draw some differently from others.</p>
+<pre data-copy><code>import QtQuick
+Item {
+    id: s
+    property string shape: "circle"
+    property color color: "transparent"
+    Rectangle {
+        anchors.fill: s
+        radius: s.shape === "circle" ? s.width / 2 : s.width * 0.22
+        color: s.color
+    }
+}</code></pre>
+<p>It applies while the extension is chosen in <b>Settings › Appearance › Browser Style</b>, alone or together with a <code>theme.json</code>.</p>
+
+<h2>extra.md and images/</h2>
+<p>If there’s no <code>extra.html</code>, an <code>extra.md</code> becomes the extension’s page, opened from its toolbar button. Pictures in <code>images/</code> can be used from it with ordinary relative links: <code>![logo](images/logo.png)</code>.</p>
+
+<h2>Making one</h2>
+<ol>
+  <li>Build it as an ordinary OyNIx extension first, without <code>"power": true</code>. The Chrome or Firefox half can be tested with <b>Settings › Extensions › Developer mode › Allow powerful extension APIs</b>.</li>
+  <li>Add <code>"power": true</code> and the power files.</li>
+  <li>Ask a key holder to review and sign it (or, if you maintain OyNIx, sign it yourself):
+<pre data-copy><code>python3 scripts/poweroynix.py sign my-extension --key you.poweroynix-key --pack My-Extension-1.0.0.poweroynix
+python3 scripts/poweroynix.py verify My-Extension-1.0.0.poweroynix</code></pre></li>
+  <li>Install the <code>.poweroynix</code> (open it in OyNIx, or <code>oynix --install-extension</code>), or submit the signed folder to the Gallery.</li>
+</ol>
+<p>Any change to any file after signing — including the signer’s own — needs a new signature. <code>scripts/poweroynix.py keygen "Your Name"</code> makes a key pair; the public line goes in <code>trusted-keys.txt</code> and takes effect in the next OyNIx release.</p>

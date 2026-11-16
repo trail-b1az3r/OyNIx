@@ -145,8 +145,47 @@ pub mod qobject {
         fn bookmarks(self: &Core, folder: &QString) -> QString;
         #[qinvokable]
         fn bookmark_folders(self: &Core) -> QString;
+        /// The bookmark for `url` ({id, url, title, folder}) or "null".
+        #[qinvokable]
+        fn bookmark_for(self: &Core, url: &QString) -> QString;
         #[qinvokable]
         fn import_bookmarks(self: Pin<&mut Core>, path_or_url: &QString) -> i32;
+
+        // ── passwords (core/passwords.rs, core/firefox.rs) ──
+        /// [{id, username, password}] saved for the page at `url`, most recent first.
+        #[qinvokable]
+        fn logins_for(self: &Core, url: &QString) -> QString;
+        /// What saving would do: "saved" | "updated" | "same" | "never".
+        #[qinvokable]
+        fn login_would(self: &Core, url: &QString, username: &QString, password: &QString) -> QString;
+        #[qinvokable]
+        fn save_login(self: Pin<&mut Core>, url: &QString, username: &QString, password: &QString) -> QString;
+        #[qinvokable]
+        fn login_used(self: Pin<&mut Core>, id: &QString);
+        #[qinvokable]
+        fn remove_login(self: Pin<&mut Core>, id: &QString) -> bool;
+        /// Every login without its password: [{id, origin, username, lastUsed, timesUsed}].
+        #[qinvokable]
+        fn login_list(self: &Core) -> QString;
+        #[qinvokable]
+        fn reveal_login(self: &Core, id: &QString) -> QString;
+        #[qinvokable]
+        fn never_save_login(self: Pin<&mut Core>, url: &QString);
+        #[qinvokable]
+        fn never_save_list(self: &Core) -> QString;
+        #[qinvokable]
+        fn forget_never_save(self: Pin<&mut Core>, origin: &QString);
+        /// Import a CSV of passwords. {ok, added, error}
+        #[qinvokable]
+        fn import_logins_csv(self: Pin<&mut Core>, path_or_url: &QString) -> QString;
+        /// Firefox profiles found on this computer.
+        #[qinvokable]
+        fn firefox_profiles(self: &Core) -> QString;
+        /// Import from a Firefox profile. {ok, passwords, bookmarks, errors: []}
+        #[qinvokable]
+        fn import_firefox(self: Pin<&mut Core>, profile: &QString, passwords: bool, bookmarks: bool) -> QString;
+        #[qsignal]
+        fn logins_changed(self: Pin<&mut Core>);
         #[qinvokable]
         fn export_bookmarks(self: &Core, path_or_url: &QString) -> bool;
 
@@ -217,6 +256,9 @@ pub mod qobject {
         fn extension_data(self: &Core, id: &QString) -> QString;
         #[qinvokable]
         fn extension_page_url(self: &Core, id: &QString) -> QString;
+        /// file:// URL of the selected browser style's theme-shape.qml (power extensions), or "".
+        #[qinvokable]
+        fn theme_shape_url(self: &Core) -> QString;
         #[qinvokable]
         fn extension_has_permission(self: &Core, id: &QString, permission: &QString) -> bool;
         /// For the WebExtension runtime: {id, name, permissions, origins,
@@ -313,6 +355,19 @@ pub mod qobject {
         fn create_extension(self: Pin<&mut Core>, name: &QString) -> QString;
         #[qinvokable]
         fn extensions_dir(self: &Core) -> QString;
+        /// network.ts: one call from an extension's background page
+        /// ({op: "block"|"header"|"clearHeaders"|"observe", …}). Returns {ok, error}.
+        #[qinvokable]
+        fn net_call(self: Pin<&mut Core>, ext: &QString, call_json: &QString) -> QString;
+        /// Requests observed for network.ts since the last call (JSON array).
+        #[qinvokable]
+        fn net_drain(self: &Core) -> QString;
+        /// The hidden page network.ts runs in; `token` authenticates its messages.
+        #[qinvokable]
+        fn network_html(self: &Core, id: &QString, token: &QString) -> QString;
+        /// The page for an extension's widget.tsx, styled with `theme_css`.
+        #[qinvokable]
+        fn widget_html(self: &Core, id: &QString, theme_css: &QString) -> QString;
         #[qinvokable]
         fn set_extension_web_id(self: Pin<&mut Core>, id: &QString, web_id: &QString);
         #[qinvokable]
@@ -852,8 +907,150 @@ impl qobject::Core {
         to_qjson(&Value::Array(v))
     }
 
+    pub fn bookmark_for(&self, url: &QString) -> QString {
+        let u = s(url);
+        match self.library.bookmarks.iter().find(|b| b.url == u) {
+            Some(b) => to_qjson(&json!({ "id": b.id, "url": b.url, "title": b.title, "folder": b.folder })),
+            None => qs("null"),
+        }
+    }
+
     pub fn bookmark_folders(&self) -> QString {
         to_qjson(&json!(self.library.folders()))
+    }
+
+    // ── passwords ──
+    pub fn logins_for(&self, url: &QString) -> QString {
+        let st = crate::core::passwords::load();
+        let v: Vec<Value> = st.for_url(&s(url)).iter().map(|l| json!({ "id": l.id, "username": l.username, "password": l.password })).collect();
+        to_qjson(&Value::Array(v))
+    }
+
+    pub fn login_would(&self, url: &QString, username: &QString, password: &QString) -> QString {
+        let st = crate::core::passwords::load();
+        let o = crate::core::passwords::origin_of(&s(url));
+        if st.never.contains(&o) {
+            return qs("never");
+        }
+        qs(st.would(&s(url), &s(username), &s(password)))
+    }
+
+    pub fn save_login(self: Pin<&mut Self>, url: &QString, username: &QString, password: &QString) -> QString {
+        let mut st = crate::core::passwords::load();
+        let r = st.put(&s(url), &s(username), &s(password));
+        if r != "same" {
+            if let Err(e) = crate::core::passwords::save(&st) {
+                return qs(format!("error: {e}"));
+            }
+            self.logins_changed();
+        }
+        qs(r)
+    }
+
+    pub fn login_used(self: Pin<&mut Self>, id: &QString) {
+        let mut st = crate::core::passwords::load();
+        st.used(&s(id));
+        let _ = crate::core::passwords::save(&st);
+    }
+
+    pub fn remove_login(self: Pin<&mut Self>, id: &QString) -> bool {
+        let mut st = crate::core::passwords::load();
+        let ok = st.remove(&s(id)) && crate::core::passwords::save(&st).is_ok();
+        if ok {
+            self.logins_changed();
+        }
+        ok
+    }
+
+    pub fn login_list(&self) -> QString {
+        let mut st = crate::core::passwords::load();
+        st.logins.sort_by(|a, b| a.origin.cmp(&b.origin).then(a.username.cmp(&b.username)));
+        let v: Vec<Value> = st
+            .logins
+            .iter()
+            .map(|l| json!({ "id": l.id, "origin": l.origin, "username": l.username, "lastUsed": l.last_used, "timesUsed": l.times_used }))
+            .collect();
+        to_qjson(&Value::Array(v))
+    }
+
+    pub fn reveal_login(&self, id: &QString) -> QString {
+        let id = s(id);
+        qs(crate::core::passwords::load().logins.iter().find(|l| l.id == id).map(|l| l.password.as_str()).unwrap_or(""))
+    }
+
+    pub fn never_save_login(self: Pin<&mut Self>, url: &QString) {
+        let mut st = crate::core::passwords::load();
+        let o = crate::core::passwords::origin_of(&s(url));
+        if !o.is_empty() && !st.never.contains(&o) {
+            st.never.push(o);
+            let _ = crate::core::passwords::save(&st);
+            self.logins_changed();
+        }
+    }
+
+    pub fn never_save_list(&self) -> QString {
+        to_qjson(&json!(crate::core::passwords::load().never))
+    }
+
+    pub fn forget_never_save(self: Pin<&mut Self>, origin: &QString) {
+        let mut st = crate::core::passwords::load();
+        let o = s(origin);
+        st.never.retain(|x| *x != o);
+        let _ = crate::core::passwords::save(&st);
+        self.logins_changed();
+    }
+
+    pub fn import_logins_csv(self: Pin<&mut Self>, path_or_url: &QString) -> QString {
+        let text = match std::fs::read_to_string(to_path(&s(path_or_url))) {
+            Ok(t) => t,
+            Err(e) => return to_qjson(&json!({ "ok": false, "added": 0, "error": e.to_string() })),
+        };
+        match crate::core::passwords::parse_csv(&text) {
+            Ok(rows) => {
+                let mut st = crate::core::passwords::load();
+                let n = st.merge(rows);
+                if let Err(e) = crate::core::passwords::save(&st) {
+                    return to_qjson(&json!({ "ok": false, "added": 0, "error": e }));
+                }
+                self.logins_changed();
+                to_qjson(&json!({ "ok": true, "added": n, "error": "" }))
+            }
+            Err(e) => to_qjson(&json!({ "ok": false, "added": 0, "error": format!("This doesn’t look like a passwords CSV ({e}).") })),
+        }
+    }
+
+    pub fn firefox_profiles(&self) -> QString {
+        to_qjson(&json!(crate::core::firefox::profiles()))
+    }
+
+    pub fn import_firefox(mut self: Pin<&mut Self>, profile: &QString, passwords: bool, bookmarks: bool) -> QString {
+        let dir = std::path::PathBuf::from(s(profile));
+        let (mut np, mut nb, mut errors) = (0usize, 0usize, Vec::<String>::new());
+        if passwords {
+            match crate::core::firefox::logins(&dir) {
+                Ok(rows) => {
+                    let mut st = crate::core::passwords::load();
+                    np = st.merge(rows);
+                    if let Err(e) = crate::core::passwords::save(&st) {
+                        errors.push(e);
+                    }
+                }
+                Err(e) => errors.push(e),
+            }
+        }
+        if bookmarks {
+            match crate::core::firefox::bookmarks(&dir) {
+                Ok(rows) => nb = self.as_mut().rust_mut().library.import_list(rows),
+                Err(e) => errors.push(format!("Bookmarks: {e}")),
+            }
+        }
+        if np > 0 {
+            self.as_mut().logins_changed();
+        }
+        if nb > 0 {
+            self.as_mut().bump_bookmarks();
+        }
+        to_qjson(&json!({ "ok": errors.is_empty(), "passwords": np, "bookmarks": nb, "errors": errors }))
     }
 
     pub fn import_bookmarks(mut self: Pin<&mut Self>, path_or_url: &QString) -> i32 {
@@ -1256,16 +1453,31 @@ impl qobject::Core {
     }
 
     pub fn browser_styles(&self) -> QString {
-        let list: Vec<Value> = self.extensions.iter().filter(|e| e.enabled && e.has_theme).map(|e| json!({ "id": e.id, "name": e.name })).collect();
+        let list: Vec<Value> = self.extensions.iter().filter(|e| e.enabled && (e.has_theme || (e.power && e.has_shape))).map(|e| json!({ "id": e.id, "name": e.name })).collect();
         to_qjson(&Value::Array(list))
     }
 
     /// file:// URL of `extra.html`, or "".
     pub fn extension_page_url(&self, id: &QString) -> QString {
-        match self.oynix_dir(id).map(|d| d.join("extra.html")) {
-            Some(p) if p.exists() => qs(format!("file://{}", p.to_string_lossy())),
-            _ => qs(""),
+        let Some(dir) = self.oynix_dir(id) else { return qs("") };
+        // extra.html, or (power extensions) extra.md rendered at install.
+        let power = self.extensions.iter().any(|e| e.id == s(id) && e.power);
+        for name in ["extra.html", "extra.md.html"] {
+            let p = dir.join(name);
+            if p.exists() && (name == "extra.html" || power) {
+                return qs(format!("file://{}", p.to_string_lossy()));
+            }
         }
+        qs("")
+    }
+
+    pub fn theme_shape_url(&self) -> QString {
+        let want = &self.settings.browser_style;
+        self.extensions
+            .iter()
+            .find(|e| !want.is_empty() && &e.id == want && e.enabled && e.power && e.has_shape)
+            .map(|e| qs(format!("file://{}", std::path::Path::new(&e.path).join("theme-shape.qml").to_string_lossy())))
+            .unwrap_or_default()
     }
 
     /// # Safety
@@ -1459,6 +1671,76 @@ impl qobject::Core {
         self.as_mut().rust_mut().extensions = list;
         self.as_mut().bump_extensions();
         qs(r.map(|e| e.path).unwrap_or_default())
+    }
+
+    pub fn net_call(mut self: Pin<&mut Self>, ext: &QString, call_json: &QString) -> QString {
+        use crate::core::netrules;
+        let ext = s(ext);
+        let c0: Value = serde_json::from_str(&s(call_json)).unwrap_or_default();
+        // An extension stopped (off or removed): drop what it set, always allowed.
+        if c0["op"] == "forget" {
+            if netrules::forget(&ext) {
+                blocker::init(active_lists(&self.settings));
+            }
+            return to_qjson(&json!({ "ok": true, "error": "" }));
+        }
+        if !self.extensions.iter().any(|e| e.id == ext && e.enabled && e.power && e.has_network) {
+            return to_qjson(&json!({ "ok": false, "error": "not a running network.ts" }));
+        }
+        let c: Value = serde_json::from_str(&s(call_json)).unwrap_or_default();
+        let r: Result<(), String> = match c["op"].as_str().unwrap_or("") {
+            "block" => {
+                let rules = match &c["rules"] {
+                    Value::Array(a) => a.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>().join("\n"),
+                    Value::String(t) => t.clone(),
+                    _ => String::new(),
+                };
+                if netrules::set_block(&ext, &rules) {
+                    blocker::init(active_lists(&self.settings));
+                }
+                Ok(())
+            }
+            "header" => netrules::add_header(&ext, c["pattern"].as_str().unwrap_or("*"), c["name"].as_str().unwrap_or(""), c["value"].as_str().unwrap_or("")),
+            "clearHeaders" => {
+                netrules::clear_headers(&ext);
+                Ok(())
+            }
+            "observe" => {
+                netrules::set_observing(&ext, c["on"].as_bool().unwrap_or(true));
+                Ok(())
+            }
+            other => Err(format!("unknown call “{other}”")),
+        };
+        let _ = self.as_mut();
+        to_qjson(&match r {
+            Ok(()) => json!({ "ok": true, "error": "" }),
+            Err(e) => json!({ "ok": false, "error": e }),
+        })
+    }
+
+    pub fn net_drain(&self) -> QString {
+        to_qjson(&crate::core::netrules::drain())
+    }
+
+    pub fn network_html(&self, id: &QString, token: &QString) -> QString {
+        let id = s(id);
+        let Some(e) = self.extensions.iter().find(|e| e.id == id && e.enabled && e.power && e.has_network) else { return qs("") };
+        match extensions::network_html(e, &s(token)) {
+            Ok(h) => qs(h),
+            Err(err) => {
+                eprintln!("oynix: network.ts of {}: {err}", e.name);
+                qs("")
+            }
+        }
+    }
+
+    pub fn widget_html(&self, id: &QString, theme_css: &QString) -> QString {
+        let id = s(id);
+        let Some(e) = self.extensions.iter().find(|e| e.id == id && e.enabled && e.has_widget) else { return qs("") };
+        match extensions::widget_html(e, &s(theme_css)) {
+            Ok(h) => qs(h),
+            Err(err) => qs(format!("<!doctype html><body style=\"font:13px sans-serif;color:#b00;padding:12px\">{}</body>", err.replace('<', "&lt;"))),
+        }
     }
 
     pub fn extensions_dir(&self) -> QString {

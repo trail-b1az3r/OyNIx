@@ -1,7 +1,7 @@
 # `.poweroynix` (maintainers only)
 
-A `.poweroynix` is an OyNIx extension with full power. It isn't offered in
-OyNIx's file pickers or the public docs. It contains:
+A `.poweroynix` is an OyNIx extension with full power. The user-facing guide
+is on the website (docs › Power extensions). It contains:
 
 - the usual OyNIx files: `oynix.json` (with `"power": true`), `code.ts`,
   `content.css`, and optionally `graphics.qt`, `extra.html`, `extra.jsonl`
@@ -11,6 +11,9 @@ OyNIx's file pickers or the public docs. It contains:
 - optionally `filters.txt` (Adblock/uBlock syntax), used with
   `"permissions": ["filters"]`. Its rules join OyNIx's content blocker while
   the extension is on;
+- optionally `network.ts` (background: blocker rules, request headers,
+  request feed, CORS-free fetch), `theme-shape.qml` (draws the browser's
+  shapes), `extra.md` (a Markdown page) and `images/`;
 - `oynix.sig`: the verification.
 
 Because it's verified, it gets the powerful WebExtension APIs (native

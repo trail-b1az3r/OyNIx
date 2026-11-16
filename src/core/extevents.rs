@@ -36,7 +36,7 @@ fn push(name: &str, args: Value) {
 }
 
 /// webRequest type names for Qt's resource types.
-fn type_name(t: i32) -> &'static str {
+pub fn type_name(t: i32) -> &'static str {
     match t {
         0 => "main_frame",
         1 => "sub_frame",

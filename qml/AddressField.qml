@@ -244,6 +244,18 @@ Rectangle {
             tip: qsTr("Reader View") + "  (Ctrl+Shift+R)"
             onClicked: field.tab.toggleReader()
         }
+        // Saved logins for this site
+        IconButton {
+            id: keyBtn
+            implicitWidth: 32; implicitHeight: 32
+            property int rev: 0
+            Connections { target: Core; function onLoginsChanged() { keyBtn.rev++ } }
+            visible: rev >= 0 && !field.editing && /^https?:/.test(field.url) && JSON.parse(Core.loginsFor(field.url)).length > 0
+            glyph: "key"; iconSize: 14
+            iconColor: Theme.textDim
+            tip: qsTr("Saved logins")
+            onClicked: field.win.showLoginMenu(keyBtn)
+        }
         IconButton {
             implicitWidth: 32; implicitHeight: 32
             visible: !field.editing && field.url !== "" && field.url.indexOf("oynix://") !== 0
@@ -251,8 +263,9 @@ Rectangle {
             property bool marked: Core.bookmarksRevision >= 0 && Core.isBookmarked(field.url)
             filledIcon: marked
             iconColor: marked ? Theme.warning : Theme.textDim
-            tip: marked ? qsTr("Remove Bookmark") : qsTr("Bookmark This Page") + "  (Ctrl+D)"
-            onClicked: Core.toggleBookmark(field.url, field.tab.model.title)
+            id: starBtn
+            tip: marked ? qsTr("Edit Bookmark") : qsTr("Bookmark This Page") + "  (Ctrl+D)"
+            onClicked: field.win.editBookmark(starBtn)
         }
         IconButton {
             implicitWidth: 32; implicitHeight: 32

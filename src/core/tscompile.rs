@@ -17,7 +17,15 @@ pub fn transpile(source: &str, file_name: &str) -> Result<String, String> {
     let src = source.to_string();
     let name = file_name.to_string();
     // A compiler bug must not take the browser down with it.
-    std::panic::catch_unwind(move || transpile_inner(&src, &name)).unwrap_or_else(|_| Err(format!("{file_name}: the TypeScript compiler failed on this file")))
+    std::panic::catch_unwind(move || transpile_inner(&src, &name, false)).unwrap_or_else(|_| Err(format!("{file_name}: the TypeScript compiler failed on this file")))
+}
+
+/// Compile TSX (widget.tsx): JSX becomes `h(type, props, ...children)`
+/// and fragments `Fragment`, from OyNIx's small widget runtime.
+pub fn transpile_tsx(source: &str, file_name: &str) -> Result<String, String> {
+    let src = source.to_string();
+    let name = file_name.to_string();
+    std::panic::catch_unwind(move || transpile_inner(&src, &name, true)).unwrap_or_else(|_| Err(format!("{file_name}: the TypeScript compiler failed on this file")))
 }
 
 fn render(e: &oxc::diagnostics::OxcDiagnostic, src: &str, file_name: &str) -> String {
@@ -36,15 +44,21 @@ fn render(e: &oxc::diagnostics::OxcDiagnostic, src: &str, file_name: &str) -> St
     }
 }
 
-fn transpile_inner(src: &str, file_name: &str) -> Result<String, String> {
+fn transpile_inner(src: &str, file_name: &str, jsx: bool) -> Result<String, String> {
     let alloc = Allocator::default();
-    let parsed = Parser::new(&alloc, src, SourceType::ts()).parse();
+    let parsed = Parser::new(&alloc, src, if jsx { SourceType::tsx() } else { SourceType::ts() }).parse();
     if let Some(e) = parsed.diagnostics.first() {
         return Err(render(e, src, file_name));
     }
     let mut program = parsed.program;
     let scoping = SemanticBuilder::new().with_enum_eval(true).build(&program).semantic.into_scoping();
-    let out = Transformer::new(&alloc, Path::new(file_name), &TransformOptions::default()).build_with_scoping(scoping, &mut program);
+    let mut options = TransformOptions::default();
+    if jsx {
+        options.jsx.runtime = oxc::transformer::JsxRuntime::Classic;
+        options.jsx.pragma = Some("h".into());
+        options.jsx.pragma_frag = Some("Fragment".into());
+    }
+    let out = Transformer::new(&alloc, Path::new(file_name), &options).build_with_scoping(scoping, &mut program);
     if let Some(e) = out.diagnostics.first() {
         return Err(render(e, src, file_name));
     }
@@ -70,6 +84,12 @@ mod tests {
     fn plain_javascript_is_unchanged_in_meaning() {
         let js = transpile("var a = [1, 2].map(function (x) { return x * 2; });", "code.ts").unwrap();
         assert!(js.contains("x * 2"));
+    }
+
+    #[test]
+    fn tsx_uses_the_widget_runtime() {
+        let js = super::transpile_tsx("export default function W(p: { n: number }) { return <><b class=\"x\">{p.n}</b></>; }", "widget.tsx").unwrap();
+        assert!(js.contains("h(Fragment") && js.contains("h(\"b\"") && !js.contains("React") && !js.contains(": number"), "{js}");
     }
 
     #[test]

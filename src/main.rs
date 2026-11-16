@@ -250,6 +250,7 @@ fn main() {
 
     let mut app = QGuiApplication::new();
     native::ffi::set_app_metadata(&args.profile);
+    native::ffi::start_expose_guard();
 
     // Content blocker + privacy defaults before any page loads.
     let settings = core::settings::Settings::load();

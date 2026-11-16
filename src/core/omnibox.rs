@@ -178,25 +178,67 @@ pub fn resolve(input: &str, engine_id: &str, bangs: bool, https_upgrade: bool) -
 
 /// Remove known tracking parameters. Returns the input unchanged if nothing
 /// was stripped (so callers can cheaply detect "no change").
-pub fn strip_tracking(raw: &str) -> String {
-    let Ok(mut u) = Url::parse(raw) else { return raw.to_string() };
-    if u.query().is_none() {
-        return raw.to_string();
+/// Sign-in, single sign-on and payment hosts: their redirects carry signed
+/// tokens whose exact bytes matter, so OyNIx never rewrites them.
+const AUTH_HOSTS: &[&str] = &[
+    "accounts.google.com", "accounts.youtube.com", "myaccount.google.com", "login.microsoftonline.com",
+    "login.microsoft.com", "login.live.com", "account.live.com", "appleid.apple.com", "idmsa.apple.com",
+    "login.yahoo.com", "api.login.yahoo.com", "id.atlassian.com", "accounts.firefox.com", "auth.openai.com",
+    "discord.com", "steamcommunity.com", "auth0.com", "okta.com", "oktapreview.com", "onelogin.com",
+    "duosecurity.com", "paypal.com", "checkout.stripe.com", "hooks.stripe.com",
+];
+/// Query fields that mean "this is the middle of a sign-in".
+const AUTH_PARAMS: &[&str] = &[
+    "code", "state", "nonce", "id_token", "access_token", "client_id", "redirect_uri", "response_type",
+    "samlrequest", "samlresponse", "relaystate", "oauth_token", "oauth_verifier", "ticket", "continue",
+    "followup", "flowname", "service", "passive", "sig", "signature", "token",
+];
+
+/// Is `raw` part of a sign-in or payment flow?
+pub fn is_auth_flow(raw: &str) -> bool {
+    let Ok(u) = Url::parse(raw) else { return false };
+    let host = u.host_str().unwrap_or("").to_ascii_lowercase();
+    if AUTH_HOSTS.iter().any(|h| host == *h || host.ends_with(&format!(".{h}"))) {
+        return true;
     }
-    let pairs: Vec<(String, String)> = u.query_pairs().map(|(k, v)| (k.into_owned(), v.into_owned())).collect();
-    let kept: Vec<&(String, String)> = pairs
+    let path = u.path().to_ascii_lowercase();
+    if ["/oauth", "/openid", "/saml", "/sso", "/signin", "/sign-in", "/login", "/logon", "/auth/", "/authorize", "/callback", "/connect/"]
         .iter()
-        .filter(|(k, _)| !TRACKING_PARAMS.contains(&k.to_ascii_lowercase().as_str()))
-        .collect();
-    if kept.len() == pairs.len() {
+        .any(|p| path.contains(p))
+    {
+        return true;
+    }
+    u.query_pairs().any(|(k, _)| AUTH_PARAMS.contains(&k.to_ascii_lowercase().as_str()))
+}
+
+/// Remove tracking parameters (utm_*, fbclid, …) from a URL. Everything
+/// else is kept byte for byte: parameters are dropped from the query text
+/// rather than decoded and re-encoded, so signed tokens and nested
+/// redirect addresses survive. Sign-in flows are never touched.
+pub fn strip_tracking(raw: &str) -> String {
+    if !(raw.starts_with("http://") || raw.starts_with("https://")) || is_auth_flow(raw) {
         return raw.to_string();
     }
-    if kept.is_empty() {
-        u.set_query(None);
-    } else {
-        u.query_pairs_mut().clear().extend_pairs(kept.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+    let (main, frag) = match raw.find('#') {
+        Some(i) => (&raw[..i], &raw[i..]),
+        None => (raw, ""),
+    };
+    let Some(q) = main.find('?') else { return raw.to_string() };
+    let (base, query) = (&main[..q], &main[q + 1..]);
+    let tracking = |seg: &str| {
+        let name = seg.split('=').next().unwrap_or("");
+        let name: String = url::form_urlencoded::parse(name.as_bytes()).next().map(|(k, _)| k.into_owned()).unwrap_or_default();
+        !name.is_empty() && TRACKING_PARAMS.contains(&name.to_ascii_lowercase().as_str())
+    };
+    let segs: Vec<&str> = query.split('&').collect();
+    let kept: Vec<&str> = segs.iter().copied().filter(|s| !tracking(s)).collect();
+    if kept.len() == segs.len() {
+        return raw.to_string();
     }
-    u.to_string()
+    let kept: Vec<&str> = kept.into_iter().filter(|s| !s.is_empty()).collect();
+    let out = if kept.is_empty() { format!("{base}{frag}") } else { format!("{base}?{}{frag}", kept.join("&")) };
+    // Belt and braces: never hand back something that doesn't parse.
+    if Url::parse(&out).is_ok() { out } else { raw.to_string() }
 }
 
 pub fn host_of(raw: &str) -> String {
@@ -371,5 +413,37 @@ mod tests {
         assert_eq!(display("https://www.example.com/x", false), "example.com");
         assert_eq!(base_domain("a.b.example.co.uk"), "example.co.uk");
         assert_eq!(base_domain("cdn.example.com"), "example.com");
+    }
+}
+
+#[cfg(test)]
+mod strip_tests {
+    use super::*;
+
+    #[test]
+    fn keeps_everything_else_byte_for_byte() {
+        // Encoded slashes, raw slashes, + and = in values are untouched.
+        let u = "https://example.com/a?x=b/c&utm_source=nl&y=A%2BB%3D&z=1+2#frag";
+        assert_eq!(strip_tracking(u), "https://example.com/a?x=b/c&y=A%2BB%3D&z=1+2#frag");
+        assert_eq!(strip_tracking("https://example.com/?utm_source=x"), "https://example.com/");
+        assert_eq!(strip_tracking("https://example.com/p?fbclid=1#top"), "https://example.com/p#top");
+        assert_eq!(strip_tracking("https://example.com/p?a=1"), "https://example.com/p?a=1");
+        assert_eq!(strip_tracking("https://example.com/p?UTM_Source=1&a"), "https://example.com/p?a");
+    }
+
+    #[test]
+    fn never_touches_sign_in() {
+        for u in [
+            "https://accounts.google.com/signin/v2/challenge?continue=https%3A%2F%2Fmail.google.com%2F&utm_source=x",
+            "https://www.google.com/?pli=1&continue=https://x/&utm_campaign=y",
+            "https://app.example.com/oauth/callback?code=abc&state=xyz&utm_source=email",
+            "https://example.com/done?SAMLResponse=PHNhbWw%2B&utm_medium=x",
+            "https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=1&utm_source=2",
+            "https://example.okta.com/app?utm_source=1",
+        ] {
+            assert_eq!(strip_tracking(u), u, "{u}");
+        }
+        assert!(is_auth_flow("https://accounts.google.com/"));
+        assert!(!is_auth_flow("https://news.example.com/story?utm_source=x"));
     }
 }

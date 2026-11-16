@@ -11,6 +11,9 @@
 #include <QtCore/QJsonObject>
 #include <QtNetwork/QNetworkCookie>
 #include <QtCore/QFile>
+#include <QtCore/QTimer>
+#include <QtCore/QHash>
+#include <QtCore/QPointer>
 #include <QtCore/QLibraryInfo>
 #include <QtCore/QString>
 #include <QtCore/QUrl>
@@ -49,7 +52,10 @@ static rust::Str to_str(const QByteArray &b) { return rust::Str(b.constData(), s
 
 class Interceptor final : public QWebEngineUrlRequestInterceptor {
 public:
-    using QWebEngineUrlRequestInterceptor::QWebEngineUrlRequestInterceptor;
+    // Private windows get their own instance that never reports requests to
+    // extensions (webRequest, network.ts) and never adds their headers.
+    Interceptor(QObject *parent, bool offTheRecord) : QWebEngineUrlRequestInterceptor(parent), m_private(offTheRecord) {}
+    const bool m_private;
 
     // webRequest observation for extensions (queued in Rust only while an
     // extension with powerful APIs is listening).
@@ -72,7 +78,14 @@ public:
 
         // Main-frame navigations: strip tracking parameters.
         if (type == QWebEngineUrlRequestInfo::ResourceTypeMainFrame) {
-            if (flags & 4u) {
+            // Only plain GET page loads: rewriting a server redirect or a form
+            // post would replay it differently (POST becomes GET), which is how
+            // sign-ins end on "malformed" or rejected addresses.
+            const auto nav = info.navigationType();
+            const bool plain = info.requestMethod() == "GET"
+                && nav != QWebEngineUrlRequestInfo::NavigationTypeRedirect
+                && nav != QWebEngineUrlRequestInfo::NavigationTypeFormSubmitted;
+            if ((flags & 4u) && plain) {
                 rust::String cleaned = strip_tracking(to_str(url));
                 if (cleaned.size() != static_cast<size_t>(url.size())) {
                     info.redirect(QUrl::fromEncoded(QByteArray(cleaned.data(), static_cast<qsizetype>(cleaned.size()))));
@@ -81,20 +94,29 @@ public:
             }
         } else if (should_block(to_str(url), to_str(first), type)) {
             info.block(true);
-            observe(info, url, first, type, true);
+            if (!m_private) observe(info, url, first, type, true);
             return;
         }
-        observe(info, url, first, type, false);
+        if (!m_private) observe(info, url, first, type, false);
         if (flags & 1u) info.setHttpHeader("DNT", "1");
         if (flags & 2u) info.setHttpHeader("Sec-GPC", "1");
+        // Headers power extensions' network.ts set for matching addresses.
+        const rust::String extra = m_private ? rust::String() : extra_request_headers(to_str(url));
+        if (!extra.empty()) {
+            const QList<QByteArray> parts = QByteArray(extra.data(), static_cast<qsizetype>(extra.size())).split('\n');
+            for (qsizetype i = 0; i + 1 < parts.size(); i += 2)
+                if (!parts[i].isEmpty()) info.setHttpHeader(parts[i], parts[i + 1]);
+        }
     }
 };
 
 Interceptor *g_interceptor = nullptr;
+Interceptor *g_private_interceptor = nullptr;
 
-Interceptor *interceptor() {
-    if (!g_interceptor) g_interceptor = new Interceptor(QCoreApplication::instance());
-    return g_interceptor;
+Interceptor *interceptor(bool offTheRecord = false) {
+    Interceptor *&slot = offTheRecord ? g_private_interceptor : g_interceptor;
+    if (!slot) slot = new Interceptor(QCoreApplication::instance(), offTheRecord);
+    return slot;
 }
 
 } // namespace
@@ -121,6 +143,52 @@ void prepare_graphics(int32_t backend) {
     }
 }
 
+// Qt on Wayland waits for the compositor's "frame done" after each frame;
+// if none arrives in time it marks the window unexposed and stops drawing
+// until one does. Some compositors (Hyprland, at times) never send it for
+// a window you're looking at: OyNIx looks frozen until something makes the
+// compositor repaint, such as moving the window to another monitor.
+// This guard notices an active (focused) window that has been unexposed
+// for about 3 seconds and recovers it: first by asking for a frame, then
+// by unmapping and remapping it, which makes the compositor start over.
+void start_expose_guard() {
+    if (QGuiApplication::platformName() != QLatin1String("wayland")) return;
+    auto *timer = new QTimer(QCoreApplication::instance());
+    auto *stuck = new QHash<QWindow *, int>();
+    QObject::connect(timer, &QTimer::timeout, timer, [stuck] {
+        const auto windows = QGuiApplication::topLevelWindows();
+        for (QWindow *w : windows) {
+            auto *qw = qobject_cast<QQuickWindow *>(w);
+            if (!qw) continue;
+            const bool wedged = qw->isVisible() && qw->isActive() && !qw->isExposed()
+                && qw->visibility() != QWindow::Minimized && qw->visibility() != QWindow::Hidden;
+            if (!wedged) { stuck->remove(w); continue; }
+            const int n = stuck->value(w) + 1;
+            stuck->insert(w, n);
+            if (n == 2) {
+                qw->requestUpdate();
+                qw->update();
+            } else if (n >= 3) {
+                stuck->remove(w);
+                const QWindow::Visibility vis = qw->visibility();
+                const QRect geo = qw->geometry();
+                qWarning("oynix: window stopped receiving frames from the compositor; remapping it");
+                record_freeze_recovery();
+                QPointer<QQuickWindow> guard(qw);
+                qw->hide();
+                QTimer::singleShot(50, qw, [guard, vis, geo] {
+                    if (!guard) return;
+                    if (vis == QWindow::Maximized || vis == QWindow::FullScreen) guard->setVisibility(vis);
+                    else { guard->setGeometry(geo); guard->show(); }
+                    guard->requestActivate();
+                    guard->update();
+                });
+            }
+        }
+    });
+    timer->start(1000);
+}
+
 void init_webengine() {
     QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
     QCoreApplication::setOrganizationName(QStringLiteral("OyNIx"));
@@ -140,7 +208,7 @@ void set_app_metadata(rust::Str profile) {
 }
 
 static void install(QQuickWebEngineProfile *p) {
-    p->setUrlRequestInterceptor(interceptor());
+    p->setUrlRequestInterceptor(interceptor(p->isOffTheRecord()));
     // Third-party cookie blocking (bit 3 of the privacy flags).
     if (QWebEngineCookieStore *store = p->cookieStore()) {
         store->setCookieFilter([](const QWebEngineCookieStore::FilterRequest &req) {

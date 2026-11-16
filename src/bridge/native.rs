@@ -6,6 +6,8 @@ pub mod ffi {
         fn should_block(url: &str, first_party: &str, resource_type: i32) -> bool;
         fn strip_tracking(url: &str) -> String;
         fn privacy_flags() -> u32;
+        fn record_freeze_recovery();
+        fn extra_request_headers(url: &str) -> String;
         fn observe_request(url: &str, first_party: &str, method: &str, resource_type: i32, headers_json: &str, blocked: bool);
         fn cookie_changed(cookie_json: &str, removed: bool);
     }
@@ -18,6 +20,7 @@ pub mod ffi {
 
         fn prepare_graphics(backend: i32);
         fn init_webengine();
+        fn start_expose_guard();
         fn set_app_metadata(profile: &str);
         unsafe fn attach_interceptor(profile: *mut QObject);
         unsafe fn clear_cookies(profile: *mut QObject);
@@ -50,7 +53,24 @@ fn privacy_flags() -> u32 {
     FLAGS.load(Ordering::Relaxed)
 }
 
+fn record_freeze_recovery() {
+    crate::core::watchdog::record_recovery();
+}
+
+/// Headers network.ts asked for, as "name\nvalue\n…" ("" almost always).
+fn extra_request_headers(url: &str) -> String {
+    let mut out = String::new();
+    for (k, v) in crate::core::netrules::headers_for(url) {
+        out.push_str(&k);
+        out.push('\n');
+        out.push_str(&v);
+        out.push('\n');
+    }
+    out
+}
+
 fn observe_request(url: &str, first_party: &str, method: &str, resource_type: i32, headers_json: &str, blocked: bool) {
+    crate::core::netrules::observe(url, first_party, method, crate::core::extevents::type_name(resource_type), blocked);
     let headers = serde_json::from_str(headers_json).unwrap_or(serde_json::Value::Array(vec![]));
     crate::core::extevents::request(url, first_party, method, resource_type, headers, blocked);
 }
