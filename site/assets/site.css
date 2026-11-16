@@ -347,3 +347,13 @@ details.source pre { margin: 0; border-radius: 0 0 var(--shape-l) var(--shape-l)
 .release-primary-row { margin-top: 14px; }
 .release-primary { min-height: 42px; height: auto; padding: 10px 18px; }
 .release-card .release-assets { padding-top: 12px; border-top: 1px solid var(--outline-variant); }
+
+/* Release history: one clearly separated section for every stable version. */
+.release-version { display: grid; gap: 10px; }
+.release-version + .release-version { margin-top: 24px; }
+.release-version-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 18px; padding: 0 4px; }
+.release-version-heading h2 { margin: 0; font-size: clamp(20px, 2.4vw, 27px); }
+.release-version-heading span { color: var(--on-surface-variant); font-size: 13px; }
+.release-version .release-card { border: 1px solid var(--outline-variant); }
+.release-retry, .text-link { padding: 0; border: 0; background: none; color: var(--primary); font: inherit; text-decoration: underline; cursor: pointer; }
+.legacy-note { color: var(--on-surface-variant); font-size: 14px; margin: 12px 0 16px; }
