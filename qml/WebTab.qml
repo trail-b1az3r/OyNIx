@@ -40,6 +40,11 @@ Item {
 
     visible: isCurrent
 
+    // Where the pointer is over the page (for Ctrl+Shift+C, Inspect Element).
+    readonly property bool pointerInside: pointer.hovered
+    readonly property point pointerPos: pointer.point.position
+    HoverHandler { id: pointer }
+
     function load(u) {
         crashed = false
         loadError = ""
@@ -158,6 +163,7 @@ Item {
         if (u.indexOf("oynix://settings") === 0) return qsTr("Settings")
         if (u.indexOf("oynix://history") === 0) return qsTr("History")
         if (u.indexOf("oynix://privacy") === 0) return qsTr("Privacy Report")
+        if (u.indexOf("oynix://play") === 0) return qsTr("Games")
         return qsTr("Start Page")
     }
 
@@ -213,7 +219,12 @@ Item {
         active: tab.internal && !webLoader.active && tab.isCurrent
         sourceComponent: (tab.model.url || "").indexOf("oynix://history") === 0 ? historyPage
                        : (tab.model.url || "").indexOf("oynix://settings") === 0 ? settingsPage
-                       : (tab.model.url || "").indexOf("oynix://privacy") === 0 ? privacyPage : startPage
+                       : (tab.model.url || "").indexOf("oynix://privacy") === 0 ? privacyPage
+                       : (tab.model.url || "").indexOf("oynix://play") === 0 ? playPage : startPage
+    }
+    Component {
+        id: playPage
+        OfflineGames {}
     }
 
     Component {
@@ -309,8 +320,23 @@ Item {
         return [qsTr("Can’t open this page"), qsTr("Something went wrong while loading %1.").arg(h || qsTr("this address")), "cookie9", "globe"]
     }
 
+    // Offline: the internet itself is unreachable (not just this site).
+    // DNS and unreachable-address errors count when there's no route out.
+    readonly property bool offline: loadError !== "" && !crashed
+        && (loadErrorCode === -106 || ([-105, -137, -109, -21].indexOf(loadErrorCode) >= 0 && !Core.networkOnline()))
+    OfflineGames {
+        anchors.fill: parent
+        visible: tab.offline && Core.offlineGame !== "off"
+        offline: true
+        heading: qsTr("You’re offline")
+        body: qsTr("OyNIx can’t reach the internet. Check your Wi-Fi or cable.")
+        onRetry: { tab.loadError = ""; if (tab.view) tab.view.reload() }
+        // Don't let clicks fall through to the page underneath.
+        MouseArea { anchors.fill: parent; z: -1; acceptedButtons: Qt.AllButtons }
+    }
+
     Interstitial {
-        visible: tab.crashed || tab.loadError !== ""
+        visible: (tab.crashed || tab.loadError !== "") && !(tab.offline && Core.offlineGame !== "off")
         shape: tab.crashed ? "burst" : tab.errorText[2]
         icon: tab.crashed ? "warning" : tab.errorText[3]
         tone: tab.crashed || tab.loadErrorCode === -20 ? Theme.errorContainer : Theme.secondaryContainer

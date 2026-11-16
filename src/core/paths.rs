@@ -90,3 +90,33 @@ pub fn write_atomic(path: &std::path::Path, data: &[u8]) -> std::io::Result<()> 
     std::fs::write(&tmp, data)?;
     std::fs::rename(tmp, path)
 }
+
+/// Is there a default route (IPv4 or IPv6)? Without one the computer is
+/// offline, whatever an individual site's error says. Linux only; true
+/// when the routing tables can't be read.
+pub fn has_default_route() -> bool {
+    // Testing hook: pretend the computer is offline.
+    if std::env::var("OYNIX_OFFLINE").is_ok_and(|v| v == "1") {
+        return false;
+    }
+    let v4 = std::fs::read_to_string("/proc/net/route");
+    let v6 = std::fs::read_to_string("/proc/net/ipv6_route");
+    if v4.is_err() && v6.is_err() {
+        return true;
+    }
+    let v4_default = v4.is_ok_and(|t| {
+        t.lines().skip(1).any(|l| {
+            let f: Vec<&str> = l.split_whitespace().collect();
+            // Iface Destination Gateway Flags …; flag 0x1 = route is up.
+            f.len() > 3 && f[0] != "lo" && f[1] == "00000000" && u32::from_str_radix(f[3], 16).is_ok_and(|fl| fl & 1 == 1)
+        })
+    });
+    let v6_default = v6.is_ok_and(|t| {
+        t.lines().any(|l| {
+            let f: Vec<&str> = l.split_whitespace().collect();
+            // dest/len … ifname last; ::/0 is the default route.
+            f.len() >= 10 && f[0] == "00000000000000000000000000000000" && f[1] == "00" && f[9] != "lo"
+        })
+    });
+    v4_default || v6_default
+}
