@@ -208,7 +208,11 @@ jobs:
           ssh-keyscan -t ed25519,ecdsa,rsa aur.archlinux.org 2>/dev/null > /tmp/scanned
           : > ~/.ssh/known_hosts
           while read -r line; do
-            fp=$(printf '%s\n' "$line" | ssh-keygen -lf - | awk '{print $2}')
+            case "$line" in ''|'#'*) continue ;; esac
+            # ssh-keyscan prints "host type key"; ssh-keygen -l wants "type key",
+            # and newer OpenSSH won't read it from stdin, so use a file.
+            printf '%s\n' "${line#* }" > /tmp/hostkey.pub
+            fp=$(ssh-keygen -lf /tmp/hostkey.pub 2>/dev/null | awk '{print $2}')
             case "$fp" in
               SHA256:RFzBCUItH9LZS0cKB5UE6ceAYhBD5C8GeOBip8Z11+4|SHA256:uTa/0PndEgPZTf76e1DFqXKJEXKsn7m9ivhLQtzGOCI|SHA256:5s5cIyReIfNNVGRFdDbe3hdYiI5OelHGpw2rOUud3Q8)
                 printf '%s\n' "$line" >> ~/.ssh/known_hosts ;;
