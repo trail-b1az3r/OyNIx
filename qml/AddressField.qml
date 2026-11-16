@@ -263,8 +263,9 @@ Rectangle {
             property bool marked: Core.bookmarksRevision >= 0 && Core.isBookmarked(field.url)
             filledIcon: marked
             iconColor: marked ? Theme.warning : Theme.textDim
-            tip: marked ? qsTr("Remove Bookmark") : qsTr("Bookmark This Page") + "  (Ctrl+D)"
-            onClicked: Core.toggleBookmark(field.url, field.tab.model.title)
+            id: starBtn
+            tip: marked ? qsTr("Edit Bookmark") : qsTr("Bookmark This Page") + "  (Ctrl+D)"
+            onClicked: field.win.editBookmark(starBtn)
         }
         IconButton {
             implicitWidth: 32; implicitHeight: 32

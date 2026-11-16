@@ -145,6 +145,9 @@ pub mod qobject {
         fn bookmarks(self: &Core, folder: &QString) -> QString;
         #[qinvokable]
         fn bookmark_folders(self: &Core) -> QString;
+        /// The bookmark for `url` ({id, url, title, folder}) or "null".
+        #[qinvokable]
+        fn bookmark_for(self: &Core, url: &QString) -> QString;
         #[qinvokable]
         fn import_bookmarks(self: Pin<&mut Core>, path_or_url: &QString) -> i32;
 
@@ -349,6 +352,9 @@ pub mod qobject {
         fn create_extension(self: Pin<&mut Core>, name: &QString) -> QString;
         #[qinvokable]
         fn extensions_dir(self: &Core) -> QString;
+        /// The page for an extension's widget.tsx, styled with `theme_css`.
+        #[qinvokable]
+        fn widget_html(self: &Core, id: &QString, theme_css: &QString) -> QString;
         #[qinvokable]
         fn set_extension_web_id(self: Pin<&mut Core>, id: &QString, web_id: &QString);
         #[qinvokable]
@@ -886,6 +892,14 @@ impl qobject::Core {
             .map(|b| json!({ "id": b.id, "url": b.url, "title": b.title, "folder": b.folder, "host": omnibox::display(&b.url, false) }))
             .collect();
         to_qjson(&Value::Array(v))
+    }
+
+    pub fn bookmark_for(&self, url: &QString) -> QString {
+        let u = s(url);
+        match self.library.bookmarks.iter().find(|b| b.url == u) {
+            Some(b) => to_qjson(&json!({ "id": b.id, "url": b.url, "title": b.title, "folder": b.folder })),
+            None => qs("null"),
+        }
     }
 
     pub fn bookmark_folders(&self) -> QString {
@@ -1629,6 +1643,15 @@ impl qobject::Core {
         self.as_mut().rust_mut().extensions = list;
         self.as_mut().bump_extensions();
         qs(r.map(|e| e.path).unwrap_or_default())
+    }
+
+    pub fn widget_html(&self, id: &QString, theme_css: &QString) -> QString {
+        let id = s(id);
+        let Some(e) = self.extensions.iter().find(|e| e.id == id && e.enabled && e.has_widget) else { return qs("") };
+        match extensions::widget_html(e, &s(theme_css)) {
+            Ok(h) => qs(h),
+            Err(err) => qs(format!("<!doctype html><body style=\"font:13px sans-serif;color:#b00;padding:12px\">{}</body>", err.replace('<', "&lt;"))),
+        }
     }
 
     pub fn extensions_dir(&self) -> QString {

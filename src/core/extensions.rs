@@ -70,6 +70,8 @@ pub struct Entry {
     pub data_records: usize,
     /// Has a valid `theme.json` (can restyle the browser).
     pub has_theme: bool,
+    /// Has `widget.tsx` (a card on the Start Page).
+    pub has_widget: bool,
     /// Extra abilities granted in oynix.json ("ocr").
     pub permissions: Vec<String>,
     /// Ships with OyNIx: can be turned off but not removed.
@@ -821,6 +823,120 @@ pub fn compile_code(dir: &Path) -> Result<String, String> {
     Ok(js)
 }
 
+/// Compile `widget.tsx` (cached like code.ts).
+pub fn compile_widget(dir: &Path) -> Result<String, String> {
+    let src_path = dir.join("widget.tsx");
+    let out = dir.join(".build").join("widget.js");
+    let fresh = match (std::fs::metadata(&src_path).and_then(|m| m.modified()), std::fs::metadata(&out).and_then(|m| m.modified())) {
+        (Ok(a), Ok(b)) => b >= a,
+        _ => false,
+    };
+    if fresh {
+        if let Ok(js) = std::fs::read_to_string(&out) {
+            return Ok(js);
+        }
+    }
+    let src = std::fs::read_to_string(&src_path).map_err(|e| format!("widget.tsx: {e}"))?;
+    let js = super::tscompile::transpile_tsx(&src, "widget.tsx")?;
+    let _ = std::fs::create_dir_all(out.parent().unwrap());
+    let _ = std::fs::write(&out, &js);
+    Ok(js)
+}
+
+/// The tiny React-like runtime widgets are written against: `h`,
+/// `Fragment`, `useState`, `useEffect`, `render`, plus `oynix` (the
+/// extension's id and extra.jsonl data). Re-rendering rebuilds the DOM;
+/// widgets are small, so that's simple and fast enough.
+const WIDGET_RUNTIME: &str = r#"
+var Fragment = { fragment: true };
+var __w = { root: null, el: null, states: [], effects: [], i: 0, e: 0, queued: false };
+function h(type, props) {
+  var kids = [];
+  (function add(list) { for (var i = 0; i < list.length; i++) Array.isArray(list[i]) ? add(list[i]) : kids.push(list[i]); })([].slice.call(arguments, 2));
+  return { type: type, props: props || {}, children: kids };
+}
+function useState(init) {
+  var i = __w.i++;
+  if (!(i in __w.states)) __w.states[i] = typeof init === 'function' ? init() : init;
+  return [__w.states[i], function (v) {
+    var next = typeof v === 'function' ? v(__w.states[i]) : v;
+    if (next !== __w.states[i]) { __w.states[i] = next; schedule(); }
+  }];
+}
+function useEffect(fn, deps) {
+  var i = __w.e++, old = __w.effects[i];
+  var changed = !old || !deps || !old.deps || deps.length !== old.deps.length || deps.some(function (d, k) { return d !== old.deps[k]; });
+  if (changed) {
+    if (old && typeof old.cleanup === 'function') old.cleanup();
+    var slot = __w.effects[i] = { deps: deps, cleanup: null };
+    setTimeout(function () { slot.cleanup = fn(); }, 0);
+  }
+}
+function useRef(v) { var s = useState(function () { return { current: v }; }); return s[0]; }
+function create(node) {
+  if (node === null || node === undefined || node === false || node === true) return document.createTextNode('');
+  if (typeof node !== 'object') return document.createTextNode(String(node));
+  if (typeof node.type === 'function') return create(node.type(Object.assign({ children: node.children }, node.props)));
+  if (node.type === Fragment) { var f = document.createDocumentFragment(); node.children.forEach(function (c) { f.appendChild(create(c)); }); return f; }
+  var el = document.createElement(node.type);
+  Object.keys(node.props).forEach(function (k) {
+    var v = node.props[k];
+    if (k === 'children' || v === undefined || v === null || v === false) return;
+    if (k === 'ref') { if (v) v.current = el; return; }
+    if (k === 'style' && typeof v === 'object') { Object.assign(el.style, v); return; }
+    if (k.slice(0, 2) === 'on' && typeof v === 'function') { el.addEventListener(k.slice(2).toLowerCase(), v); return; }
+    if (k === 'className') k = 'class';
+    if (k === 'value' || k === 'checked') { el[k] = v; return; }
+    el.setAttribute(k, v === true ? '' : v);
+  });
+  node.children.forEach(function (c) { el.appendChild(create(c)); });
+  return el;
+}
+function schedule() { if (!__w.queued) { __w.queued = true; requestAnimationFrame(function () { __w.queued = false; draw(); }); } }
+function draw() {
+  __w.i = 0; __w.e = 0;
+  var a = document.activeElement, id = a && a.id, pos = a && a.selectionStart;
+  __w.el.replaceChildren(create(__w.root));
+  if (id) { var n = document.getElementById(id); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (e) {} } }
+}
+function render(node, el) { __w.root = node; __w.el = el || document.getElementById('root'); draw(); }
+"#;
+
+/// The page a widget runs in: the theme, the runtime, its data and code.
+/// It's loaded with a made-up https origin per extension, so it can use
+/// the network and its own localStorage, but no local files.
+pub fn widget_html(e: &Entry, theme_css: &str) -> Result<String, String> {
+    let dir = Path::new(&e.path);
+    let js = compile_widget(dir)?;
+    // Modules aren't available here: `export default X` becomes the
+    // widget to render, and other exports are kept as plain declarations.
+    let mut code = String::new();
+    for line in js.lines() {
+        let t = line.trim_start();
+        if let Some(rest) = t.strip_prefix("export default ") {
+            code.push_str("__oynixWidget = ");
+            code.push_str(rest);
+        } else if let Some(rest) = t.strip_prefix("export ") {
+            if rest.starts_with('{') {
+                continue;
+            }
+            code.push_str(rest);
+        } else {
+            code.push_str(line);
+        }
+        code.push('\n');
+    }
+    let data = serde_json::to_string(&read_data(dir).unwrap_or_default()).unwrap_or_else(|_| "[]".into());
+    let id = serde_json::to_string(&e.id).unwrap_or_default();
+    let esc = |s: &str| s.replace("</", "<\\/");
+    Ok(format!(
+        "<!doctype html><html><head><meta charset=\"utf-8\"><style>{theme}\nhtml,body{{margin:0;background:transparent;color:var(--fg);font:14px var(--font);}}#root{{padding:14px}}a{{color:var(--accent)}}button{{font:inherit;border:0;border-radius:999px;padding:6px 14px;background:var(--accent);color:var(--on-accent);cursor:pointer}}input{{font:inherit;border:0;border-radius:8px;padding:6px 10px;background:var(--field);color:var(--fg)}}</style></head><body><div id=\"root\"></div><script>\nvar oynix = Object.freeze({{ id: {id}, data: Object.freeze({data}) }});\nvar __oynixWidget = null;\n{runtime}\n{code}\nif (typeof __oynixWidget === 'function') render(h(__oynixWidget, null));\n</script></body></html>",
+        theme = esc(theme_css),
+        runtime = WIDGET_RUNTIME,
+        code = esc(&code),
+    ))
+}
+
 /// Parse `extra.jsonl`: one JSON value per non-empty line.
 pub fn read_data(dir: &Path) -> Result<Vec<Value>, String> {
     let p = dir.join("extra.jsonl");
@@ -916,6 +1032,10 @@ fn prepare_oynix(dir: &Path, e: &mut Entry, power: bool) -> Result<(), String> {
     }
     e.has_page = dir.join("extra.html").exists();
     e.has_theme = read_theme(dir)?.is_some();
+    e.has_widget = dir.join("widget.tsx").exists();
+    if e.has_widget {
+        compile_widget(dir)?;
+    }
     e.permissions = match v.get("permissions") {
         None => vec![],
         Some(Value::Array(a)) => {
@@ -1451,6 +1571,31 @@ mod tests {
         std::fs::write(b.join("extra.jsonl"), "{\"ok\": 1}\nnot json\n").unwrap();
         let err = install(&b, &mut list).unwrap_err();
         assert!(err.starts_with("extra.jsonl:2:"), "{err}");
+    }
+
+    #[test]
+    fn widgets_compile_and_render() {
+        with_data_home();
+        let d = tmp("widget");
+        std::fs::write(d.join("oynix.json"), r#"{"name": "Clock Widget", "matches": []}"#).unwrap();
+        std::fs::write(d.join("code.ts"), "export {};").unwrap();
+        std::fs::write(d.join("content.css"), "").unwrap();
+        std::fs::write(d.join("extra.jsonl"), "{\"city\": \"Oslo\"}\n").unwrap();
+        std::fs::write(
+            d.join("widget.tsx"),
+            "export function Label(p: { t: string }) { return <b>{p.t}</b>; }\nexport default function Clock() {\n  const [n, setN] = useState(0);\n  return <div onClick={() => setN(n + 1)}><Label t={oynix.data[0].city} /> {n}</div>;\n}\n",
+        )
+        .unwrap();
+        let mut list = vec![];
+        let e = install(&d, &mut list).unwrap();
+        assert!(e.has_widget);
+        let html = widget_html(&e, ":root{--fg:#000}").unwrap();
+        assert!(html.contains("__oynixWidget = function Clock()") && html.contains("function Label(") && !html.contains("export "), "{html}");
+        assert!(html.contains("\"city\":\"Oslo\"") && html.contains("render(h(__oynixWidget"));
+        // A widget that doesn't compile is refused at install.
+        std::fs::write(d.join("widget.tsx"), "export default () => <div>").unwrap();
+        assert!(install(&d, &mut list).unwrap_err().starts_with("widget.tsx:"));
+        remove(&e.id, &mut list);
     }
 
     #[test]
