@@ -41,6 +41,9 @@ pub struct Settings {
     pub suspend_after_minutes: i32,
     pub close_window_with_last_tab: bool,
     pub tab_hover_previews: bool,
+    /// Vertical tabs show a tree under the current tab: the outline of a
+    /// Markdown or PDF document, or the pages of the site visited in it.
+    pub tree_tabs: bool,
 
     // ── Search ────────────────────────────────────────────────────
     pub search_engine: String,
@@ -143,6 +146,7 @@ impl Default for Settings {
             suspend_after_minutes: 30,
             close_window_with_last_tab: false,
             tab_hover_previews: true,
+            tree_tabs: false,
             search_engine: "duckduckgo".into(),
             search_suggestions: true,
             bangs_enabled: true,

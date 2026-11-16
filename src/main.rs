@@ -19,6 +19,7 @@ mod bridge {
     pub mod panel;
     pub mod updater;
     pub mod ocrbridge;
+    pub mod outlinebridge;
     pub mod usbbridge;
 }
 mod core;

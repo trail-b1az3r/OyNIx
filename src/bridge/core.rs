@@ -36,6 +36,7 @@ pub mod qobject {
         #[qproperty(i32, suspend_after_minutes)]
         #[qproperty(bool, close_window_with_last_tab)]
         #[qproperty(bool, tab_hover_previews)]
+        #[qproperty(bool, tree_tabs)]
         #[qproperty(QString, search_engine)]
         #[qproperty(bool, search_suggestions)]
         #[qproperty(bool, content_blocker)]
@@ -367,6 +368,7 @@ pub struct CoreRust {
     suspend_after_minutes: i32,
     close_window_with_last_tab: bool,
     tab_hover_previews: bool,
+    tree_tabs: bool,
     search_engine: QString,
     search_suggestions: bool,
     content_blocker: bool,
@@ -434,6 +436,7 @@ impl Default for CoreRust {
             suspend_after_minutes: 30,
             close_window_with_last_tab: false,
             tab_hover_previews: true,
+            tree_tabs: false,
             search_engine: q(""),
             search_suggestions: true,
             content_blocker: true,
@@ -523,6 +526,7 @@ impl CoreRust {
         self.suspend_after_minutes = st.suspend_after_minutes;
         self.close_window_with_last_tab = st.close_window_with_last_tab;
         self.tab_hover_previews = st.tab_hover_previews;
+        self.tree_tabs = st.tree_tabs;
         self.search_engine = qs(&st.search_engine);
         self.search_suggestions = st.search_suggestions;
         self.content_blocker = st.content_blocker;
@@ -591,6 +595,7 @@ impl qobject::Core {
         self.as_mut().set_suspend_after_minutes(st.suspend_after_minutes);
         self.as_mut().set_close_window_with_last_tab(st.close_window_with_last_tab);
         self.as_mut().set_tab_hover_previews(st.tab_hover_previews);
+        self.as_mut().set_tree_tabs(st.tree_tabs);
         self.as_mut().set_search_engine(qs(&st.search_engine));
         self.as_mut().set_search_suggestions(st.search_suggestions);
         self.as_mut().set_content_blocker(st.content_blocker);

@@ -430,6 +430,20 @@ Rectangle {
                 }
             }
             Section {
+                title: qsTr("Tree Tabs")
+                Row_ {
+                    label: qsTr("Tree tabs")
+                    hint: qsTr("Vertical tabs that open into a tree under the tab you’re on: the contents of a Markdown or PDF document, to jump between sections, and the pages of the site you’ve moved through, to switch between them. Turning this on switches to vertical tabs.")
+                    Toggle {
+                        checked: sw.s.treeTabs === true
+                        onToggled: {
+                            sw.set("treeTabs", checked)
+                            if (checked && Core.tabLayout !== "vertical") sw.set("tabLayout", "vertical")
+                        }
+                    }
+                }
+            }
+            Section {
                 title: qsTr("Behaviour")
                 SwitchRow { label: qsTr("Open links in background"); hint: qsTr("Middle-click and Ctrl-click open tabs without switching to them."); key: "openLinksInBackground" }
                 Divider {}

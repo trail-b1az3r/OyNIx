@@ -162,6 +162,7 @@ QtObject {
     // Only the tab you're looking at can be read, only for extensions that
     // declared the "ocr" permission, and only the page that asked.
     property OcrService ocr: OcrService {}
+    property OutlineService outlines: OutlineService {}
     property var ocrRequests: ({})
     function answerOcr(ext, req, text, error) {
         extBridge.post(ext, "content", JSON.stringify({ __oynix: "ocr", req: req, text: text || "", error: error || "" }))

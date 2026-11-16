@@ -53,6 +53,104 @@ Item {
         else model.url = u   // activates the web loader, which loads model.url
     }
 
+    // ── Tree tabs ────────────────────────────────────────────────────
+    // Remember the pages of one site visited in this tab (a new site starts
+    // a new list), for the tree under the tab in the vertical tab list.
+    function recordPage() {
+        if (!view) return
+        var u = String(view.url).split("#")[0]
+        if (!/^(https?|file):/.test(u)) return
+        var list = []
+        try { list = JSON.parse(model.pages || "[]") } catch (e) {}
+        if (list.length && Core.hostOf(list[0].url) !== Core.hostOf(u)) list = []
+        var found = false
+        for (var i = 0; i < list.length; i++) if (list[i].url === u) { list[i].title = view.title || list[i].title; found = true }
+        if (!found) list.push({ url: u, title: view.title || "" })
+        if (list.length > 60) list = list.slice(list.length - 60)
+        model.pages = JSON.stringify(list)
+    }
+    function updatePageTitle() {
+        if (!view || !model.pages) return
+        var u = String(view.url).split("#")[0]
+        var list = JSON.parse(model.pages)
+        for (var i = 0; i < list.length; i++) if (list[i].url === u && list[i].title !== view.title) { list[i].title = view.title; model.pages = JSON.stringify(list); return }
+    }
+    function readOutline() {
+        if (!view || !Core.treeTabs) return
+        var u = String(view.url)
+        view.runJavaScript(TreeScripts.outline, WebEngineScript.ApplicationWorld, function (r) {
+            if (r && r.kind === "pdf" || !r && /\.pdf($|[?#])/i.test(u)) { tab.win.app.outlines.requestPdf(u); return }
+            model.outline = r && r.kind === "md" && r.items.length ? JSON.stringify(r) : ""
+            model.outlineActive = -1
+            if (model.outline) activeTimer.restart()
+        })
+    }
+    // Jump to an outline entry: scroll there, or for PDFs, to its page.
+    function openOutlineItem(i) {
+        var o = JSON.parse(model.outline || "{}")
+        var it = o.items && o.items[i]
+        if (!it || !view) return
+        if (o.kind === "pdf") {
+            // Chromium's PDF viewer reads #page= only when it opens the
+            // file, so reload; the file comes from the cache.
+            view.url = String(view.url).split("#")[0] + "#page=" + it.page
+            pdfReload.restart()
+            return
+        }
+        view.runJavaScript(TreeScripts.scrollTo({ raw: o.raw, line: it.line, index: it.index }), WebEngineScript.ApplicationWorld)
+        model.outlineActive = i
+    }
+    // Go to one of the site's pages. A page in this tab's back/forward
+    // history is reached through it, so Chromium's back-forward cache gives
+    // it back instantly with its scroll position; others load normally and
+    // come from the HTTP cache when they can.
+    function openPage(u) {
+        if (view) {
+            for (var b = 0; b < backList.count; b++) { var bi = backList.objectAt(b); if (bi && String(bi.url).split("#")[0] === u) { view.goBackOrForward(bi.offset); return } }
+            for (var f = 0; f < fwdList.count; f++) { var fi = fwdList.objectAt(f); if (fi && String(fi.url).split("#")[0] === u) { view.goBackOrForward(fi.offset); return } }
+        }
+        load(u)
+    }
+    Instantiator {
+        id: backList
+        model: tab.view ? tab.view.history.backItems : null
+        delegate: QtObject { required property url url; required property int offset }
+    }
+    Instantiator {
+        id: fwdList
+        model: tab.view ? tab.view.history.forwardItems : null
+        delegate: QtObject { required property url url; required property int offset }
+    }
+    Timer { id: pdfReload; interval: 30; onTriggered: if (tab.view) tab.view.reload() }
+    Timer {
+        id: activeTimer
+        interval: 200
+        onTriggered: {
+            if (!tab.view || !tab.model.outline) return
+            var o = JSON.parse(tab.model.outline)
+            if (o.kind !== "md") return
+            tab.view.runJavaScript(TreeScripts.active(o.items, o.raw), WebEngineScript.ApplicationWorld, function (i) {
+                if (typeof i === "number") tab.model.outlineActive = i
+            })
+        }
+    }
+    Connections {
+        target: tab.win.app.outlines
+        function onPdfReady(url, items, error) {
+            if (!tab.view || String(tab.view.url).split("#")[0] !== url.split("#")[0]) return
+            var list = JSON.parse(items)
+            tab.model.outline = list.length ? JSON.stringify({ kind: "pdf", items: list }) : ""
+            // The entry for the page the viewer opened at (#page=N).
+            var m = /#page=(\d+)/.exec(String(tab.view.url)), page = m ? +m[1] : 1, act = -1
+            for (var i = 0; i < list.length; i++) if (list[i].page <= page) act = i
+            tab.model.outlineActive = m ? act : -1
+        }
+    }
+    Connections {
+        target: Core
+        function onTreeTabsChanged() { if (Core.treeTabs) tab.readOutline() }
+    }
+
     Component.onCompleted: if (internal && !model.title) model.title = titleFor(model.url)
     onInternalChanged: if (internal) model.title = titleFor(model.url)
 
@@ -256,7 +354,8 @@ Item {
             settings.javascriptEnabled: { var s = JSON.parse(Core.siteSettings(tab.host)); return s.javascript !== undefined ? s.javascript : Core.javascript }
             settings.playbackRequiresUserGesture: !Core.autoplayMedia
             settings.fullScreenSupportEnabled: true
-            settings.pluginsEnabled: false
+            // Qt 6 has no plugins besides the PDF viewer, which needs this on.
+            settings.pluginsEnabled: true
             settings.dnsPrefetchEnabled: false
             settings.hyperlinkAuditingEnabled: false
             settings.pdfViewerEnabled: true
@@ -354,8 +453,10 @@ Item {
                     tab.win.app.extensionHost.tabEvent("webNavigation.onHistoryStateUpdated", [{ tabId: tab.model.uid, url: view.url.toString(), frameId: 0, timeStamp: Date.now(), transitionType: "link", transitionQualifiers: [] }])
                 }
             }
+            onScrollPositionChanged: if (Core.treeTabs && tab.model.outline) activeTimer.restart()
             onTitleChanged: {
                 tab.model.title = title
+                tab.updatePageTitle()
                 if (!tab.win.privateMode) Core.updateTitle(url.toString(), title)
             }
             onIconChanged: {
@@ -381,6 +482,8 @@ Item {
                         exth.tabEvent("webNavigation.onErrorOccurred", [Object.assign({ error: info.errorString }, nav)])
                 }
                 if (info.status === WebEngineView.LoadStartedStatus) {
+                    tab.model.outline = ""
+                    tab.model.outlineActive = -1
                     tab.loadError = ""
                     tab.certError = null
                 } else if (info.status === WebEngineView.LoadSucceededStatus) {
@@ -391,6 +494,8 @@ Item {
                     tab.win.app.extensionHost.tabEvent("tabs.onUpdated", [tab.model.uid, { status: "complete", url: url.toString(), title: title }, tab.win.app.extensionHost.tabInfo(tab.win, tab.index)])
                     tab.applySiteSettings()
                     tab.probeReader()
+                    tab.recordPage()
+                    tab.readOutline()
                     snapTimer.restart()
                 } else if (info.status === WebEngineView.LoadFailedStatus && info.errorCode !== -3) {
                     // -3 = ERR_ABORTED (user stopped / replaced navigation)

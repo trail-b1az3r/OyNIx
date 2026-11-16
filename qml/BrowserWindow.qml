@@ -111,7 +111,10 @@ ApplicationWindow {
         return Object.assign({
             uid: uidCounter, url: url, title: "", icon: "", loading: false, progress: 0,
             pinned: false, suspended: false, audible: false, muted: false,
-            lastActive: Date.now(), thumb: "", zoom: Core.defaultZoom
+            lastActive: Date.now(), thumb: "", zoom: Core.defaultZoom,
+            // Tree tabs: pages of the site visited in this tab, the
+            // document's outline (both JSON), the section being read.
+            pages: "", outline: "", outlineActive: -1, treeOpen: true
         }, extra || {})
     }
 
@@ -395,7 +398,7 @@ ApplicationWindow {
         for (var i = 0; i < tabModel.count; i++) {
             var t = tabModel.get(i)
             if (!t.url || t.url === "about:blank") continue
-            list.push({ url: t.url, title: t.title, pinned: t.pinned, muted: t.muted })
+            list.push({ url: t.url, title: t.title, pinned: t.pinned, muted: t.muted, pages: t.pages, treeOpen: t.treeOpen })
         }
         return { tabs: list, current: currentIndex, sidebar: sidebarOpen, x: win.x, y: win.y, w: win.width, h: win.height, maximized: win.visibility === Window.Maximized }
     }
@@ -406,7 +409,8 @@ ApplicationWindow {
             for (var i = 0; i < initialTabs.length; i++) {
                 var t = initialTabs[i]
                 // Only the selected tab loads now; the rest restore lazily.
-                tabModel.append(makeTab(t.url, { title: t.title || "", pinned: !!t.pinned, muted: !!t.muted, suspended: i !== initialIndex }))
+                tabModel.append(makeTab(t.url, { title: t.title || "", pinned: !!t.pinned, muted: !!t.muted, suspended: i !== initialIndex,
+                                                 pages: t.pages || "", treeOpen: t.treeOpen !== false }))
             }
             activate(Math.min(Math.max(0, initialIndex), tabModel.count - 1))
         } else {
