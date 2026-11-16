@@ -15,6 +15,8 @@ void prepare_graphics(int32_t backend);
 
 // Must run before QGuiApplication is constructed.
 void init_webengine();
+// Wayland: bring back windows the compositor stopped sending frames to.
+void start_expose_guard();
 
 // After QGuiApplication exists: application name, icon, desktop file name.
 void set_app_metadata(rust::Str profile);

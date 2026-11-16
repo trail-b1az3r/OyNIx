@@ -33,6 +33,13 @@ pub fn beat(active: bool) {
     LAST_BEAT_MS.store(now_ms(), Ordering::Relaxed);
 }
 
+/// The expose guard (cpp/native.cpp) brought back a window the
+/// compositor had stopped sending frames to.
+pub fn record_recovery() {
+    let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    record(&format!("{t}: window stopped getting frames from the compositor while in use; remapped it (Wayland)"));
+}
+
 pub fn log_path() -> std::path::PathBuf {
     paths::cache_dir().join("freezes.log")
 }

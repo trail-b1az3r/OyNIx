@@ -29,6 +29,7 @@ pub mod qobject {
         fn tabs_result(self: Pin<&mut ExtBridge>, id: QString, result: QString);
         #[qsignal]
         fn ext_event(self: Pin<&mut ExtBridge>, name: QString, args: QString);
+
         #[qsignal]
         fn badge_changed(self: Pin<&mut ExtBridge>, ext: QString, text: QString, color: QString, title: QString);
         #[qsignal]
@@ -68,6 +69,7 @@ pub mod qobject {
         /// OyNIx). Returns "" or an error.
         #[qinvokable]
         fn native_connect(self: Pin<&mut ExtBridge>, ext: &QString, port: &QString, host: &QString) -> QString;
+
         #[qinvokable]
         fn native_post(self: Pin<&mut ExtBridge>, port: &QString, json: &QString) -> QString;
         #[qinvokable]

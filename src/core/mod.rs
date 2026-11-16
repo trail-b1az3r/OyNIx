@@ -25,3 +25,4 @@ pub mod favicons;
 pub mod outline;
 pub mod passwords;
 pub mod firefox;
+pub mod netrules;

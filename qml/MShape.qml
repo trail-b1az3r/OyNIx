@@ -41,7 +41,26 @@ Item {
     readonly property real _a: amplitude >= 0 ? amplitude : (spec[shape] || [0, 0])[1]
     readonly property int _n: lobes > 0 ? lobes : (spec[shape] || [0, 0])[0]
 
+    // A power extension's theme-shape.qml, when its browser style is chosen,
+    // draws every shape instead (it gets shape, color, size, borderColor,
+    // borderWidth and rotationOffset).
+    readonly property string customUrl: { Core.settingsJson; Core.extensionsRevision; return Core.themeShapeUrl() }
+    Loader {
+        id: custom
+        anchors.fill: parent
+        active: root.customUrl !== ""
+        source: root.customUrl
+        onLoaded: {
+            var props = ["shape", "color", "size", "borderColor", "borderWidth", "rotationOffset"]
+            for (var i = 0; i < props.length; i++) {
+                var p = props[i]
+                if (p in item) item[p] = Qt.binding((function (name) { return function () { return root[name] } })(p))
+            }
+        }
+    }
+
     Shape {
+        visible: custom.status !== Loader.Ready
         anchors.fill: parent
         layer.enabled: true
         layer.samples: 4

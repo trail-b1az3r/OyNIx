@@ -72,6 +72,12 @@ pub struct Entry {
     pub has_theme: bool,
     /// Has `widget.tsx` (a card on the Start Page).
     pub has_widget: bool,
+    /// Power only: has `theme-shape.qml` (draws the browser's shapes).
+    pub has_shape: bool,
+    /// Power only: has `network.ts` (runs in the background, see netrules.rs).
+    pub has_network: bool,
+    /// Power only: number of pictures in `images/`.
+    pub images: usize,
     /// Extra abilities granted in oynix.json ("ocr").
     pub permissions: Vec<String>,
     /// Ships with OyNIx: can be turned off but not removed.
@@ -823,6 +829,195 @@ pub fn compile_code(dir: &Path) -> Result<String, String> {
     Ok(js)
 }
 
+const IMAGE_EXTS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp", "svg", "avif"];
+const MAX_IMAGE_BYTES: u64 = 2 << 20;
+
+/// Pictures in a power extension's `images/` folder: (name, mime, path).
+fn image_files(dir: &Path) -> Vec<(String, &'static str, PathBuf)> {
+    let mut out = vec![];
+    let Ok(rd) = std::fs::read_dir(dir.join("images")) else { return out };
+    for f in rd.flatten() {
+        let p = f.path();
+        let ext = p.extension().map(|x| x.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+        if !p.is_file() || !IMAGE_EXTS.contains(&ext.as_str()) {
+            continue;
+        }
+        let mime = match ext.as_str() {
+            "png" => "image/png",
+            "gif" => "image/gif",
+            "webp" => "image/webp",
+            "svg" => "image/svg+xml",
+            "avif" => "image/avif",
+            _ => "image/jpeg",
+        };
+        out.push((f.file_name().to_string_lossy().into_owned(), mime, p));
+    }
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    out
+}
+
+/// The extras only verified power extensions get: extra.md (rendered to a
+/// page), images/, theme-shape.qml and network.ts.
+fn prepare_power_extras(dir: &Path, e: &mut Entry) -> Result<(), String> {
+    let imgs = image_files(dir);
+    let total: u64 = imgs.iter().filter_map(|(_, _, p)| std::fs::metadata(p).ok()).map(|m| m.len()).sum();
+    if total > MAX_IMAGE_BYTES {
+        return Err(format!("images/ holds {} KB; the limit is {} KB", total >> 10, MAX_IMAGE_BYTES >> 10));
+    }
+    e.images = imgs.len();
+    if dir.join("extra.md").exists() {
+        let md = std::fs::read_to_string(dir.join("extra.md")).map_err(|err| format!("extra.md: {err}"))?;
+        std::fs::write(dir.join("extra.md.html"), markdown_page(&e.name, &md)).map_err(|err| err.to_string())?;
+        if dir.join("extra.html").exists() {
+            e.warnings.push("extra.html and extra.md both exist; the page shows extra.html".into());
+        }
+        e.has_page = true;
+    }
+    if dir.join("theme-shape.qml").exists() {
+        let qml = std::fs::read_to_string(dir.join("theme-shape.qml")).map_err(|err| format!("theme-shape.qml: {err}"))?;
+        super::qmlcheck::check(&qml).map_err(|err| err.replace("graphics.qt", "theme-shape.qml").replace("in panels", "in theme shapes"))?;
+        for prop in ["shape", "color"] {
+            if !qml.contains(&format!("property string {prop}")) && !qml.contains(&format!("property color {prop}")) {
+                return Err(format!("theme-shape.qml needs a “{prop}” property (see the .poweroynix docs)"));
+            }
+        }
+        e.has_shape = true;
+    }
+    if dir.join("network.ts").exists() {
+        compile_named(dir, "network.ts", "network.js")?;
+        e.has_network = true;
+    }
+    Ok(())
+}
+
+/// The `oynix` object in network.ts. Every call is a message carrying the
+/// page's token through ExtBridge; NetworkHost.qml checks it, does the
+/// work and answers with `__oynixNet.result(...)`.
+const NETWORK_API: &str = r#"var oynix = (function () {
+  var id = __ID__, token = __TOKEN__, images = __IMAGES__, pending = {}, listeners = [], seq = 0;
+  var ready = new Promise(function (resolve) {
+    (function wait() {
+      if (typeof qt === 'undefined' || !qt.webChannelTransport || typeof QWebChannel === 'undefined') return setTimeout(wait, 25);
+      new QWebChannel(qt.webChannelTransport, function (ch) { resolve(ch.objects.oynixExtensions); });
+    })();
+  });
+  function call(op, args) {
+    return ready.then(function (b) {
+      return new Promise(function (resolve, reject) {
+        var req = 'r' + (++seq);
+        pending[req] = { resolve: resolve, reject: reject };
+        b.post(id, 'oynix:net', JSON.stringify(Object.assign({ token: token, op: op, req: req }, args || {})));
+      });
+    });
+  }
+  window.__oynixNet = {
+    result: function (req, value, error) {
+      var p = pending[req];
+      if (!p) return;
+      delete pending[req];
+      if (error) p.reject(new Error(error)); else p.resolve(value);
+    },
+    requests: function (list) {
+      list.forEach(function (r) { listeners.forEach(function (f) { try { f(r); } catch (e) { console.error(e); } }); });
+    }
+  };
+  function response(r) {
+    return { status: r.status, ok: r.status >= 200 && r.status < 300, headers: r.headers || {},
+             text: function () { return Promise.resolve(r.body); },
+             json: function () { return Promise.resolve(JSON.parse(r.body)); } };
+  }
+  return Object.freeze({
+    id: id,
+    data: Object.freeze(__DATA__),
+    image: function (name) { return images[name] || ''; },
+    network: Object.freeze({
+      // Blocker rules in Adblock/uBlock syntax; replaces this extension's earlier list.
+      block: function (rules) { return call('block', { rules: rules }); },
+      // Add a header to requests whose address matches pattern (* wildcards).
+      setRequestHeader: function (pattern, name, value) { return call('header', { pattern: pattern, name: name, value: String(value) }); },
+      clearRequestHeaders: function () { return call('clearHeaders'); },
+      // Called with {url, firstParty, method, type, blocked, time} for every request.
+      onRequest: function (f) { if (typeof f !== 'function') return; listeners.push(f); if (listeners.length === 1) call('observe', { on: true }); },
+      // fetch() without cross-origin limits. Resolves to {status, ok, headers, text(), json()}.
+      fetch: function (url, init) { init = init || {}; return call('fetch', { url: String(url), method: init.method || 'GET', headers: init.headers || {}, body: init.body === undefined ? undefined : String(init.body) }).then(response); }
+    })
+  });
+})();"#;
+
+/// The hidden page a power extension's network.ts runs in.
+pub fn network_html(e: &Entry, token: &str) -> Result<String, String> {
+    let dir = Path::new(&e.path);
+    let js = compile_named(dir, "network.ts", "network.js")?;
+    let data = serde_json::to_string(&read_data(dir).unwrap_or_default()).unwrap_or_else(|_| "[]".into());
+    let api = NETWORK_API
+        .replace("__ID__", &serde_json::to_string(&e.id).unwrap_or_default())
+        .replace("__TOKEN__", &serde_json::to_string(token).unwrap_or_default())
+        .replace("__IMAGES__", &serde_json::to_string(&image_map(e)).unwrap_or_else(|_| "{}".into()))
+        .replace("__DATA__", &data);
+    let esc = |s: &str| s.replace("</", "<\\/");
+    Ok(format!(
+        "<!doctype html><html><head><meta charset=\"utf-8\"><title>{} network.ts</title></head><body><script>\n{}\n{}\n(function () {{\n{}\n}})();\n</script></body></html>",
+        e.name.replace('<', "&lt;"),
+        esc(&crate::bridge::native::ffi::webchannel_js()),
+        esc(&api),
+        esc(&js)
+    ))
+}
+
+/// Markdown → a complete, readable page (light and dark).
+pub fn markdown_page(title: &str, md: &str) -> String {
+    use pulldown_cmark::{html, Options, Parser};
+    let opts = Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS | Options::ENABLE_FOOTNOTES | Options::ENABLE_HEADING_ATTRIBUTES;
+    let mut body = String::new();
+    html::push_html(&mut body, Parser::new_ext(md, opts));
+    let t = title.replace('&', "&amp;").replace('<', "&lt;");
+    format!(
+        "<!doctype html><html><head><meta charset=\"utf-8\"><title>{t}</title><style>\
+:root{{color-scheme:light dark;--fg:#1d1b20;--muted:#49454f;--line:#cac4d0;--code:#f3edf7;--accent:#6750a4}}\
+@media (prefers-color-scheme:dark){{:root{{--fg:#e6e0e9;--muted:#cac4d0;--line:#49454f;--code:#2b2930;--accent:#d0bcff}}}}\
+body{{font:15px/1.6 system-ui,sans-serif;color:var(--fg);margin:0;padding:20px 22px;max-width:760px}}\
+h1,h2,h3{{line-height:1.25;margin:1.2em 0 .4em}}h1{{font-size:1.6em}}a{{color:var(--accent)}}img{{max-width:100%;border-radius:10px}}\
+code{{background:var(--code);padding:.1em .35em;border-radius:5px;font-size:.92em}}pre{{background:var(--code);padding:12px 14px;border-radius:10px;overflow:auto}}pre code{{padding:0;background:none}}\
+table{{border-collapse:collapse}}td,th{{border:1px solid var(--line);padding:5px 9px}}blockquote{{margin:0;padding-left:14px;border-left:3px solid var(--line);color:var(--muted)}}\
+</style></head><body>{body}</body></html>"
+    )
+}
+
+fn compile_named(dir: &Path, src_name: &str, out_name: &str) -> Result<String, String> {
+    let src_path = dir.join(src_name);
+    let out = dir.join(".build").join(out_name);
+    let fresh = match (std::fs::metadata(&src_path).and_then(|m| m.modified()), std::fs::metadata(&out).and_then(|m| m.modified())) {
+        (Ok(a), Ok(b)) => b >= a,
+        _ => false,
+    };
+    if fresh {
+        if let Ok(js) = std::fs::read_to_string(&out) {
+            return Ok(js);
+        }
+    }
+    let src = std::fs::read_to_string(&src_path).map_err(|e| format!("{src_name}: {e}"))?;
+    let js = super::tscompile::transpile(&src, src_name)?;
+    let _ = std::fs::create_dir_all(out.parent().unwrap());
+    let _ = std::fs::write(&out, &js);
+    Ok(js)
+}
+
+/// Data URLs of a power extension's pictures, by file name, for
+/// `oynix.image(name)` in code.ts and network.ts.
+pub fn image_map(e: &Entry) -> serde_json::Map<String, Value> {
+    use base64::Engine;
+    let mut m = serde_json::Map::new();
+    if !e.power {
+        return m;
+    }
+    for (name, mime, p) in image_files(Path::new(&e.path)) {
+        if let Ok(b) = std::fs::read(p) {
+            m.insert(name, json!(format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(b))));
+        }
+    }
+    m
+}
+
 /// Compile `widget.tsx` (cached like code.ts).
 pub fn compile_widget(dir: &Path) -> Result<String, String> {
     let src_path = dir.join("widget.tsx");
@@ -1140,9 +1335,12 @@ const OYNIX_API: &str = r#"var oynix = (function () {
       return bridge;
     });
   }
+  var images = __IMAGES__;
   return Object.freeze({
     id: id,
     data: Object.freeze(__DATA__),
+    // Power extensions: a picture from images/ as a data: URL ("" if missing).
+    image: function (name) { return images[name] || ''; },
     post: function (msg) { return connect().then(function (b) { b.post(id, 'panel', JSON.stringify(msg === undefined ? null : msg)); }); },
     onMessage: function (f) { if (typeof f === 'function') { listeners.push(f); connect().catch(function () {}); } },
     openPanel: function () { return connect().then(function (b) { b.post(id, 'oynix:open', '{}'); }); },
@@ -1233,6 +1431,7 @@ pub fn oynix_script(e: &Entry) -> Option<String> {
     let api = OYNIX_API
         .replace("__ID__", &id_js)
         .replace("__DATA__", &data_js)
+        .replace("__IMAGES__", &serde_json::to_string(&image_map(e)).unwrap_or_else(|_| "{}".into()))
         .replace("__MESSAGING__", if channel.is_empty() { "false" } else { "true" })
         .replace("__OCR__", if ocr && !channel.is_empty() { "true" } else { "false" });
     Some(format!(
@@ -1295,12 +1494,18 @@ fn install_inner(source: &Path, staging: &Path, base: &Path, list: &mut Vec<Entr
         }
         let icon = std::mem::take(&mut e.icon);
         prepare_oynix(&dir, &mut e, true)?;
+        prepare_power_extras(&dir, &mut e)?;
         if e.icon.is_empty() {
             e.icon = icon;
         }
         e.power = true;
     } else if dir.join("oynix.json").exists() && !dir.join("manifest.json").exists() {
         prepare_oynix(&dir, &mut e, false)?;
+        for f in ["network.ts", "theme-shape.qml", "extra.md"] {
+            if dir.join(f).exists() {
+                e.warnings.push(format!("{f} is ignored: it's only for verified .poweroynix extensions"));
+            }
+        }
     } else {
         prepare_webext(&dir, &mut e, crx_key.as_deref(), from_xpi)?;
     }

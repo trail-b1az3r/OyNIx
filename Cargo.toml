@@ -38,6 +38,7 @@ des = "0.8"
 sha1 = "0.10"
 base64 = "0.23.1"
 rusqlite = { version = "0.40.2", features = ["bundled"] }
+pulldown-cmark = { version = "0.13.6", default-features = false, features = ["html"] }
 
 [build-dependencies]
 cxx-qt-build = "0.10"

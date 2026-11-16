@@ -163,6 +163,8 @@ QtObject {
     // declared the "ocr" permission, and only the page that asked.
     property OcrService ocr: OcrService {}
     property OutlineService outlines: OutlineService {}
+    // Power extensions' network.ts (NetworkHost.qml)
+    property NetworkHost networkHost: NetworkHost { app: app }
     property var ocrRequests: ({})
     function answerOcr(ext, req, text, error) {
         extBridge.post(ext, "content", JSON.stringify({ __oynix: "ocr", req: req, text: text || "", error: error || "" }))

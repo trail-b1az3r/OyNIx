@@ -256,6 +256,9 @@ pub mod qobject {
         fn extension_data(self: &Core, id: &QString) -> QString;
         #[qinvokable]
         fn extension_page_url(self: &Core, id: &QString) -> QString;
+        /// file:// URL of the selected browser style's theme-shape.qml (power extensions), or "".
+        #[qinvokable]
+        fn theme_shape_url(self: &Core) -> QString;
         #[qinvokable]
         fn extension_has_permission(self: &Core, id: &QString, permission: &QString) -> bool;
         /// For the WebExtension runtime: {id, name, permissions, origins,
@@ -352,6 +355,16 @@ pub mod qobject {
         fn create_extension(self: Pin<&mut Core>, name: &QString) -> QString;
         #[qinvokable]
         fn extensions_dir(self: &Core) -> QString;
+        /// network.ts: one call from an extension's background page
+        /// ({op: "block"|"header"|"clearHeaders"|"observe", …}). Returns {ok, error}.
+        #[qinvokable]
+        fn net_call(self: Pin<&mut Core>, ext: &QString, call_json: &QString) -> QString;
+        /// Requests observed for network.ts since the last call (JSON array).
+        #[qinvokable]
+        fn net_drain(self: &Core) -> QString;
+        /// The hidden page network.ts runs in; `token` authenticates its messages.
+        #[qinvokable]
+        fn network_html(self: &Core, id: &QString, token: &QString) -> QString;
         /// The page for an extension's widget.tsx, styled with `theme_css`.
         #[qinvokable]
         fn widget_html(self: &Core, id: &QString, theme_css: &QString) -> QString;
@@ -1440,16 +1453,31 @@ impl qobject::Core {
     }
 
     pub fn browser_styles(&self) -> QString {
-        let list: Vec<Value> = self.extensions.iter().filter(|e| e.enabled && e.has_theme).map(|e| json!({ "id": e.id, "name": e.name })).collect();
+        let list: Vec<Value> = self.extensions.iter().filter(|e| e.enabled && (e.has_theme || (e.power && e.has_shape))).map(|e| json!({ "id": e.id, "name": e.name })).collect();
         to_qjson(&Value::Array(list))
     }
 
     /// file:// URL of `extra.html`, or "".
     pub fn extension_page_url(&self, id: &QString) -> QString {
-        match self.oynix_dir(id).map(|d| d.join("extra.html")) {
-            Some(p) if p.exists() => qs(format!("file://{}", p.to_string_lossy())),
-            _ => qs(""),
+        let Some(dir) = self.oynix_dir(id) else { return qs("") };
+        // extra.html, or (power extensions) extra.md rendered at install.
+        let power = self.extensions.iter().any(|e| e.id == s(id) && e.power);
+        for name in ["extra.html", "extra.md.html"] {
+            let p = dir.join(name);
+            if p.exists() && (name == "extra.html" || power) {
+                return qs(format!("file://{}", p.to_string_lossy()));
+            }
         }
+        qs("")
+    }
+
+    pub fn theme_shape_url(&self) -> QString {
+        let want = &self.settings.browser_style;
+        self.extensions
+            .iter()
+            .find(|e| !want.is_empty() && &e.id == want && e.enabled && e.power && e.has_shape)
+            .map(|e| qs(format!("file://{}", std::path::Path::new(&e.path).join("theme-shape.qml").to_string_lossy())))
+            .unwrap_or_default()
     }
 
     /// # Safety
@@ -1643,6 +1671,67 @@ impl qobject::Core {
         self.as_mut().rust_mut().extensions = list;
         self.as_mut().bump_extensions();
         qs(r.map(|e| e.path).unwrap_or_default())
+    }
+
+    pub fn net_call(mut self: Pin<&mut Self>, ext: &QString, call_json: &QString) -> QString {
+        use crate::core::netrules;
+        let ext = s(ext);
+        let c0: Value = serde_json::from_str(&s(call_json)).unwrap_or_default();
+        // An extension stopped (off or removed): drop what it set, always allowed.
+        if c0["op"] == "forget" {
+            if netrules::forget(&ext) {
+                blocker::init(active_lists(&self.settings));
+            }
+            return to_qjson(&json!({ "ok": true, "error": "" }));
+        }
+        if !self.extensions.iter().any(|e| e.id == ext && e.enabled && e.power && e.has_network) {
+            return to_qjson(&json!({ "ok": false, "error": "not a running network.ts" }));
+        }
+        let c: Value = serde_json::from_str(&s(call_json)).unwrap_or_default();
+        let r: Result<(), String> = match c["op"].as_str().unwrap_or("") {
+            "block" => {
+                let rules = match &c["rules"] {
+                    Value::Array(a) => a.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>().join("\n"),
+                    Value::String(t) => t.clone(),
+                    _ => String::new(),
+                };
+                if netrules::set_block(&ext, &rules) {
+                    blocker::init(active_lists(&self.settings));
+                }
+                Ok(())
+            }
+            "header" => netrules::add_header(&ext, c["pattern"].as_str().unwrap_or("*"), c["name"].as_str().unwrap_or(""), c["value"].as_str().unwrap_or("")),
+            "clearHeaders" => {
+                netrules::clear_headers(&ext);
+                Ok(())
+            }
+            "observe" => {
+                netrules::set_observing(&ext, c["on"].as_bool().unwrap_or(true));
+                Ok(())
+            }
+            other => Err(format!("unknown call “{other}”")),
+        };
+        let _ = self.as_mut();
+        to_qjson(&match r {
+            Ok(()) => json!({ "ok": true, "error": "" }),
+            Err(e) => json!({ "ok": false, "error": e }),
+        })
+    }
+
+    pub fn net_drain(&self) -> QString {
+        to_qjson(&crate::core::netrules::drain())
+    }
+
+    pub fn network_html(&self, id: &QString, token: &QString) -> QString {
+        let id = s(id);
+        let Some(e) = self.extensions.iter().find(|e| e.id == id && e.enabled && e.power && e.has_network) else { return qs("") };
+        match extensions::network_html(e, &s(token)) {
+            Ok(h) => qs(h),
+            Err(err) => {
+                eprintln!("oynix: network.ts of {}: {err}", e.name);
+                qs("")
+            }
+        }
     }
 
     pub fn widget_html(&self, id: &QString, theme_css: &QString) -> QString {
