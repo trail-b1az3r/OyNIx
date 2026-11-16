@@ -705,6 +705,28 @@ ApplicationWindow {
                         extMenu.open()
                     }
                 }
+                // Red while an OyNIx update is waiting, even after "Later" on the banner.
+                IconButton {
+                    id: updateBtn
+                    readonly property var u: win.app.updater
+                    readonly property var rel: u.release ? JSON.parse(u.release) : null
+                    visible: rel !== null && !win.privateMode
+                        && ["available", "downloading", "ready", "installing", "installed"].indexOf(u.state) >= 0
+                    glyph: u.state === "installed" ? "reload" : "download"
+                    iconColor: Theme.danger
+                    tip: !rel ? "" : u.state === "installed" ? qsTr("OyNIx %1 is installed: restart to use it").arg(rel.version)
+                        : u.state === "downloading" ? qsTr("Downloading OyNIx %1…").arg(rel.version)
+                        : qsTr("OyNIx %1 is available").arg(rel.version)
+                    onClicked: {
+                        if (u.state === "installed") {
+                            if (!win.app.restartForUpdate()) win.toastMessage(qsTr("Couldn’t restart OyNIx; please start it again yourself."))
+                        } else if (u.state === "ready" || u.state === "installing" || (u.state === "available" && updateBanner.external)) {
+                            updateBanner.dismissed = ""   // bring the banner back
+                        } else {
+                            win.app.openSettings("about")
+                        }
+                    }
+                }
                 IconButton { glyph: "plus"; tip: qsTr("New Tab") + "  (Ctrl+T)"; onClicked: win.newTab() }
                 IconButton {
                     glyph: "tabs"; tip: qsTr("Show All Tabs") + "  (Ctrl+Shift+\\)"

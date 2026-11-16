@@ -413,9 +413,12 @@ QtObject {
     property Timer updateTimer: Timer {
         interval: 60 * 1000; running: true; repeat: true
         onTriggered: {
+            // Once per launch too: what an earlier check found isn't kept,
+            // and the toolbar's red update icon should come back after a restart.
+            var first = interval < 60 * 60 * 1000
             interval = 60 * 60 * 1000
             if (Core.startPrivate || !app.updateSettings().updateCheck) return
-            if (app.updater.secondsSinceCheck() > 20 * 3600) app.checkForUpdate(false)
+            if (first || app.updater.secondsSinceCheck() > 20 * 3600) app.checkForUpdate(false)
         }
     }
     property Connections updateFlow: Connections {
