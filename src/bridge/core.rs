@@ -290,6 +290,20 @@ pub mod qobject {
         fn remove_extension(self: Pin<&mut Core>, id: &QString) -> bool;
         #[qinvokable]
         fn set_extension_enabled(self: Pin<&mut Core>, id: &QString, enabled: bool);
+        /// Is the extension pinned to the toolbar?
+        #[qinvokable]
+        fn is_extension_pinned(self: &Core, id: &QString) -> bool;
+        #[qinvokable]
+        fn set_extension_pinned(self: Pin<&mut Core>, id: &QString, pinned: bool);
+        /// Icon file of the extension a chrome-extension:// URL belongs to, or "".
+        #[qinvokable]
+        fn extension_icon_for(self: &Core, url: &QString) -> QString;
+        /// Keep a copy of the icon a page shows (see core/favicons.rs).
+        #[qinvokable]
+        fn remember_favicon(self: &Core, page_url: &QString, icon: &QString);
+        /// "file://…" of the saved icon for the site of `url`, or "".
+        #[qinvokable]
+        fn cached_favicon(self: &Core, url: &QString) -> QString;
         #[qinvokable]
         fn create_extension(self: Pin<&mut Core>, name: &QString) -> QString;
         #[qinvokable]
@@ -1377,6 +1391,39 @@ impl qobject::Core {
         self.as_mut().rust_mut().extensions = list;
         self.bump_extensions();
         ok
+    }
+
+    pub fn is_extension_pinned(&self, id: &QString) -> bool {
+        let id = s(id);
+        self.settings.pinned_extensions.iter().any(|p| *p == id)
+    }
+
+    pub fn set_extension_pinned(mut self: Pin<&mut Self>, id: &QString, pinned: bool) {
+        let id = s(id);
+        {
+            let mut r = self.as_mut().rust_mut();
+            r.settings.pinned_extensions.retain(|p| *p != id);
+            if pinned {
+                r.settings.pinned_extensions.push(id);
+            }
+        }
+        self.rust().settings.save();
+        self.bump_extensions();
+    }
+
+    pub fn remember_favicon(&self, page_url: &QString, icon: &QString) {
+        crate::core::favicons::remember(&s(page_url), &s(icon));
+    }
+
+    pub fn cached_favicon(&self, url: &QString) -> QString {
+        qs(crate::core::favicons::cached(&s(url)).map(|p| format!("file://{}", p.to_string_lossy())).unwrap_or_default())
+    }
+
+    pub fn extension_icon_for(&self, url: &QString) -> QString {
+        let u = s(url);
+        let Some(rest) = u.strip_prefix("chrome-extension://") else { return qs("") };
+        let web_id = rest.split('/').next().unwrap_or("");
+        qs(self.extensions.iter().find(|e| !web_id.is_empty() && e.web_id == web_id).map(|e| e.icon.as_str()).unwrap_or(""))
     }
 
     pub fn set_extension_enabled(mut self: Pin<&mut Self>, id: &QString, enabled: bool) {

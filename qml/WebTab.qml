@@ -358,7 +358,10 @@ Item {
                 tab.model.title = title
                 if (!tab.win.privateMode) Core.updateTitle(url.toString(), title)
             }
-            onIconChanged: tab.model.icon = icon.toString()
+            onIconChanged: {
+                tab.model.icon = icon.toString()
+                if (!tab.win.privateMode && tab.model.icon !== "") Core.rememberFavicon(url.toString(), tab.model.icon)
+            }
             onLoadProgressChanged: tab.model.progress = loadProgress / 100
             onRecentlyAudibleChanged: tab.model.audible = recentlyAudible
             onLinkHovered: function (hoveredUrl) { tab.hoveredLink = hoveredUrl.toString() }

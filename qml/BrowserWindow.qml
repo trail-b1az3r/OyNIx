@@ -78,6 +78,30 @@ ApplicationWindow {
     // ── Tab management ──────────────────────────────────────────────
     function tabItem(i) { return tabRepeater.itemAt(i) }
 
+    // Open an extension's panel or popup under `anchor`, or send it a click.
+    function activateExtension(e, anchor) {
+        if (e.kind === "oynix" && (e.hasPanel || e.hasPage)) { openOynixPanel(e, anchor); return }
+        var u = app.extensionHost.popupUrl(e.id)
+        if (!u) {
+            // No popup: the extension handles clicks itself.
+            var info = app.extensionHost.tabInfo(win, currentIndex)
+            app.extBridge.dispatch("action.onClicked", JSON.stringify([e.webId, info]))
+            return
+        }
+        if (extPopup.recentlyClosed() && extPopup.lastUrl === u) return
+        extPopup.url = u
+        var p = anchor.mapToItem(win.contentItem, anchor.width, anchor.height + 6)
+        extPopup.x = Math.max(8, p.x - extPopup.width); extPopup.y = p.y
+        extPopup.open()
+    }
+    // Can the extension be clicked (panel, page, popup or action)?
+    function extensionClickable(e) {
+        if (!e.enabled) return false
+        if (e.kind === "oynix" && (e.hasPanel || e.hasPage)) return true
+        if (e.kind === "oynix" && !e.manifestVersion) return false
+        return app.extensionHost.isLoaded(e.id)
+    }
+
     function syncCurrent() {
         currentTab = (currentIndex >= 0 && currentIndex < tabRepeater.count) ? tabRepeater.itemAt(currentIndex) : null
     }
@@ -634,14 +658,16 @@ ApplicationWindow {
                         shareMenu.open()
                     }
                 }
-                // Extension action buttons (Chrome / Firefox extensions with a popup)
+                ToolbarDivider { visible: extMenuBtn.visible }
+                // Pinned extensions (pin them from the puzzle menu)
                 Repeater {
                     model: {
                         var host = win.app.extensionHost
                         host.revision; Core.extensionsRevision
                         if (win.privateMode || !host.supported) return []
                         return JSON.parse(Core.extensions()).filter(function (e) {
-                            if (!e.enabled) return false
+                            // Only pinned extensions get a toolbar button; the rest are in the puzzle menu.
+                            if (!e.enabled || !Core.isExtensionPinned(e.id)) return false
                             // OyNIx extensions get a button when they have a panel or page.
                             if (e.kind === "oynix" && (e.hasPanel || e.hasPage)) return true
                             // Power extensions may also have a Chrome/Firefox half.
@@ -677,21 +703,7 @@ ApplicationWindow {
                         }
                         ToolTip.visible: hovered; ToolTip.delay: 600
                         ToolTip.text: { var b = win.app.extensionHost.badgeFor(modelData); return b && b.title ? b.title : modelData.name }
-                        onClicked: {
-                            if (modelData.kind === "oynix" && (modelData.hasPanel || modelData.hasPage)) { win.openOynixPanel(modelData, extBtn); return }
-                            var u = win.app.extensionHost.popupUrl(modelData.id)
-                            if (!u) {
-                                // No popup: the extension handles clicks itself.
-                                var info = win.app.extensionHost.tabInfo(win, win.currentIndex)
-                                win.app.extBridge.dispatch("action.onClicked", JSON.stringify([modelData.webId, info]))
-                                return
-                            }
-                            if (extPopup.recentlyClosed() && extPopup.lastUrl === u) return
-                            extPopup.url = u
-                            var p = extBtn.mapToItem(win.contentItem, extBtn.width, extBtn.height + 6)
-                            extPopup.x = Math.max(8, p.x - extPopup.width); extPopup.y = p.y
-                            extPopup.open()
-                        }
+                        onClicked: win.activateExtension(modelData, extBtn)
                     }
                 }
                 IconButton {
@@ -705,6 +717,7 @@ ApplicationWindow {
                         extMenu.open()
                     }
                 }
+                ToolbarDivider {}
                 // Red while an OyNIx update is waiting, even after "Later" on the banner.
                 IconButton {
                     id: updateBtn
@@ -1407,23 +1420,53 @@ ApplicationWindow {
     Popover {
         id: extMenu
         parent: win.contentItem
-        width: 280
+        width: 320
         padding: 6
         contentItem: ColumnLayout {
             spacing: 1
-            Txt { text: qsTr("Extensions"); color: Theme.textDim; font.pixelSize: 12; Layout.leftMargin: 8; Layout.topMargin: 4; Layout.bottomMargin: 4 }
+            Txt { text: qsTr("Extensions"); color: Theme.textDim; font.pixelSize: 12; Layout.leftMargin: 8; Layout.topMargin: 4; Layout.bottomMargin: 2 }
+            Txt { text: qsTr("Pin one to keep it in the toolbar."); color: Theme.textFaint; font.pixelSize: 11; Layout.leftMargin: 8; Layout.bottomMargin: 4 }
             Repeater {
                 model: { Core.extensionsRevision; win.app.extensionHost.revision; return extMenu.opened ? JSON.parse(Core.extensions()) : [] }
-                delegate: RowLayout {
+                delegate: Rectangle {
+                    id: extRow
                     required property var modelData
+                    readonly property bool clickable: win.extensionClickable(modelData)
+                    readonly property bool pinned: Core.extensionsRevision >= 0 && Core.isExtensionPinned(modelData.id)
                     Layout.fillWidth: true
-                    Layout.leftMargin: 8; Layout.rightMargin: 6
-                    Layout.preferredHeight: 30
-                    spacing: 8
-                    Image { Layout.preferredWidth: 16; Layout.preferredHeight: 16; sourceSize: Qt.size(32, 32); source: modelData.icon ? "file://" + modelData.icon : ""; visible: !!modelData.icon }
-                    Icon { visible: !modelData.icon; name: "puzzle"; size: 16; color: Theme.textDim }
-                    Txt { text: modelData.name; Layout.fillWidth: true; color: modelData.enabled ? Theme.text : Theme.textDim }
-                    Toggle { checked: modelData.enabled; onToggled: win.app.extensionHost.setEnabled(modelData.id, checked) }
+                    Layout.preferredHeight: 36
+                    radius: 8
+                    color: rowHover.hovered && clickable ? Theme.hover : "transparent"
+                    HoverHandler { id: rowHover }
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 8; anchors.rightMargin: 4
+                        spacing: 8
+                        Item {
+                            Layout.fillWidth: true; Layout.fillHeight: true
+                            RowLayout {
+                                anchors.fill: parent
+                                spacing: 8
+                                Image { Layout.preferredWidth: 16; Layout.preferredHeight: 16; sourceSize: Qt.size(32, 32); source: extRow.modelData.icon ? "file://" + extRow.modelData.icon : ""; visible: !!extRow.modelData.icon }
+                                Icon { visible: !extRow.modelData.icon; name: "puzzle"; size: 16; color: Theme.textDim }
+                                Txt { text: extRow.modelData.name; Layout.fillWidth: true; color: extRow.modelData.enabled ? Theme.text : Theme.textDim }
+                            }
+                            TapHandler {
+                                enabled: extRow.clickable
+                                onTapped: { extMenu.close(); win.activateExtension(extRow.modelData, extMenuBtn) }
+                            }
+                        }
+                        IconButton {
+                            implicitWidth: 28; implicitHeight: 28
+                            glyph: "pin"; iconSize: 15
+                            visible: extRow.clickable || extRow.pinned
+                            checked: extRow.pinned
+                            iconColor: extRow.pinned ? Theme.accent : Theme.textFaint
+                            tip: extRow.pinned ? qsTr("Unpin from toolbar") : qsTr("Pin to toolbar")
+                            onClicked: Core.setExtensionPinned(extRow.modelData.id, !extRow.pinned)
+                        }
+                        Toggle { checked: extRow.modelData.enabled; onToggled: win.app.extensionHost.setEnabled(extRow.modelData.id, checked) }
+                    }
                 }
             }
             Rectangle { Layout.fillWidth: true; height: 1; color: Theme.separator; Layout.topMargin: 4; Layout.bottomMargin: 4 }

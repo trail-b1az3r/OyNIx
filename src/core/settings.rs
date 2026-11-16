@@ -87,6 +87,8 @@ pub struct Settings {
     /// Developer mode › Allow powerful extension APIs (native messaging,
     /// cookies, webRequest observation, browsingData, management changes).
     pub ext_powerful_apis: bool,
+    /// Extensions pinned to the toolbar (OyNIx ids, in order).
+    pub pinned_extensions: Vec<String>,
 
     // ── Claude for OyNIx ──────────────────────────────────────────
     /// Allow Claude (MCP clients and the built-in panel) to control the browser.
@@ -167,6 +169,7 @@ impl Default for Settings {
             browser_style: String::new(),
             ext_developer_mode: false,
             ext_powerful_apis: false,
+            pinned_extensions: Vec::new(),
             agent_enabled: false,
             agent_mode: "ask".into(),
             agent_allowed_sites: Vec::new(),

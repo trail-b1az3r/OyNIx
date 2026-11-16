@@ -13,6 +13,14 @@ Item {
     implicitHeight: size
 
     readonly property string host: Core.hostOf(url)
+    // Extension pages show their extension's icon.
+    readonly property string extIcon: Core.extensionsRevision >= 0 && url.indexOf("chrome-extension://") === 0 ? Core.extensionIconFor(url) : ""
+    // Without a live icon (bookmarks, history, tabs not loaded yet), use
+    // the copy OyNIx saved the last time the site was open.
+    readonly property bool web: /^https?:\/\//.test(url)
+    readonly property string effective: extIcon !== "" ? "file://" + extIcon
+        : String(source) !== "" ? String(source)
+        : web ? Core.cachedFavicon(url) : ""
     readonly property string letter: {
         var h = host.replace(/^www\./, "")
         return (h.length ? h[0] : (title.length ? title[0] : "•")).toUpperCase()
@@ -22,23 +30,32 @@ Item {
     Image {
         id: img
         anchors.fill: parent
-        source: f.source
+        source: f.effective
         sourceSize: Qt.size(f.size * 2, f.size * 2)
         smooth: true
         asynchronous: true
-        visible: status === Image.Ready && !f.loading
+        // The icon store answers "nothing saved" with an empty image.
+        readonly property bool ok: status === Image.Ready && implicitWidth > 1
+        visible: ok && !f.loading
     }
     Rectangle {
         anchors.fill: parent
-        visible: img.status !== Image.Ready && !f.loading
+        visible: !img.ok && !f.loading
         radius: f.size * 0.25
-        color: f.url.indexOf("oynix://") === 0 ? Theme.accent : Qt.hsla(f.hue(f.host), 0.45, Theme.dark ? 0.42 : 0.55, 1)
+        color: f.url.indexOf("oynix://") === 0 ? Theme.accent : f.url.indexOf("chrome-extension://") === 0 ? Theme.surfaceContainerHigh : Qt.hsla(f.hue(f.host), 0.45, Theme.dark ? 0.42 : 0.55, 1)
         Text {
             anchors.centerIn: parent
-            text: f.url.indexOf("oynix://") === 0 ? "" : f.letter
+            text: f.url.indexOf("oynix://") === 0 || f.url.indexOf("chrome-extension://") === 0 ? "" : f.letter
             color: "white"
             font.pixelSize: f.size * 0.62
             font.bold: true
+        }
+        Icon {
+            anchors.centerIn: parent
+            visible: f.url.indexOf("chrome-extension://") === 0
+            name: "puzzle"
+            size: f.size * 0.75
+            color: Theme.textDim
         }
         Icon {
             anchors.centerIn: parent
