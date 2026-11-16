@@ -20,19 +20,29 @@ check the package without pushing.
 
 ## One-time setup
 
-1. Create an account on <https://aur.archlinux.org> (or use the maintainer's).
-2. Make a key just for this workflow, with no passphrase:
+The intended AUR maintainer/publisher account is **`ray0rfire`**.
+
+1. Sign in to <https://aur.archlinux.org> as `ray0rfire`.
+2. Generate a dedicated, passphrase-free SSH key for this workflow:
 
    ```bash
-   ssh-keygen -t ed25519 -N '' -C 'oynix AUR publish' -f aur_oynix
+   ssh-keygen -t ed25519 -N '' -C 'oynix AUR publish (ray0rfire)' -f aur_oynix
    ```
 
-3. Paste `aur_oynix.pub` into **My Account → SSH Public Key** on the AUR.
-4. In this repository, add `aur_oynix` (the private half) as an Actions secret
-   named `AUR_SSH_PRIVATE_KEY` (**Settings → Secrets and variables → Actions**).
-   Then delete the local copy.
-5. Run **Actions → Publish to the AUR** once. The first push creates the
-   `oynix-bin` package with that account as its maintainer.
+3. While signed in as `ray0rfire`, paste `aur_oynix.pub` into **My Account → SSH Public Key**.
+4. In this GitHub repository, replace the Actions secret `AUR_SSH_PRIVATE_KEY`
+   with the contents of the new `aur_oynix` private key (not the `.pub` file):
+   **Settings → Secrets and variables → Actions**.
+5. Ensure `ray0rfire` is a maintainer of the existing `oynix-bin` AUR package.
+   If it is currently maintained only by another account, add `ray0rfire` as a
+   co-maintainer or transfer maintenance through the AUR package settings first.
+6. Run **Actions → Publish to the AUR** once. The workflow's AUR commits are
+   attributed to `ray0rfire`.
+
+The workflow's SSH key determines which AUR account is authenticated; changing
+the Git commit author alone does not change package ownership or maintainer access.
+The repository secret must therefore contain a private key registered to
+`ray0rfire`. GitHub Actions cannot read or replace that secret automatically.
 
 Without the secret, automatic runs only warn and a manual run fails, saying why.
 
