@@ -1,0 +1,71 @@
+<!--
+title: Troubleshooting
+short: Troubleshooting
+order: 9
+icon: warning
+lede: Diagnose installation, startup, graphics, networking, extensions and update problems.
+description: OyNIx troubleshooting guide for package installation, first launch, graphics backends, profiles, extensions, WebUSB and updates.
+-->
+<h2>Before you start</h2>
+<p>Check the installed version in <b>Settings › About</b>. If a problem started after an update, note the previous and current versions and whether it happens in a fresh profile. Keep the exact error text; it is more useful than a screenshot of only the window.</p>
+
+<h2>Installation problems</h2>
+<h3>APT reports a dependency or package error</h3>
+<p>Make sure you downloaded the Debian package (<code>.deb</code>) for the current release and install the local file rather than opening it as an archive:</p>
+<pre data-copy><code>sudo apt install ./oynix_VERSION_amd64.deb</code></pre>
+<p>If APT reports missing dependencies, let it resolve them with the command above. Do not rename an Arch package to <code>.deb</code> or vice versa.</p>
+<h3>Pacman refuses the package</h3>
+<p>Use the Arch package (<code>.pkg.tar.zst</code>) and install it with:</p>
+<pre data-copy><code>sudo pacman -U ./oynix-VERSION-1-x86_64.pkg.tar.zst</code></pre>
+<p>If the package is from the AUR, update it with your AUR helper rather than installing a downloaded binary over it.</p>
+
+<h2>OyNIx does not start</h2>
+<ul>
+  <li>Run <code>oynix</code> from a terminal and read the first error printed there.</li>
+  <li>Check that the installed package matches your CPU architecture and distribution.</li>
+  <li>If the normal profile is damaged, try a temporary profile with <code>oynix --profile troubleshooting</code>. This creates a separate profile and does not replace your existing data.</li>
+  <li>If a profile works but the default one does not, disable recently installed extensions or test with a copy of the profile before changing or deleting data.</li>
+</ul>
+
+<h2>Graphics and rendering</h2>
+<p>OyNIx selects a graphics backend based on the display session and available driver. You can inspect the selected Vulkan device with <code>oynix --gpu-info</code>. To test another backend for one launch, use:</p>
+<pre data-copy><code>oynix --gpu vulkan
+oynix --gpu gles
+oynix --gpu opengl
+oynix --gpu software</code></pre>
+<p>On Wayland, OpenGL ES is the normal interface backend; on X11, OyNIx may use Vulkan when supported. If the interface is blank, flickers or freezes, try another backend and compare. See <a href="{{root}}docs/reference/#graphics">Graphics</a> for the reason behind the defaults.</p>
+
+<h2>Website compatibility</h2>
+<ul>
+  <li>Try reloading the page and temporarily disabling the site’s extensions.</li>
+  <li>Open the shield in the toolbar and temporarily turn off blocking for the affected site if content is missing.</li>
+  <li>Check per-site JavaScript, pop-up and dark-mode settings under <b>Settings › Websites</b>.</li>
+  <li>Use a private window to check whether stored cookies or site data are involved. Extensions do not run in private windows.</li>
+</ul>
+
+<h2>Extensions</h2>
+<p>If an extension does not install, confirm that it is a supported Chrome/Firefox package or an OyNIx extension with the required files. For a power extension, its signature must validate against a trusted key. Review the extension’s requested permissions and try disabling it before removing it.</p>
+<p>For development, use <b>Settings › Extensions › Developer mode</b> and consult <a href="{{root}}docs/build-an-extension/">Build an extension</a> and <a href="{{root}}docs/power-extensions/">Power extensions</a>.</p>
+
+<h2>WebUSB permission denied</h2>
+<p>On Linux, your user may not have permission to open a particular USB device. Find the vendor and product IDs with <code>lsusb</code>, then follow the udev rule example in <a href="{{root}}docs/reference/#webusb">WebUSB</a>. Reload the udev rules and reconnect the device.</p>
+
+<h2>Updates do not install</h2>
+<ul>
+  <li>For APT or pacman installs, confirm the package manager is available and that your desktop session has a polkit authentication agent.</li>
+  <li>For a bare Hyprland or Sway session, start a polkit agent such as <code>hyprpolkitagent</code>.</li>
+  <li>For <code>oynix-bin</code> from the AUR, update with <code>yay -Syu</code>; OyNIx intentionally leaves AUR package installation to the AUR helper.</li>
+  <li>For source builds, rebuild from the latest source instead of expecting the package updater to replace your custom build.</li>
+</ul>
+
+<h2>Collect useful diagnostics</h2>
+<p>When reporting a problem, include:</p>
+<ul>
+  <li>OyNIx version and distribution;</li>
+  <li>Wayland or X11, desktop/compositor and graphics driver;</li>
+  <li>the steps that reproduce the issue and what you expected to happen;</li>
+  <li>the terminal output or exact error message;</li>
+  <li>whether it also happens in a new profile and with extensions disabled.</li>
+</ul>
+<p>For interface freezes, include the entries from <b>Settings › About › Responsiveness</b> or <code>~/.cache/oynix/PROFILE/freezes.log</code>. Please remove personal URLs, tokens and other private information before posting logs to an issue.</p>
+<p><a href="{{repo}}/issues/new">Report a problem on GitHub</a> and include the information above.</p>

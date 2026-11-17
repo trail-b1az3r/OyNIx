@@ -1,0 +1,47 @@
+<!--
+title: Downloads and releases
+short: Downloads
+order: 8
+icon: download
+lede: Choose the right release, download its package directly, and verify the file before installing it.
+description: OyNIx stable and pre-release channels, legacy archive, direct package downloads, SHA-256 verification and update behavior.
+-->
+<h2>Choose a release</h2>
+<p>The <a href="{{root}}downloads/">Downloads page</a> reads published release metadata from the official OyNIx GitHub repository. Stable releases are shown one version at a time, with the release date and every attached asset. Pre-releases are kept in their own tab so they are not confused with the recommended stable builds.</p>
+<p>Choose the package that matches your distribution:</p>
+<table>
+  <tr><th>Package</th><th>Typical system</th><th>Install</th></tr>
+  <tr><td><code>.deb</code></td><td>Debian, Ubuntu, Linux Mint and derivatives</td><td><code>sudo apt install ./oynix_VERSION_amd64.deb</code></td></tr>
+  <tr><td><code>.pkg.tar.zst</code></td><td>Arch Linux and derivatives</td><td><code>sudo pacman -U oynix-VERSION-1-x86_64.pkg.tar.zst</code></td></tr>
+  <tr><td><code>.flatpak</code></td><td>Systems with Flatpak support</td><td><code>flatpak install --user ./OyNIx-VERSION.flatpak</code></td></tr>
+</table>
+<p>Not every release necessarily contains every package format. Only use a package that is actually listed under that version. The Downloads page links to each asset’s direct download URL; it does not send you through a release-details page.</p>
+
+<h2>Verify a download</h2>
+<p>When a release includes <code>SHA256SUMS</code>, download it into the same directory as the package. Then run:</p>
+<pre data-copy><code>sha256sum -c SHA256SUMS --ignore-missing</code></pre>
+<p>A result ending in <code>OK</code> means the local file matches the published checksum. A failure means the file is incomplete, damaged or not the file described by that checksum. Download it again before installing.</p>
+
+<h2>Legacy archive</h2>
+<p>Versions <b>v4.3 and older</b> are grouped in the collapsed Legacy archive. Open the archive, find the exact version you need, and choose one of its attached files. The legacy list uses the same direct asset links as current releases.</p>
+<div class="note">{{shape:cookie9:warning}}<p>Legacy builds may lack security fixes, compatibility fixes and current features. Use them only when you specifically need an older build for compatibility or recovery. For normal use, choose a current stable version.</p></div>
+
+<h2>Pre-releases</h2>
+<p>Pre-releases are development builds published before a stable release. They may contain unfinished features or regressions. Keep them separate from your normal installation unless you are testing a fix or helping verify a change.</p>
+
+<h2>Automatic updates</h2>
+<p>OyNIx checks for updates once a day by default. When an update is available, it can download the package in the background and verify its SHA-256 checksum before offering installation. The package manager performs the installation and asks for authorization; restarting OyNIx restores your tabs.</p>
+<ul>
+  <li><b>APT and pacman installs:</b> OyNIx can offer to install the downloaded package through the system package manager.</li>
+  <li><b>AUR installs:</b> OyNIx can notify you about a new release, but updates remain the responsibility of your AUR helper. Run <code>yay -Syu</code>.</li>
+  <li><b>Source builds:</b> OyNIx can tell you that a newer release exists, but it does not replace your locally built program.</li>
+</ul>
+<p>Open <b>Settings › About › Updates</b> to check immediately, choose the beta channel, or disable update checks and background downloads.</p>
+
+<h2>Downloads page troubleshooting</h2>
+<ul>
+  <li><b>“Releases could not be loaded”:</b> check your connection and try again. The release list is supplied by GitHub’s public Releases API, which can be temporarily unavailable or rate-limited.</li>
+  <li><b>A version has no files:</b> that release has no downloadable assets attached. Choose another release or build from source.</li>
+  <li><b>A package is missing:</b> not every release publishes every package format. Do not rename a package for another distribution.</li>
+  <li><b>The download fails:</b> retry the asset link and verify the checksum before installing.</li>
+</ul>

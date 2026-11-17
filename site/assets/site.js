@@ -2,10 +2,8 @@
 (function () {
   'use strict';
 
-  // Releases are displayed on this site, but the assets remain hosted by GitHub.
-  // Link directly to each asset's browser_download_url; never route through a
-  // GitHub release/tag page.
   var releaseApi = 'https://api.github.com/repos/trail-b1az3r/OyNIx/releases?per_page=100';
+  var directAssetPrefix = 'https://github.com/trail-b1az3r/OyNIx/releases/download/';
 
   function escapeHtml(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) {
@@ -14,17 +12,27 @@
   }
 
   function versionParts(release) {
-    var tag = String(release.tag_name || release.name || '').replace(/^v/i, '');
-    var core = tag.split('-')[0];
-    return core.split('.').map(function (part) {
-      var n = parseInt(part, 10);
-      return Number.isFinite(n) ? n : 0;
-    });
+    var raw = String(release.tag_name || release.name || '').trim().replace(/^v\s*/i, '');
+    var match = raw.match(/(\d+)(?:\.(\d+))?(?:\.(\d+))?/);
+    return match ? [Number(match[1]), Number(match[2] || 0), Number(match[3] || 0)] : [0, 0, 0];
+  }
+
+  function versionLabel(release) {
+    var parts = versionParts(release);
+    return parts.join('.');
+  }
+
+  function compareVersions(a, b) {
+    var av = versionParts(a), bv = versionParts(b);
+    for (var i = 0; i < 3; i++) {
+      if (av[i] !== bv[i]) return bv[i] - av[i];
+    }
+    return String(b.tag_name || b.name || '').localeCompare(String(a.tag_name || a.name || ''), undefined, { numeric: true });
   }
 
   function isLegacy(release) {
     var v = versionParts(release);
-    return v[0] < 4 || (v[0] === 4 && (v[1] || 0) <= 3);
+    return v[0] < 4 || (v[0] === 4 && v[1] <= 3);
   }
 
   function formatSize(bytes) {
@@ -35,6 +43,23 @@
     return (i ? n.toFixed(1) : String(n)) + ' ' + units[i];
   }
 
+  function assetUrl(asset) {
+    var url = String(asset && asset.browser_download_url || '');
+    return url.indexOf(directAssetPrefix) === 0 ? url : '';
+  }
+
+  function primaryAsset(assets) {
+    var usable = assets.filter(function (a) {
+      return assetUrl(a) && !/sha256|checksum|debug|symbols/i.test(a.name || '');
+    });
+    var priorities = [/\.deb$/i, /\.pkg\.tar\.zst$/i, /\.flatpak$/i, /\.rpm$/i, /\.appimage$/i, /\.exe$/i];
+    for (var i = 0; i < priorities.length; i++) {
+      var found = usable.find(function (a) { return priorities[i].test(a.name || ''); });
+      if (found) return found;
+    }
+    return usable[0] || assets.find(function (a) { return assetUrl(a); }) || null;
+  }
+
   function renderRelease(release) {
     var tag = release.tag_name || release.name || 'Untitled release';
     var assets = Array.isArray(release.assets) ? release.assets : [];
@@ -42,14 +67,16 @@
     var dateText = date && !Number.isNaN(date.getTime())
       ? date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '';
     var links = assets.map(function (asset) {
-      if (!asset.browser_download_url) return '';
+      var url = assetUrl(asset);
+      if (!url) return '';
       var label = escapeHtml(asset.name || 'Download');
       var size = formatSize(Number(asset.size));
-      return '<a class="btn release-download" href="' + escapeHtml(asset.browser_download_url) +
-        '" download rel="noopener noreferrer">' + label + (size ? '<small>' + escapeHtml(size) + '</small>' : '') + '</a>';
+      return '<a class="btn release-download" href="' + escapeHtml(url) +
+        '" rel="noopener noreferrer">' + label + (size ? '<small>' + escapeHtml(size) + '</small>' : '') + '</a>';
     }).join('');
-    var primary = assets.find(function (a) { return a.browser_download_url && !/sha256|checksum/i.test(a.name || ''); }) || assets.find(function (a) { return a.browser_download_url; });
-    var primaryButton = primary ? '<a class="btn release-primary" href="' + escapeHtml(primary.browser_download_url) + '" rel="noopener noreferrer">Download this version</a>' : '';
+    var primary = primaryAsset(assets);
+    var primaryButton = primary ? '<a class="btn release-primary" href="' + escapeHtml(assetUrl(primary)) +
+      '" rel="noopener noreferrer">Download ' + escapeHtml(primary.name || 'this version') + '</a>' : '';
     return '<article class="release-card">' +
       '<div class="release-heading"><div><h3>' + escapeHtml(release.name || tag) + '</h3>' +
       '<p class="release-meta">' + escapeHtml(tag) + (dateText ? ' · ' + escapeHtml(dateText) : '') +
@@ -66,40 +93,63 @@
       '<p class="release-empty">There are no releases in this channel.</p>';
   }
 
+  function renderStableVersions(releases) {
+    var target = document.getElementById('release-stable');
+    if (!target) return;
+    var sorted = releases.slice().sort(compareVersions);
+    if (!sorted.length) {
+      target.innerHTML = '<p class="release-empty">There are no stable releases in this channel.</p>';
+      return;
+    }
+    target.innerHTML = sorted.map(function (release) {
+      var tag = release.tag_name || release.name || 'Release';
+      return '<section class="release-version"><div class="release-version-heading"><h2>' +
+        escapeHtml(release.name || versionLabel(release)) + '</h2><span>' +
+        escapeHtml(tag) + '</span></div>' + renderRelease(release) + '</section>';
+    }).join('');
+  }
+
   function renderReleases(releases) {
-    var published = releases.filter(function (r) { return !r.draft; });
-    var legacy = published.filter(isLegacy);
+    var published = releases.filter(function (r) { return r && !r.draft; });
+    var legacy = published.filter(isLegacy).sort(compareVersions);
     var current = published.filter(function (r) { return !isLegacy(r); });
-    fillList('release-stable', current.filter(function (r) { return !r.prerelease; }));
-    fillList('release-beta', current.filter(function (r) { return !!r.prerelease; }));
+    renderStableVersions(current.filter(function (r) { return !r.prerelease; }));
+    fillList('release-beta', current.filter(function (r) { return !!r.prerelease; }).sort(compareVersions));
     fillList('release-legacy', legacy);
     var status = document.getElementById('release-status');
-    if (status) status.textContent = published.length + ' releases available · ' +
-      (current.length) + ' current and ' + legacy.length + ' legacy';
+    if (status) status.textContent = published.length + ' published releases · ' +
+      current.filter(function (r) { return !r.prerelease; }).length + ' stable · ' +
+      current.filter(function (r) { return !!r.prerelease; }).length + ' pre-release · ' +
+      legacy.length + ' legacy';
   }
 
   function loadReleases() {
     var status = document.getElementById('release-status');
     if (!status) return;
+    status.textContent = 'Loading releases…';
     var all = [], page = 1;
     function next() {
-      return fetch(releaseApi + '&page=' + page, { headers: { Accept: 'application/vnd.github+json' } })
-        .then(function (response) {
-          if (!response.ok) throw new Error('GitHub returned HTTP ' + response.status);
-          return response.json();
-        })
-        .then(function (batch) {
-          if (!Array.isArray(batch)) throw new Error('Unexpected release response');
-          all = all.concat(batch);
-          if (batch.length === 100 && page < 10) { page++; return next(); }
-          renderReleases(all);
-        });
+      return fetch(releaseApi + '&page=' + page, {
+        headers: { Accept: 'application/vnd.github+json' },
+        cache: 'no-store'
+      }).then(function (response) {
+        if (!response.ok) throw new Error('GitHub returned HTTP ' + response.status);
+        return response.json();
+      }).then(function (batch) {
+        if (!Array.isArray(batch)) throw new Error('Unexpected release response');
+        all = all.concat(batch);
+        if (batch.length === 100 && page < 20) { page++; return next(); }
+        renderReleases(all);
+      });
     }
     next().catch(function () {
-      status.textContent = 'Releases could not be loaded right now. Please try again later.';
+      status.innerHTML = 'Releases could not be loaded. Check your connection and <button class="text-link release-retry" type="button">try again</button>.';
+      var retry = status.querySelector('.release-retry');
+      if (retry) retry.addEventListener('click', loadReleases);
     });
   }
 
+  // Only fetch release metadata on the Downloads page.
   loadReleases();
 
   // Mobile menu
@@ -111,15 +161,17 @@
 
   // Copy buttons on code blocks marked data-copy
   document.querySelectorAll('pre[data-copy]').forEach(function (pre) {
+    var code = pre.querySelector('code');
+    if (!code) return;
     var b = document.createElement('button');
     b.className = 'copy'; b.type = 'button'; b.textContent = 'Copy';
     b.addEventListener('click', function () {
-      var text = pre.querySelector('code').innerText.replace(/^\s*#.*$/gm, '').replace(/
-{2,}/g, '
-').trim();
+      var text = code.innerText.replace(/^\s*#.*$/gm, '').replace(/\n{2,}/g, '\n').trim();
+      if (!navigator.clipboard || !navigator.clipboard.writeText) return;
       navigator.clipboard.writeText(text).then(function () {
-        b.textContent = 'Copied'; setTimeout(function () { b.textContent = 'Copy'; }, 1400);
-      });
+        b.textContent = 'Copied';
+        window.setTimeout(function () { b.textContent = 'Copy'; }, 1400);
+      }).catch(function () { b.textContent = 'Copy unavailable'; });
     });
     pre.appendChild(b);
   });
@@ -130,7 +182,7 @@
     function pick(id) {
       buttons.forEach(function (b) {
         var on = b.dataset.panel === id;
-        b.setAttribute('aria-selected', on);
+        b.setAttribute('aria-selected', on ? 'true' : 'false');
         var p = document.getElementById(b.dataset.panel);
         if (p) p.hidden = !on;
       });
@@ -149,7 +201,10 @@
     pins.forEach(function (p, i) {
       p.addEventListener('mouseenter', function () { on(i); });
       p.addEventListener('focus', function () { on(i); });
-      p.addEventListener('click', function () { on(i); notes[i] && notes[i].scrollIntoView({ block: 'nearest', behavior: 'smooth' }); });
+      p.addEventListener('click', function () {
+        on(i);
+        if (notes[i]) notes[i].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      });
     });
     notes.forEach(function (n, i) { n.addEventListener('mouseenter', function () { on(i); }); });
     tour.addEventListener('mouseleave', function () { on(-1); });
@@ -163,18 +218,21 @@
     var empty = document.querySelector('.empty');
     var cat = '';
     function apply() {
-      var q = (input.value || '').trim().toLowerCase(), shown = 0;
+      var q = input ? (input.value || '').trim().toLowerCase() : '', shown = 0;
       grid.querySelectorAll('.ext').forEach(function (e) {
-        var ok = (!cat || e.dataset.category === cat) && (!q || e.dataset.text.indexOf(q) >= 0);
-        e.hidden = !ok; if (ok) shown++;
+        var ok = (!cat || e.dataset.category === cat) && (!q || (e.dataset.text || '').indexOf(q) >= 0);
+        e.hidden = !ok;
+        if (ok) shown++;
       });
       if (empty) empty.hidden = shown > 0;
     }
-    input.addEventListener('input', apply);
+    if (input) input.addEventListener('input', apply);
     chips.forEach(function (c) {
       c.addEventListener('click', function () {
         cat = c.getAttribute('aria-pressed') === 'true' ? '' : c.dataset.category;
-        chips.forEach(function (x) { x.setAttribute('aria-pressed', x.dataset.category === cat && cat !== ''); });
+        chips.forEach(function (x) {
+          x.setAttribute('aria-pressed', x.dataset.category === cat && cat !== '' ? 'true' : 'false');
+        });
         apply();
       });
     });
