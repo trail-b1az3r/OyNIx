@@ -59,7 +59,8 @@ QtObject {
         target: host.supported ? host.manager : null
         function onLoadFinished(info) {
             var e = host.entryForPath(info.path)
-            if (e && host.loadingId === e.id) host.loadingId = ""
+            // loadFinished corresponds to the single outstanding request, even if the registry entry was removed meanwhile.
+            host.loadingId = ""
             if (e) {
                 if (info.error) { host.setError(e.id, info.error); console.warn("OyNIx: extension", e.name, "failed:", info.error) }
                 else host.setError(e.id, "")
