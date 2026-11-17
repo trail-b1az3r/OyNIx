@@ -116,10 +116,52 @@ fn registry_file() -> PathBuf {
 }
 
 pub fn load() -> Vec<Entry> {
-    std::fs::read(registry_file())
+    let mut list: Vec<Entry> = std::fs::read(registry_file())
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or_default()
+        .unwrap_or_default();
+
+    // Older OyNIx releases stored MV2 manifests unchanged. Re-run the same
+    // compatibility conversion used by the installer so existing extensions
+    // (notably uBlock Origin) are migrated after a browser update too.
+    let mut migrated = false;
+    for entry in &mut list {
+        let manifest_path = Path::new(&entry.path).join("manifest.json");
+        let Ok(text) = std::fs::read_to_string(&manifest_path) else { continue };
+        let Ok(manifest) = parse_json_lenient(&text) else { continue };
+        if manifest.get("manifest_version").and_then(Value::as_u64) != Some(2) {
+            continue;
+        }
+        let old_kind = entry.kind.clone();
+        let old_enabled = entry.enabled;
+        let old_builtin = entry.builtin;
+        let old_power = entry.power;
+        let old_verified_by = entry.verified_by.clone();
+        let old_installed = entry.installed;
+        let old_first_run = entry.first_run;
+        let old_id = entry.id.clone();
+        match prepare_webext(Path::new(&entry.path), entry, None, false) {
+            Ok(()) => {
+                entry.id = old_id;
+                entry.kind = old_kind;
+                entry.enabled = old_enabled;
+                entry.builtin = old_builtin;
+                entry.power = old_power;
+                entry.verified_by = old_verified_by;
+                entry.installed = old_installed;
+                entry.first_run = old_first_run;
+                migrated = true;
+                eprintln!("oynix: migrated existing Manifest V2 extension {}", entry.name);
+            }
+            Err(err) => {
+                eprintln!("oynix: could not migrate Manifest V2 extension {}: {err}", entry.name);
+            }
+        }
+    }
+    if migrated {
+        save(&list);
+    }
+    list
 }
 
 pub fn save(list: &[Entry]) {
