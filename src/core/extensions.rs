@@ -140,7 +140,9 @@ pub fn load() -> Vec<Entry> {
         let old_installed = entry.installed;
         let old_first_run = entry.first_run;
         let old_id = entry.id.clone();
-        match prepare_webext(Path::new(&entry.path), entry, None, false) {
+        // Keep the path borrow independent from the mutable registry entry.
+        let extension_path = PathBuf::from(&entry.path);
+        match prepare_webext(&extension_path, entry, None, false) {
             Ok(()) => {
                 entry.id = old_id;
                 entry.kind = old_kind;
