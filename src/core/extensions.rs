@@ -606,7 +606,19 @@ fn convert_mv2(m: &mut Map<String, Value>, warnings: &mut Vec<String>) {
             m.insert("action".into(), a);
         }
     }
-    // Host patterns moved to host_permissions in V3.
+    // Host patterns moved to host_permissions in V3. The MV2-only
+    // webRequestBlocking permission is invalid in MV3; keep webRequest so
+    // extensions can still observe requests through OyNIx's compatibility
+    // bridge, and report that synchronous blocking needs the native blocker.
+    for key in ["permissions", "optional_permissions"] {
+        if let Some(Value::Array(perms)) = m.get_mut(key) {
+            let had_blocking = perms.iter().any(|p| p.as_str() == Some("webRequestBlocking"));
+            perms.retain(|p| p.as_str() != Some("webRequestBlocking"));
+            if had_blocking {
+                warnings.push("Manifest V2 webRequestBlocking was migrated to OyNIx's request-observation API; synchronous blocking callbacks are not available in this build".into());
+            }
+        }
+    }
     for (from, to) in [("permissions", "host_permissions"), ("optional_permissions", "optional_host_permissions")] {
         let mut hosts = vec![];
         if let Some(Value::Array(perms)) = m.get_mut(from) {
