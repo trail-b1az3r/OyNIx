@@ -869,7 +869,7 @@ Rectangle {
                                 RowLayout {
                                     spacing: 6
                                     Txt { text: ext.modelData.name; font.weight: Font.DemiBold; Layout.maximumWidth: 240 }
-                                    Txt { text: ext.modelData.version + (ext.modelData.builtin ? " · " + qsTr("Built in") : ext.modelData.power ? " · " + qsTr("Verified by %1").arg(ext.modelData.verifiedBy) : "") + (ext.modelData.hasTheme ? " · " + qsTr("Browser style") : "") + ((ext.modelData.permissions || []).indexOf("ocr") >= 0 ? " · " + qsTr("Reads text from page screenshots") : ""); color: Theme.textDim; font.pixelSize: 11 }
+                                    Txt { text: ext.modelData.version + (ext.modelData.builtin ? " · " + qsTr("Built in") : ext.modelData.power ? " · " + qsTr("Verified by %1").arg(ext.modelData.verifiedBy) + (ext.modelData.gemprint ? " · " + qsTr("GemPrint %1").arg(ext.modelData.gemprint) : "") : "") + (ext.modelData.hasTheme ? " · " + qsTr("Browser style") : "") + ((ext.modelData.permissions || []).indexOf("ocr") >= 0 ? " · " + qsTr("Reads text from page screenshots") : ""); color: Theme.textDim; font.pixelSize: 11 }
                                     Txt { visible: sw.s.extDeveloperMode === true; Layout.fillWidth: true; text: (ext.modelData.webId ? "ID " + ext.modelData.webId + " · " : "") + ext.modelData.path; color: Theme.textFaint; font.pixelSize: 11; font.family: "monospace"; elide: Text.ElideMiddle }
                                     Rectangle {
                                         implicitWidth: kindText.implicitWidth + 12; implicitHeight: 18; radius: 9

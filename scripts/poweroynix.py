@@ -2,12 +2,13 @@
 """Make keys for, sign, verify and pack .poweroynix extensions.
 
     poweroynix.py keygen "Your Name" [--out FILE]   new Ed25519 key pair
-    poweroynix.py sign DIR --key FILE [--pack OUT]  write DIR/oynix.sig (and a .poweroynix)
+    poweroynix.py sign DIR --key FILE [--commit C] [--format N] [--pack OUT]
+                                                    write DIR/oynix.sig (and a .poweroynix)
     poweroynix.py verify PATH [--keys FILE]         check a folder or .poweroynix
     poweroynix.py pack DIR OUT                      zip a signed folder
 
 Signing is the "verified" step: read the extension first. The rules match
-src/core/poweroynix.rs. The Ed25519 code is RFC 8032's reference
+crates/stonedgem-poweroynix. The Ed25519 code is RFC 8032's reference
 implementation, so this needs nothing beyond Python 3.
 """
 
@@ -21,9 +22,12 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+# StonedGem has no keys of its own: products (OyNIx, PowerOyNix) keep their
+# trusted-keys.txt; pass it with --keys. This default is for running inside OyNIx.
 TRUSTED = ROOT / "packaging" / "poweroynix" / "trusted-keys.txt"
 MAGIC = "OyNIx poweroynix v1\n"     # format 1: SHA-256 file hashes
-MAGIC_V2 = "OyNIx poweroynix v2\n"  # format 2 (default): SHA3-256
+MAGIC_V2 = "OyNIx poweroynix v2\n"  # format 2: SHA3-256
+MAGIC_V3 = "OyNIx GemSig v3\n"      # format 3 (default): GemSig, SHA3-512
 SIG_FILE = "oynix.sig"
 MAX_BYTES = 64 << 20
 
@@ -160,12 +164,106 @@ def files_of(folder):
     return out
 
 
-def digest_message(folder, fmt=2):
-    lines = [MAGIC_V2 if fmt >= 2 else MAGIC]
+def identity(folder):
+    """(id, version) the package says it is, from oynix.json."""
+    try:
+        meta = json.loads((Path(folder) / "oynix.json").read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        meta = {}
+    pid = meta.get("id") or meta.get("name") or ""
+    ver = meta.get("version") or ""
+    return str(pid), str(ver)
+
+
+def _one_line(field, v):
+    if "\n" in v or "\r" in v:
+        raise ValueError(f"the {field} contains a line break")
+    return v
+
+
+def digest_message(folder, fmt=3, commit=""):
+    """The signed message. Format 3 (GemSig) adds a header naming the package
+    and the signing commit, and hashes files with SHA3-512."""
+    if fmt >= 3:
+        pid, ver = identity(folder)
+        lines = [MAGIC_V3, f"id: {_one_line('id', pid)}\n", f"version: {_one_line('version', ver)}\n",
+                 f"commit: {_one_line('commit', commit)}\n"]
+        h = hashlib.sha3_512
+    else:
+        lines = [MAGIC_V2 if fmt == 2 else MAGIC]
+        h = hashlib.sha3_256 if fmt == 2 else hashlib.sha256
     for rel, full in files_of(Path(folder)):
-        h = hashlib.sha3_256 if fmt >= 2 else hashlib.sha256
         lines.append(f"{h(full.read_bytes()).hexdigest()}  {rel}\n")
     return "".join(lines).encode()
+
+
+def signed_bytes(folder, fmt=3, commit=""):
+    """What Ed25519 signs: format 3 signs the message's SHA3-512 summary."""
+    msg = digest_message(folder, fmt, commit)
+    return hashlib.sha3_512(msg).digest() if fmt >= 3 else msg
+
+
+# ── GemPrint (display only) ───────────────────────────────────────────
+M64 = (1 << 64) - 1
+
+
+def _rotl(x, k):
+    return ((x << k) | (x >> (64 - k))) & M64
+
+
+class Xoshiro256pp:
+    def __init__(self, seed32):
+        self.s = [int.from_bytes(seed32[8 * i:8 * i + 8], "little") for i in range(4)]
+        if not any(self.s):
+            self.s[0] = 1
+
+    def next(self):
+        s = self.s
+        result = (_rotl((s[0] + s[3]) & M64, 23) + s[0]) & M64
+        t = (s[1] << 17) & M64
+        s[2] ^= s[0]
+        s[3] ^= s[1]
+        s[1] ^= s[2]
+        s[0] ^= s[3]
+        s[2] ^= t
+        s[3] = _rotl(s[3], 45)
+        return result
+
+
+def _isqrt(n):
+    import math
+    return math.isqrt(n)
+
+
+def gemprint_value(summary, commit):
+    """round(H·H·√(seed+1) ÷ (1.5·x) ÷ c × 0.37125² ÷ (r+1)), exactly.
+
+    H = SHA3-256(summary) as an integer; xoshiro256++ seeded from the summary
+    draws seed ∈ 0..=3750, x (non-zero) and r ∈ 0..=100; c is the signing
+    commit as a number. √ is taken in 64-bit fixed point; 0.37125² =
+    88209/640000; the one rounding is half-up at the end."""
+    H = int.from_bytes(hashlib.sha3_256(summary).digest(), "big")
+    rng = Xoshiro256pp(summary[:32])
+    seed = rng.next() % 3751
+    x = rng.next() or 1
+    r = rng.next() % 101
+    try:
+        cb = bytes.fromhex(commit) if len(commit) >= 16 else b""
+    except ValueError:
+        cb = b""
+    if len(cb) < 8:
+        cb = hashlib.sha3_256(commit.encode()).digest()
+    c = int.from_bytes(cb[:8], "big") or 1
+    num = H * H * _isqrt((seed + 1) << 128) * 2 * 88209
+    den = 3 * x * c * 640000 * (r + 1) << 64
+    return (2 * num + den) // (2 * den)
+
+
+def gemprint(summary, commit):
+    """The value's low 64 bits as four groups: a1b2-c3d4-e5f6-0718."""
+    v = gemprint_value(summary, commit) & M64
+    h = f"{v:016x}"
+    return "-".join(h[i:i + 4] for i in range(0, 16, 4))
 
 
 def trusted_keys(path):
@@ -197,11 +295,28 @@ def verify_dir(folder, keys):
     if key not in keys:
         raise ValueError(f"signed by a key OyNIx doesn't trust ({key.hex()[:16]}…)")
     fmt = sig.get("format", 1)
-    if fmt not in (1, 2):
+    if fmt not in (1, 2, 3):
         raise ValueError(f"unknown signature format {fmt}")
-    if not ed_verify(key, digest_message(folder, fmt), signature):
+    commit = sig.get("commit", "") if fmt >= 3 else ""
+    if fmt >= 3:
+        pid, ver = identity(folder)
+        if sig.get("id", pid) != pid or sig.get("version", ver) != ver:
+            raise ValueError(f"oynix.sig was made for {sig.get('id')} {sig.get('version')}, not {pid} {ver}")
+    if not ed_verify(key, signed_bytes(folder, fmt, commit), signature):
         raise ValueError("the signature doesn't match the files: something changed after signing")
-    return keys[key] or key.hex()[:16]
+    who = keys[key] or key.hex()[:16]
+    if fmt >= 3:
+        who += f" (GemPrint {gemprint(signed_bytes(folder, 3, commit), commit)})"
+    return who
+
+
+def git_head(folder):
+    import subprocess
+    try:
+        r = subprocess.run(["git", "-C", str(folder), "rev-parse", "HEAD"], capture_output=True, text=True, timeout=10)
+        return r.stdout.strip() if r.returncode == 0 else ""
+    except (OSError, subprocess.SubprocessError):
+        return ""
 
 
 def pack(folder, out):
@@ -227,6 +342,8 @@ def main():
     s.add_argument("dir")
     s.add_argument("--key", required=True)
     s.add_argument("--pack", help="also write this .poweroynix")
+    s.add_argument("--commit", help="the extension's source commit, recorded for GemPrint (default: git HEAD of DIR, if any)")
+    s.add_argument("--format", type=int, default=3, choices=[2, 3], help="signature format (default 3, GemSig)")
     v = sub.add_parser("verify", help="check a folder or .poweroynix")
     v.add_argument("path")
     v.add_argument("--keys", default=str(TRUSTED))
@@ -259,9 +376,20 @@ def main():
         key = json.loads(Path(a.key).read_text())
         secret = bytes.fromhex(key["secret"])
         pub = public_key(secret)
-        sig = ed_sign(secret, digest_message(folder))
-        (folder / SIG_FILE).write_text(json.dumps({"format": 2, "key": pub.hex(), "signature": sig.hex(), "signer": key.get("name", "")}, indent=2) + "\n")
-        print(f"Signed {meta.get('name', folder.name)} {meta.get('version', '')} as {key.get('name', pub.hex()[:16])}")
+        fmt = a.format
+        commit = ""
+        if fmt >= 3:
+            commit = a.commit if a.commit is not None else git_head(folder)
+            _one_line("commit", commit)
+        sig = ed_sign(secret, signed_bytes(folder, fmt, commit))
+        out = {"format": fmt, "key": pub.hex(), "signature": sig.hex(), "signer": key.get("name", "")}
+        if fmt >= 3:
+            pid, ver = identity(folder)
+            out.update({"id": pid, "version": ver, "commit": commit})
+        (folder / SIG_FILE).write_text(json.dumps(out, indent=2) + "\n")
+        print(f"Signed {meta.get('name', folder.name)} {meta.get('version', '')} as {key.get('name', pub.hex()[:16])} (format {fmt})")
+        if fmt >= 3:
+            print(f"GemPrint: {gemprint(signed_bytes(folder, 3, commit), commit)}")
         if a.pack:
             pack(folder, a.pack)
             print(f"Wrote {a.pack}")

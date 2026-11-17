@@ -20,7 +20,9 @@ description: The .poweroynix format: what power extensions can do, how verificat
 <p><b>Wallbreaker</b>, which gets you past “please turn off your ad blocker” walls, is a power extension that ships with OyNIx.</p>
 
 <h2>Verification</h2>
-<p>OyNIx installs a <code>.poweroynix</code> only when <code>oynix.sig</code> is a valid Ed25519 signature over the SHA3-256 hash of every other file in the package, made by a key in <code>packaging/poweroynix/trusted-keys.txt</code>, which is compiled into OyNIx. A package changed after signing, signed by an unknown key, or not signed at all is refused with a message saying which. The Extension Gallery refuses to list one under the same rule.</p>
+<p>OyNIx installs a <code>.poweroynix</code> only when <code>oynix.sig</code> is a valid signature, made by a key in <code>packaging/poweroynix/trusted-keys.txt</code> (compiled into OyNIx), over every other file in the package. A package changed after signing, signed by an unknown key, or not signed at all is refused with a message saying which. The Extension Gallery refuses to list one under the same rule.</p>
+<p><b>GemSig</b> (signature format 3, what the signing tool now writes) hashes every file with SHA3-512, adds a header naming the extension, its version and the source commit it was signed from, and signs the SHA3-512 summary of all that with Ed25519. Because the name and version are signed, a signature can’t be moved to another extension or another version. Older formats still verify: format 2 (SHA3-256) and format 1 (SHA-256).</p>
+<p>A GemSig package also gets a <b>GemPrint</b> such as <code>29e6-e4af-2c14-bcf6</code>, shown next to “Verified by” in Settings › Extensions. It’s worked out from the signed summary and the signing commit, so two copies of the same signed extension always show the same GemPrint and a different build shows a different one. It’s for comparing at a glance; whether a package installs is decided by the signature alone.</p>
 <p>Signing <i>is</i> the review: the people who hold trusted keys read the whole extension before they sign it. Extensions that ship inside OyNIx are the one exception — they came with the browser.</p>
 
 <h2>network.ts</h2>
@@ -72,7 +74,7 @@ Item {
   <li>Build it as an ordinary OyNIx extension first, without <code>"power": true</code>. The Chrome or Firefox half can be tested with <b>Settings › Extensions › Developer mode › Allow powerful extension APIs</b>.</li>
   <li>Add <code>"power": true</code> and the power files.</li>
   <li>Ask a key holder to review and sign it (or, if you maintain OyNIx, sign it yourself):
-<pre data-copy><code>python3 scripts/poweroynix.py sign my-extension --key you.poweroynix-key --pack My-Extension-1.0.0.poweroynix
+<pre data-copy><code>python3 scripts/poweroynix.py sign my-extension --key you.poweroynix-key --commit "$(git -C my-extension rev-parse HEAD)" --pack My-Extension-1.0.0.poweroynix
 python3 scripts/poweroynix.py verify My-Extension-1.0.0.poweroynix</code></pre></li>
   <li>Install the <code>.poweroynix</code> (open it in OyNIx, or <code>oynix --install-extension</code>), or submit the signed folder to the Gallery.</li>
 </ol>

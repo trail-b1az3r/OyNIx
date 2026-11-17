@@ -22,10 +22,19 @@ turning on Developer mode. Its manifest still has to ask for each permission.
 
 ## Verification
 
-OyNIx installs a `.poweroynix` only when its `oynix.sig` is a valid Ed25519
-signature over the SHA3-256 hash of every file in the package (signature
-format 2, since 5.3.1; format 1 with SHA-256 is still accepted), made by a key in
-`trusted-keys.txt` (compiled into OyNIx). The site build refuses to list one
+OyNIx installs a `.poweroynix` only when its `oynix.sig` is a valid signature
+over every file in the package, made by a key in `trusted-keys.txt` (compiled
+into OyNIx).
+
+* **Format 3, GemSig** (what `sign` now writes): SHA3-512 per file, plus a
+  header with the extension's id, version and signing commit; Ed25519 signs
+  the SHA3-512 summary. The package gets a **GemPrint** (`29e6-e4af-2c14-bcf6`),
+  shown in Settings › Extensions, for comparing packages at a glance. It never
+  decides anything; the signature does.
+* Format 2 (SHA3-256) and format 1 (SHA-256) still verify.
+
+`scripts/poweroynix.py sign` writes format 3 and records the folder's git
+`HEAD` as the commit (or `--commit`); `--format 2` writes the old format. The site build refuses to list one
 in the gallery under the same rule. A package changed after signing fails.
 
 Extensions in `builtin/` are the exception: they ship inside OyNIx, so they

@@ -34,16 +34,15 @@ cbc = "0.1"
 des = "0.8"
 sha1 = "0.10"
 base64 = "0.23.1"
-rusqlite = { version = "0.40.2", features = ["bundled"] }
 sha3 = "0.10"
 
 # StonedGem: the platform OyNIx is moving onto (see its docs/MIGRATION.md).
-stonedgem-url = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "79450164f4e3ea58120a9f2582dc76a01b6b33b3" }
-stonedgem-vault = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "79450164f4e3ea58120a9f2582dc76a01b6b33b3" }
-stonedgem-profile = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "79450164f4e3ea58120a9f2582dc76a01b6b33b3" }
-stonedgem-blocker = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "79450164f4e3ea58120a9f2582dc76a01b6b33b3" }
-stonedgem-library = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "79450164f4e3ea58120a9f2582dc76a01b6b33b3" }
-stonedgem-extensions = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "79450164f4e3ea58120a9f2582dc76a01b6b33b3" }
+stonedgem-url = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "fc9ccfff3ec412ccbddfe00cf339cdaf4f9ba7c0" }
+stonedgem-vault = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "fc9ccfff3ec412ccbddfe00cf339cdaf4f9ba7c0" }
+stonedgem-profile = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "fc9ccfff3ec412ccbddfe00cf339cdaf4f9ba7c0" }
+stonedgem-blocker = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "fc9ccfff3ec412ccbddfe00cf339cdaf4f9ba7c0" }
+stonedgem-library = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "fc9ccfff3ec412ccbddfe00cf339cdaf4f9ba7c0" }
+stonedgem-extensions = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "fc9ccfff3ec412ccbddfe00cf339cdaf4f9ba7c0" }
 
 [build-dependencies]
 cxx-qt-build = "0.10"
