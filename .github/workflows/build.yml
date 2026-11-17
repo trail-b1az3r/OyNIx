@@ -99,8 +99,11 @@ jobs:
         run: |
           mkdir -p dist
           cp target/deb/*.deb target/pkg/*.pkg.tar.zst dist/
+          # SHA3-256SUMS is what OyNIx 5.3.1+ checks; SHA256SUMS stays for
+          # older versions' updater, the AUR (pacman has no SHA-3) and sha256sum.
           (cd dist && sha256sum * > SHA256SUMS)
-          cat dist/SHA256SUMS
+          (cd dist && python3 -c 'import hashlib,sys; [print(hashlib.sha3_256(open(f,"rb").read()).hexdigest()+"  "+f) for f in sys.argv[1:]]' $(ls | grep -v SUMS) > SHA3-256SUMS)
+          cat dist/SHA256SUMS dist/SHA3-256SUMS
 
       - uses: actions/upload-artifact@v4
         with:
@@ -144,7 +147,7 @@ jobs:
             or from the AUR: `yay -S oynix-bin`
 
             Both packages include their own Qt ${{ env.QT_VERSION }} runtime under `/usr/lib/oynix`.
-            Verify downloads with `sha256sum -c SHA256SUMS`.
+            Verify downloads with `sha256sum -c SHA256SUMS`, or `SHA3-256SUMS` (checked by OyNIx's updater).
           files: dist/*
 
   aur:

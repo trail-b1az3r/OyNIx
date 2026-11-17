@@ -9,7 +9,7 @@
 //! Markdown outlines come from the page itself (see `scripts::OUTLINE`).
 
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
+use sha3::{Digest, Sha3_256};
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
@@ -26,7 +26,7 @@ const MAX_ITEMS: usize = 500;
 const WEB_TTL: Duration = Duration::from_secs(24 * 3600);
 
 fn cache_file(url: &str) -> PathBuf {
-    let h: String = Sha256::digest(url.as_bytes()).iter().take(16).map(|b| format!("{b:02x}")).collect();
+    let h: String = Sha3_256::digest(url.as_bytes()).iter().take(16).map(|b| format!("{b:02x}")).collect();
     super::paths::cache_dir().join("outlines").join(format!("{h}.json"))
 }
 

@@ -5,7 +5,8 @@
 //!   sent beyond what any HTTPS request carries.
 //! * **Download**: the package that matches how this copy was installed
 //!   (`.deb` for dpkg, `.pkg.tar.zst` for pacman), streamed to the cache,
-//!   then checked against the release's `SHA256SUMS`.
+//!   then checked against the release's `SHA3-256SUMS` (or `SHA256SUMS`
+//!   for releases before 5.3.1).
 //! * **Install**: through the system package manager, behind the desktop's
 //!   password prompt (`pkexec`). OyNIx never runs as root itself.
 //!
@@ -206,8 +207,14 @@ impl Release {
         })
     }
 
-    pub fn checksums(&self) -> Option<&Asset> {
-        self.assets.iter().find(|a| a.name == "SHA256SUMS")
+    /// The checksum file to trust: SHA3-256SUMS (5.3.1+), else SHA256SUMS.
+    /// Returns (asset, uses SHA-3).
+    pub fn checksums(&self) -> Option<(&Asset, bool)> {
+        self.assets
+            .iter()
+            .find(|a| a.name == "SHA3-256SUMS")
+            .map(|a| (a, true))
+            .or_else(|| self.assets.iter().find(|a| a.name == "SHA256SUMS").map(|a| (a, false)))
     }
 
     pub fn to_json(&self, kind: Kind) -> Value {
@@ -302,7 +309,7 @@ pub fn expected_hash(sums: &str, name: &str) -> Option<String> {
 /// (received, total). Returns the verified file.
 pub fn download(release: &Release, kind: Kind, cancel: &AtomicBool, mut progress: impl FnMut(u64, u64)) -> Result<PathBuf, String> {
     let asset = release.package_for(kind).ok_or("This release has no package for your system")?;
-    let sums_asset = release.checksums().ok_or("This release has no SHA256SUMS file, so its download can’t be checked")?;
+    let (sums_asset, sha3) = release.checksums().ok_or("This release has no checksum file, so its download can’t be checked")?;
     let sums = agent()
         .get(&sums_asset.url)
         .call()
@@ -310,7 +317,7 @@ pub fn download(release: &Release, kind: Kind, cancel: &AtomicBool, mut progress
         .body_mut()
         .read_to_string()
         .map_err(|e| e.to_string())?;
-    let want = expected_hash(&sums, &asset.name).ok_or_else(|| format!("SHA256SUMS doesn’t list {}", asset.name))?;
+    let want = expected_hash(&sums, &asset.name).ok_or_else(|| format!("{} doesn’t list {}", sums_asset.name, asset.name))?;
 
     let dir = download_dir();
     let _ = std::fs::remove_dir_all(&dir); // one update at a time; drop old ones
@@ -324,7 +331,12 @@ pub fn download(release: &Release, kind: Kind, cancel: &AtomicBool, mut progress
     let total = resp.body().content_length().unwrap_or(asset.size);
     let mut reader = resp.body_mut().with_config().limit(2 << 30).reader();
     let mut file = std::fs::File::create(&part).map_err(|e| e.to_string())?;
-    let mut hasher = Sha256::new();
+    // SHA3-256 when the release publishes it, SHA-256 for older releases.
+    enum Hasher {
+        Sha2(Sha256),
+        Sha3(sha3::Sha3_256),
+    }
+    let mut hasher = if sha3 { Hasher::Sha3(sha3::Digest::new()) } else { Hasher::Sha2(Sha256::new()) };
     let mut buf = vec![0u8; 256 * 1024];
     let mut got = 0u64;
     loop {
@@ -337,12 +349,19 @@ pub fn download(release: &Release, kind: Kind, cancel: &AtomicBool, mut progress
             break;
         }
         file.write_all(&buf[..n]).map_err(|e| format!("Couldn’t save the update: {e}"))?;
-        hasher.update(&buf[..n]);
+        match &mut hasher {
+            Hasher::Sha2(h) => h.update(&buf[..n]),
+            Hasher::Sha3(h) => sha3::Digest::update(h, &buf[..n]),
+        }
         got += n as u64;
         progress(got, total);
     }
     file.flush().map_err(|e| e.to_string())?;
-    let have: String = hasher.finalize().iter().map(|b| format!("{b:02x}")).collect();
+    let digest: Vec<u8> = match hasher {
+        Hasher::Sha2(h) => h.finalize().to_vec(),
+        Hasher::Sha3(h) => sha3::Digest::finalize(h).to_vec(),
+    };
+    let have: String = digest.iter().map(|b| format!("{b:02x}")).collect();
     if have != want {
         let _ = std::fs::remove_file(&part);
         return Err("The download didn’t match its published checksum and was deleted. Try again later.".into());
@@ -467,6 +486,18 @@ mod tests {
         assert_eq!(r.package_for(Kind::Deb).unwrap().url, "https://x/deb");
         assert!(r.package_for(Kind::Manual).is_none());
         assert_eq!(pick_latest(&releases(), true).unwrap().version.to_string(), "5.3.0-beta.1");
+    }
+
+    #[test]
+    fn prefers_sha3_sums() {
+        let a = |n: &str| Asset { name: n.into(), url: format!("https://x/{n}"), size: 1 };
+        let mut r = Release { version: Version::parse("v5.3.1").unwrap(), title: String::new(), notes: String::new(), page: String::new(), published: String::new(),
+                              assets: vec![a("SHA256SUMS"), a("SHA3-256SUMS")] };
+        let (c, sha3) = r.checksums().unwrap();
+        assert!(sha3 && c.name == "SHA3-256SUMS");
+        r.assets.retain(|x| x.name != "SHA3-256SUMS");
+        let (c, sha3) = r.checksums().unwrap();
+        assert!(!sha3 && c.name == "SHA256SUMS");
     }
 
     #[test]

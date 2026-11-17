@@ -1744,8 +1744,10 @@ mod tests {
         assert_eq!(manifest["permissions"], json!(["storage", "webRequest"]));
         assert!(manifest["permissions"].as_array().unwrap().iter().all(|p| p != "webRequestBlocking"));
         assert!(e.warnings.iter().any(|w| w.contains("webRequestBlocking")));
-        assert!(installed.join(BG_FILE).exists(), "MV2 background scripts must be hosted by OyNIx");
-        assert_eq!(e.background_page, BG_FILE);
+        // OyNIx hosts MV2 background scripts in a generated page that loads them.
+        assert!(installed.join(BG_PAGE).exists(), "MV2 background scripts must be hosted by OyNIx");
+        assert_eq!(e.background_page, BG_PAGE);
+        assert!(std::fs::read_to_string(installed.join(BG_PAGE)).unwrap().contains("src=\"/background.js\""));
         assert_eq!(manifest["web_accessible_resources"][0]["resources"], json!(["assets/*"]));
         remove(&e.id, &mut list);
     }

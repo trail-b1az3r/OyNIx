@@ -22,7 +22,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 TRUSTED = ROOT / "packaging" / "poweroynix" / "trusted-keys.txt"
-MAGIC = "OyNIx poweroynix v1\n"
+MAGIC = "OyNIx poweroynix v1\n"     # format 1: SHA-256 file hashes
+MAGIC_V2 = "OyNIx poweroynix v2\n"  # format 2 (default): SHA3-256
 SIG_FILE = "oynix.sig"
 MAX_BYTES = 64 << 20
 
@@ -159,10 +160,11 @@ def files_of(folder):
     return out
 
 
-def digest_message(folder):
-    lines = [MAGIC]
+def digest_message(folder, fmt=2):
+    lines = [MAGIC_V2 if fmt >= 2 else MAGIC]
     for rel, full in files_of(Path(folder)):
-        lines.append(f"{hashlib.sha256(full.read_bytes()).hexdigest()}  {rel}\n")
+        h = hashlib.sha3_256 if fmt >= 2 else hashlib.sha256
+        lines.append(f"{h(full.read_bytes()).hexdigest()}  {rel}\n")
     return "".join(lines).encode()
 
 
@@ -194,7 +196,10 @@ def verify_dir(folder, keys):
         raise ValueError(f"oynix.sig is unreadable: {e}")
     if key not in keys:
         raise ValueError(f"signed by a key OyNIx doesn't trust ({key.hex()[:16]}…)")
-    if not ed_verify(key, digest_message(folder), signature):
+    fmt = sig.get("format", 1)
+    if fmt not in (1, 2):
+        raise ValueError(f"unknown signature format {fmt}")
+    if not ed_verify(key, digest_message(folder, fmt), signature):
         raise ValueError("the signature doesn't match the files: something changed after signing")
     return keys[key] or key.hex()[:16]
 
@@ -255,7 +260,7 @@ def main():
         secret = bytes.fromhex(key["secret"])
         pub = public_key(secret)
         sig = ed_sign(secret, digest_message(folder))
-        (folder / SIG_FILE).write_text(json.dumps({"key": pub.hex(), "signature": sig.hex(), "signer": key.get("name", "")}, indent=2) + "\n")
+        (folder / SIG_FILE).write_text(json.dumps({"format": 2, "key": pub.hex(), "signature": sig.hex(), "signer": key.get("name", "")}, indent=2) + "\n")
         print(f"Signed {meta.get('name', folder.name)} {meta.get('version', '')} as {key.get('name', pub.hex()[:16])}")
         if a.pack:
             pack(folder, a.pack)

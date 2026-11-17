@@ -3,19 +3,19 @@
 //!
 //! Uses the `ocrs` engine (pure Rust, CPU). Its two models (about 12 MB)
 //! are downloaded on first use from the ocrs project and checked against
-//! pinned SHA-256 hashes; set `OYNIX_OCR_MODELS` to a folder holding
+//! pinned SHA3-256 hashes; set `OYNIX_OCR_MODELS` to a folder holding
 //! `text-detection.onnx` and `text-recognition.onnx` to use local copies
 //! (e.g. a distribution package). Latin script only.
 
 use ocrs::{ImageSource, OcrEngine, OcrEngineParams};
-use sha2::{Digest, Sha256};
+use sha3::{Digest, Sha3_256};
 use std::io::Read;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
 const MODELS: [(&str, &str, &str); 2] = [
-    ("text-detection.onnx", "https://ocrs-models.s3-accelerate.amazonaws.com/text-detection.onnx", "a917b23dbd9524b465df7e922641b3ff2981623df4ded5a0234004ef2fee7cfe"),
-    ("text-recognition.onnx", "https://ocrs-models.s3-accelerate.amazonaws.com/text-recognition.onnx", "86c145c2edb96c8caed5b1ebb8f44d706408922211451c309c625157dd6061c5"),
+    ("text-detection.onnx", "https://ocrs-models.s3-accelerate.amazonaws.com/text-detection.onnx", "7097e43ea6a46ba2243ba4b26d1d28b64bc01d539e62896c511a4153206bb04f"),
+    ("text-recognition.onnx", "https://ocrs-models.s3-accelerate.amazonaws.com/text-recognition.onnx", "1871694075ec7e2d80b8883be5220340249e19018a10720222a9ca43b368a2a5"),
 ];
 
 /// Shared by all profiles: ~/.local/share/oynix/ocr-models.
@@ -34,8 +34,8 @@ pub fn models_present() -> bool {
     MODELS.iter().all(|(f, _, _)| models_dir().join(f).is_file())
 }
 
-fn sha256_hex(data: &[u8]) -> String {
-    Sha256::digest(data).iter().map(|b| format!("{b:02x}")).collect()
+fn sha3_hex(data: &[u8]) -> String {
+    Sha3_256::digest(data).iter().map(|b| format!("{b:02x}")).collect()
 }
 
 /// Download any missing model, verifying its hash.
@@ -53,7 +53,7 @@ pub fn ensure_models() -> Result<(), String> {
         let mut resp = super::updater::agent().get(url).call().map_err(|e| format!("Couldn’t download the text recognition model: {e}"))?;
         let mut data = Vec::new();
         resp.body_mut().with_config().limit(64 << 20).reader().read_to_end(&mut data).map_err(|e| e.to_string())?;
-        if sha256_hex(&data) != hash {
+        if sha3_hex(&data) != hash {
             return Err("The downloaded text recognition model didn’t match its expected checksum".into());
         }
         let part = dest.with_extension("part");

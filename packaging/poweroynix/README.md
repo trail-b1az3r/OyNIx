@@ -23,7 +23,8 @@ turning on Developer mode. Its manifest still has to ask for each permission.
 ## Verification
 
 OyNIx installs a `.poweroynix` only when its `oynix.sig` is a valid Ed25519
-signature over every file in the package, made by a key in
+signature over the SHA3-256 hash of every file in the package (signature
+format 2, since 5.3.1; format 1 with SHA-256 is still accepted), made by a key in
 `trusted-keys.txt` (compiled into OyNIx). The site build refuses to list one
 in the gallery under the same rule. A package changed after signing fails.
 
