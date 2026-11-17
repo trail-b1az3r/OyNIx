@@ -135,9 +135,10 @@ QtObject {
         loadQueue = []
     }
 
-    // Make the loaded set match the registry's enabled set. MV2 extensions
-    // are no longer supported by current Chromium; report that explicitly
-    // instead of repeatedly handing them to Qt WebEngine at startup.
+    // Make the loaded set match the registry's enabled set. MV2 manifests
+    // are normalized by the Rust installer before they reach Qt WebEngine;
+    // keep them eligible here just like MV3 extensions. The runtime still
+    // reports APIs that cannot be emulated by Qt's request pipeline.
     function sync() {
         if (!supported) return
         var list = entries(), wanted = {}, queue = loadQueue.slice()
