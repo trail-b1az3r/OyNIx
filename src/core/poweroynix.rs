@@ -19,14 +19,16 @@
 //!   uBlock syntax) is added to OyNIx's content blocker while the extension
 //!   is on.
 //!
-//! The signed message is `MAGIC` followed by one line per file, sorted by
-//! path: `<sha256 hex>  <path>\n` (paths relative, `/`-separated).
+//! The signed message is a header line followed by one line per file,
+//! sorted by path: `<hash hex>  <path>\n` (paths relative, `/`-separated).
+//! Format 2 (`"format": 2` in oynix.sig, the default since 5.3.1) hashes
+//! files with SHA3-256; format 1 (SHA-256) is still accepted.
 //! `scripts/poweroynix.py` makes keys, signs and verifies with the same rules.
 
-use sha2::{Digest, Sha256};
 use std::path::Path;
 
 pub const MAGIC: &str = "OyNIx poweroynix v1\n";
+pub const MAGIC_V2: &str = "OyNIx poweroynix v2\n";
 pub const SIG_FILE: &str = "oynix.sig";
 const TRUSTED_KEYS: &str = include_str!("../../packaging/poweroynix/trusted-keys.txt");
 /// Packages bigger than this are refused rather than hashed.
@@ -70,8 +72,14 @@ pub fn is_power_dir(dir: &Path) -> bool {
         .is_some_and(|v| v.get("power").and_then(|p| p.as_bool()) == Some(true))
 }
 
-/// The message that gets signed for the package in `dir`.
+/// The message that gets signed for the package in `dir` (format 2, SHA3-256).
+#[cfg(test)]
 pub fn digest_message(dir: &Path) -> Result<String, String> {
+    digest_message_format(dir, 2)
+}
+
+/// The signed message in a given format: 1 = SHA-256, 2 = SHA3-256.
+pub fn digest_message_format(dir: &Path, format: u64) -> Result<String, String> {
     fn walk(base: &Path, dir: &Path, out: &mut Vec<(String, std::path::PathBuf)>, total: &mut u64) -> Result<(), String> {
         let rd = std::fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
         for e in rd.flatten() {
@@ -101,13 +109,20 @@ pub fn digest_message(dir: &Path) -> Result<String, String> {
     let mut files = vec![];
     walk(dir, dir, &mut files, &mut 0)?;
     files.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
-    let mut msg = String::from(MAGIC);
+    let mut msg = String::from(if format >= 2 { MAGIC_V2 } else { MAGIC });
     for (rel, p) in files {
         if rel.contains('\n') {
             return Err("a file name contains a line break".into());
         }
         let bytes = std::fs::read(&p).map_err(|e| format!("{rel}: {e}"))?;
-        msg.push_str(&hex(&Sha256::digest(&bytes)));
+        let digest = if format >= 2 {
+            use sha3::Digest;
+            hex(&sha3::Sha3_256::digest(&bytes))
+        } else {
+            use sha2::Digest;
+            hex(&sha2::Sha256::digest(&bytes))
+        };
+        msg.push_str(&digest);
         msg.push_str("  ");
         msg.push_str(&rel);
         msg.push('\n');
@@ -130,7 +145,11 @@ fn verify_with(dir: &Path, keys_text: &str) -> Result<String, String> {
     let Some((_, who)) = keys.iter().find(|(k, _)| *k == key) else {
         return Err(format!("{UNVERIFIED}, and the key that signed it ({}…) isn't one OyNIx trusts.", &hex(&key)[..16]));
     };
-    let msg = digest_message(dir)?;
+    let format = sig["format"].as_u64().unwrap_or(1);
+    if format > 2 {
+        return Err(format!("{UNVERIFIED}; its oynix.sig uses format {format}, which needs a newer OyNIx."));
+    }
+    let msg = digest_message_format(dir, format)?;
     ring::signature::UnparsedPublicKey::new(&ring::signature::ED25519, &key)
         .verify(msg.as_bytes(), &signature)
         .map_err(|_| format!("{UNVERIFIED}. Its signature doesn't match its files: it was changed after it was verified."))?;
@@ -158,7 +177,7 @@ mod tests {
         let kp = ring::signature::Ed25519KeyPair::from_pkcs8(doc.as_ref()).unwrap();
         let sig = kp.sign(digest_message(dir).unwrap().as_bytes());
         let pubhex = hex(kp.public_key().as_ref());
-        std::fs::write(dir.join(SIG_FILE), serde_json::json!({ "key": pubhex, "signature": hex(sig.as_ref()) }).to_string()).unwrap();
+        std::fs::write(dir.join(SIG_FILE), serde_json::json!({ "format": 2, "key": pubhex, "signature": hex(sig.as_ref()) }).to_string()).unwrap();
         pubhex
     }
 
@@ -169,7 +188,12 @@ mod tests {
         let m = digest_message(&d).unwrap();
         let paths: Vec<&str> = m.lines().skip(1).map(|l| l.split("  ").nth(1).unwrap()).collect();
         assert_eq!(paths, ["code.ts", "icons/a.png", "oynix.json"]);
-        assert!(m.starts_with(MAGIC));
+        assert!(m.starts_with(MAGIC_V2));
+        // SHA3-256 of "console.log(1)"
+        use sha3::Digest;
+        let want: String = sha3::Sha3_256::digest(b"console.log(1)").iter().map(|b| format!("{b:02x}")).collect();
+        assert!(m.contains(&format!("{want}  code.ts")));
+        assert!(digest_message_format(&d, 1).unwrap().starts_with(MAGIC));
     }
 
     #[test]
@@ -186,6 +210,21 @@ mod tests {
         std::fs::write(d.join("code.ts"), "console.log(1)").unwrap();
         std::fs::write(d.join("extra.js"), "evil()").unwrap();
         assert!(verify_with(&d, &format!("{key} x")).unwrap_err().contains("changed after"));
+    }
+
+    #[test]
+    fn format_1_signatures_still_verify() {
+        let d = pkg("v1");
+        let rng = ring::rand::SystemRandom::new();
+        let doc = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng).unwrap();
+        let kp = ring::signature::Ed25519KeyPair::from_pkcs8(doc.as_ref()).unwrap();
+        let sig = kp.sign(digest_message_format(&d, 1).unwrap().as_bytes());
+        let key = hex(kp.public_key().as_ref());
+        std::fs::write(d.join(SIG_FILE), serde_json::json!({ "key": key, "signature": hex(sig.as_ref()) }).to_string()).unwrap();
+        assert_eq!(verify_with(&d, &format!("{key} Old")).unwrap(), "Old");
+        // ...but not if the file claims format 2.
+        std::fs::write(d.join(SIG_FILE), serde_json::json!({ "format": 2, "key": key, "signature": hex(sig.as_ref()) }).to_string()).unwrap();
+        assert!(verify_with(&d, &format!("{key} Old")).is_err());
     }
 
     #[test]

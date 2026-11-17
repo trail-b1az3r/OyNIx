@@ -6,7 +6,7 @@
 # and pushes this file to aur.archlinux.org on every release.
 
 pkgname=oynix-bin
-pkgver=5.3.0
+pkgver=5.3.1
 pkgrel=1
 pkgdesc="Fast, private web browser (Rust + QML, Qt 6.12) with Chrome/Firefox extension support (prebuilt)"
 arch=('x86_64')

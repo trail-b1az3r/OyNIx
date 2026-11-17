@@ -112,7 +112,7 @@ Install the packages with `sudo apt install ./oynix_*.deb` or `sudo pacman -U oy
 
 A version you supply is baked into the binary (`oynix --version`, Settings › About) and the package metadata. Leave it out and the version from `Cargo.toml` is used.
 
-**From GitHub:** open *Actions › Build › Run workflow*, enter a version such as `5.1.0` (optionally tick *pre-release* or *draft*), and run it. The workflow tests the code, builds the .deb and the pacman package, then publishes the release `v5.1.0` with both files and a `SHA256SUMS`. Pushing a tag such as `v5.1.0` does the same. Runs without a version only build the packages and attach them as workflow artifacts.
+**From GitHub:** open *Actions › Build › Run workflow*, enter a version such as `5.1.0` (optionally tick *pre-release* or *draft*), and run it. The workflow tests the code, builds the .deb and the pacman package, then publishes the release `v5.1.0` with both files, `SHA256SUMS` and `SHA3-256SUMS`. Pushing a tag such as `v5.1.0` does the same. Runs without a version only build the packages and attach them as workflow artifacts.
 
 **From your machine** (needs the GitHub CLI, `gh auth login`):
 
@@ -275,7 +275,7 @@ OyNIx ships its own libusb, so no extra package is needed. In containers without
 
 ## Updates
 
-OyNIx checks GitHub for a new release once a day (Settings › About › Updates; switchable, with a beta channel). It downloads the package that matches how it was installed (`.deb` or pacman), verifies it against the release's `SHA256SUMS`, and installs it with `pkexec apt-get install` / `pkexec pacman -U` when you click **Install**; **Restart** reopens your tabs in the new version. Source builds are told about new versions but not changed, and AUR installs (`oynix-bin`) leave updating to the AUR helper. The release workflow already publishes the files the updater needs (both packages and `SHA256SUMS`).
+OyNIx checks GitHub for a new release once a day (Settings › About › Updates; switchable, with a beta channel). It downloads the package that matches how it was installed (`.deb` or pacman), verifies it against the release's `SHA3-256SUMS` (or `SHA256SUMS` for releases before 5.3.1), and installs it with `pkexec apt-get install` / `pkexec pacman -U` when you click **Install**; **Restart** reopens your tabs in the new version. Source builds are told about new versions but not changed, and AUR installs (`oynix-bin`) leave updating to the AUR helper. The release workflow already publishes the files the updater needs (both packages and both checksum files).
 
 `OYNIX_UPDATE_URL` points the updater at another release feed (forks, testing); `OYNIX_UPDATE_DRY_RUN=1` prints the install command instead of running it.
 

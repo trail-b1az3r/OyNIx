@@ -20,7 +20,7 @@ description: The .poweroynix format: what power extensions can do, how verificat
 <p><b>Wallbreaker</b>, which gets you past “please turn off your ad blocker” walls, is a power extension that ships with OyNIx.</p>
 
 <h2>Verification</h2>
-<p>OyNIx installs a <code>.poweroynix</code> only when <code>oynix.sig</code> is a valid Ed25519 signature over every other file in the package, made by a key in <code>packaging/poweroynix/trusted-keys.txt</code>, which is compiled into OyNIx. A package changed after signing, signed by an unknown key, or not signed at all is refused with a message saying which. The Extension Gallery refuses to list one under the same rule.</p>
+<p>OyNIx installs a <code>.poweroynix</code> only when <code>oynix.sig</code> is a valid Ed25519 signature over the SHA3-256 hash of every other file in the package, made by a key in <code>packaging/poweroynix/trusted-keys.txt</code>, which is compiled into OyNIx. A package changed after signing, signed by an unknown key, or not signed at all is refused with a message saying which. The Extension Gallery refuses to list one under the same rule.</p>
 <p>Signing <i>is</i> the review: the people who hold trusted keys read the whole extension before they sign it. Extensions that ship inside OyNIx are the one exception — they came with the browser.</p>
 
 <h2>network.ts</h2>
