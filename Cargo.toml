@@ -22,7 +22,6 @@ serde_json = "1"
 url = "2"
 ash = { version = "0.38", default-features = false, features = ["loaded", "debug"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
-aho-corasick = "1"
 rusb = { version = "0.9", features = ["vendored"] }
 oxc = { version = "0.158", features = ["transformer", "codegen", "semantic"] }
 ureq = { version = "3", default-features = false, features = ["rustls", "platform-verifier"] }
@@ -42,9 +41,11 @@ pulldown-cmark = { version = "0.13.6", default-features = false, features = ["ht
 sha3 = "0.10"
 
 # StonedGem: the platform OyNIx is moving onto (see its docs/MIGRATION.md).
-stonedgem-url = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "6ae3b78d2be134a0d031e576937de5dc1ae6868f" }
-stonedgem-poweroynix = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "6ae3b78d2be134a0d031e576937de5dc1ae6868f" }
-stonedgem-vault = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "6ae3b78d2be134a0d031e576937de5dc1ae6868f" }
+stonedgem-url = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "08436298e0bc93045bb5d79ec71fe06efc94cd66" }
+stonedgem-poweroynix = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "08436298e0bc93045bb5d79ec71fe06efc94cd66" }
+stonedgem-vault = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "08436298e0bc93045bb5d79ec71fe06efc94cd66" }
+stonedgem-profile = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "08436298e0bc93045bb5d79ec71fe06efc94cd66" }
+stonedgem-blocker = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "08436298e0bc93045bb5d79ec71fe06efc94cd66" }
 
 [build-dependencies]
 cxx-qt-build = "0.10"

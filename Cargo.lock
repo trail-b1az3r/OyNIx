@@ -1754,7 +1754,6 @@ name = "oynix"
 version = "5.3.1"
 dependencies = [
  "aes",
- "aho-corasick",
  "ash",
  "base64",
  "cbc",
@@ -1778,7 +1777,9 @@ dependencies = [
  "sha1",
  "sha2 0.11.1",
  "sha3",
+ "stonedgem-blocker",
  "stonedgem-poweroynix",
+ "stonedgem-profile",
  "stonedgem-url",
  "stonedgem-vault",
  "ureq",
@@ -2521,9 +2522,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
+name = "stonedgem-blocker"
+version = "0.1.0"
+source = "git+https://github.com/trail-b1az3r/StonedGem?rev=08436298e0bc93045bb5d79ec71fe06efc94cd66#08436298e0bc93045bb5d79ec71fe06efc94cd66"
+dependencies = [
+ "aho-corasick",
+ "serde",
+ "serde_json",
+ "stonedgem-profile",
+ "stonedgem-url",
+]
+
+[[package]]
 name = "stonedgem-poweroynix"
 version = "0.1.0"
-source = "git+https://github.com/trail-b1az3r/StonedGem?rev=6ae3b78d2be134a0d031e576937de5dc1ae6868f#6ae3b78d2be134a0d031e576937de5dc1ae6868f"
+source = "git+https://github.com/trail-b1az3r/StonedGem?rev=08436298e0bc93045bb5d79ec71fe06efc94cd66#08436298e0bc93045bb5d79ec71fe06efc94cd66"
 dependencies = [
  "ring",
  "serde_json",
@@ -2532,9 +2545,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "stonedgem-profile"
+version = "0.1.0"
+source = "git+https://github.com/trail-b1az3r/StonedGem?rev=08436298e0bc93045bb5d79ec71fe06efc94cd66#08436298e0bc93045bb5d79ec71fe06efc94cd66"
+
+[[package]]
 name = "stonedgem-url"
 version = "0.1.0"
-source = "git+https://github.com/trail-b1az3r/StonedGem?rev=6ae3b78d2be134a0d031e576937de5dc1ae6868f#6ae3b78d2be134a0d031e576937de5dc1ae6868f"
+source = "git+https://github.com/trail-b1az3r/StonedGem?rev=08436298e0bc93045bb5d79ec71fe06efc94cd66#08436298e0bc93045bb5d79ec71fe06efc94cd66"
 dependencies = [
  "url",
 ]
@@ -2542,7 +2560,7 @@ dependencies = [
 [[package]]
 name = "stonedgem-vault"
 version = "0.1.0"
-source = "git+https://github.com/trail-b1az3r/StonedGem?rev=6ae3b78d2be134a0d031e576937de5dc1ae6868f#6ae3b78d2be134a0d031e576937de5dc1ae6868f"
+source = "git+https://github.com/trail-b1az3r/StonedGem?rev=08436298e0bc93045bb5d79ec71fe06efc94cd66#08436298e0bc93045bb5d79ec71fe06efc94cd66"
 dependencies = [
  "aes",
  "base64",
