@@ -1765,8 +1765,6 @@ dependencies = [
  "image",
  "lopdf",
  "ocrs",
- "oxc",
- "pulldown-cmark",
  "qt-build-utils",
  "ring",
  "rten",
@@ -1778,13 +1776,13 @@ dependencies = [
  "sha2 0.11.1",
  "sha3",
  "stonedgem-blocker",
- "stonedgem-poweroynix",
+ "stonedgem-extensions",
+ "stonedgem-library",
  "stonedgem-profile",
  "stonedgem-url",
  "stonedgem-vault",
  "ureq",
  "url",
- "zip",
 ]
 
 [[package]]
@@ -2524,7 +2522,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 [[package]]
 name = "stonedgem-blocker"
 version = "0.1.0"
-source = "git+https://github.com/trail-b1az3r/StonedGem?rev=08436298e0bc93045bb5d79ec71fe06efc94cd66#08436298e0bc93045bb5d79ec71fe06efc94cd66"
+source = "git+https://github.com/trail-b1az3r/StonedGem?rev=79450164f4e3ea58120a9f2582dc76a01b6b33b3#79450164f4e3ea58120a9f2582dc76a01b6b33b3"
 dependencies = [
  "aho-corasick",
  "serde",
@@ -2534,9 +2532,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "stonedgem-extensions"
+version = "0.1.0"
+source = "git+https://github.com/trail-b1az3r/StonedGem?rev=79450164f4e3ea58120a9f2582dc76a01b6b33b3#79450164f4e3ea58120a9f2582dc76a01b6b33b3"
+dependencies = [
+ "base64",
+ "oxc",
+ "pulldown-cmark",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "stonedgem-poweroynix",
+ "stonedgem-profile",
+ "zip",
+]
+
+[[package]]
+name = "stonedgem-library"
+version = "0.1.0"
+source = "git+https://github.com/trail-b1az3r/StonedGem?rev=79450164f4e3ea58120a9f2582dc76a01b6b33b3#79450164f4e3ea58120a9f2582dc76a01b6b33b3"
+dependencies = [
+ "serde",
+ "serde_json",
+ "stonedgem-profile",
+ "stonedgem-url",
+]
+
+[[package]]
 name = "stonedgem-poweroynix"
 version = "0.1.0"
-source = "git+https://github.com/trail-b1az3r/StonedGem?rev=08436298e0bc93045bb5d79ec71fe06efc94cd66#08436298e0bc93045bb5d79ec71fe06efc94cd66"
+source = "git+https://github.com/trail-b1az3r/StonedGem?rev=79450164f4e3ea58120a9f2582dc76a01b6b33b3#79450164f4e3ea58120a9f2582dc76a01b6b33b3"
 dependencies = [
  "ring",
  "serde_json",
@@ -2547,12 +2572,12 @@ dependencies = [
 [[package]]
 name = "stonedgem-profile"
 version = "0.1.0"
-source = "git+https://github.com/trail-b1az3r/StonedGem?rev=08436298e0bc93045bb5d79ec71fe06efc94cd66#08436298e0bc93045bb5d79ec71fe06efc94cd66"
+source = "git+https://github.com/trail-b1az3r/StonedGem?rev=79450164f4e3ea58120a9f2582dc76a01b6b33b3#79450164f4e3ea58120a9f2582dc76a01b6b33b3"
 
 [[package]]
 name = "stonedgem-url"
 version = "0.1.0"
-source = "git+https://github.com/trail-b1az3r/StonedGem?rev=08436298e0bc93045bb5d79ec71fe06efc94cd66#08436298e0bc93045bb5d79ec71fe06efc94cd66"
+source = "git+https://github.com/trail-b1az3r/StonedGem?rev=79450164f4e3ea58120a9f2582dc76a01b6b33b3#79450164f4e3ea58120a9f2582dc76a01b6b33b3"
 dependencies = [
  "url",
 ]
@@ -2560,7 +2585,7 @@ dependencies = [
 [[package]]
 name = "stonedgem-vault"
 version = "0.1.0"
-source = "git+https://github.com/trail-b1az3r/StonedGem?rev=08436298e0bc93045bb5d79ec71fe06efc94cd66#08436298e0bc93045bb5d79ec71fe06efc94cd66"
+source = "git+https://github.com/trail-b1az3r/StonedGem?rev=79450164f4e3ea58120a9f2582dc76a01b6b33b3#79450164f4e3ea58120a9f2582dc76a01b6b33b3"
 dependencies = [
  "aes",
  "base64",
