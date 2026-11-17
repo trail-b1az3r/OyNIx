@@ -41,6 +41,11 @@ rusqlite = { version = "0.40.2", features = ["bundled"] }
 pulldown-cmark = { version = "0.13.6", default-features = false, features = ["html"] }
 sha3 = "0.10"
 
+# StonedGem: the platform OyNIx is moving onto (see its docs/MIGRATION.md).
+stonedgem-url = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "6ae3b78d2be134a0d031e576937de5dc1ae6868f" }
+stonedgem-poweroynix = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "6ae3b78d2be134a0d031e576937de5dc1ae6868f" }
+stonedgem-vault = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "6ae3b78d2be134a0d031e576937de5dc1ae6868f" }
+
 [build-dependencies]
 cxx-qt-build = "0.10"
 qt-build-utils = "0.10"
