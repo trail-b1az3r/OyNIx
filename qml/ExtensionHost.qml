@@ -146,10 +146,6 @@ QtObject {
             if (e.kind === "oynix" && !e.manifestVersion) continue  // no Chrome/Firefox half
             wanted[e.id] = true
             var info = infos[e.id]
-            if (e.manifestVersion > 0 && e.manifestVersion < 3) {
-                if (!errors[e.id]) setError(e.id, qsTr("Manifest V%1 is not supported by this Chromium build. Update this extension to Manifest V3.").arg(e.manifestVersion))
-                continue
-            }
             if (e.enabled && !info && !errors[e.id] && e.id !== loadingId && queue.indexOf(e.id) < 0)
                 queue.push(e.id)
             else if (!e.enabled && info) manager.unloadExtension(info)
