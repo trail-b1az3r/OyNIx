@@ -1714,6 +1714,41 @@ mod tests {
     }
 
     #[test]
+    fn chrome_mv2_is_converted_and_remains_loadable() {
+        with_data_home();
+        let d = tmp("chrome-mv2");
+        std::fs::write(
+            d.join("manifest.json"),
+            r#"{
+                "manifest_version": 2,
+                "name": "uBlock Origin Compatibility Test",
+                "version": "1.0",
+                "permissions": ["storage", "webRequest", "webRequestBlocking", "<all_urls>"],
+                "background": {"scripts": ["background.js"], "persistent": true},
+                "browser_action": {"default_popup": "popup.html"},
+                "web_accessible_resources": ["assets/*"]
+            }"#,
+        ).unwrap();
+        std::fs::write(d.join("background.js"), "chrome.runtime.onInstalled.addListener(function () {});").unwrap();
+        let mut list = vec![];
+        let e = install(&d, &mut list).unwrap();
+        assert_eq!(e.manifest_version, 2, "retain source manifest version for UI and diagnostics");
+        assert!(e.is_webext());
+        let installed = Path::new(&e.path);
+        let manifest: Value = serde_json::from_slice(&std::fs::read(installed.join("manifest.json")).unwrap()).unwrap();
+        assert_eq!(manifest["manifest_version"], 3, "the Qt WebEngine-facing manifest must be normalized");
+        assert_eq!(manifest["action"]["default_popup"], "popup.html");
+        assert_eq!(manifest["host_permissions"], json!(["<all_urls>"]));
+        assert_eq!(manifest["permissions"], json!(["storage", "webRequest"]));
+        assert!(manifest["permissions"].as_array().unwrap().iter().all(|p| p != "webRequestBlocking"));
+        assert!(e.warnings.iter().any(|w| w.contains("webRequestBlocking")));
+        assert!(installed.join(BG_FILE).exists(), "MV2 background scripts must be hosted by OyNIx");
+        assert_eq!(e.background_page, BG_FILE);
+        assert_eq!(manifest["web_accessible_resources"][0]["resources"], json!(["assets/*"]));
+        remove(&e.id, &mut list);
+    }
+
+    #[test]
     fn firefox_mv3_is_converted() {
         with_data_home();
         let d = tmp("ff");
