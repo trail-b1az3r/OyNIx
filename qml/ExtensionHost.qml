@@ -19,6 +19,18 @@ QtObject {
     property var pendingReload: ({})
     property var pendingRemove: ({})
 
+    // Qt WebEngine's extension manager is asynchronous. Loading several
+    // extensions in one QML turn can race profile/extension initialisation
+    // (and older Chromium extensions can crash some Qt builds). Keep one
+    // load in flight and start the next only after loadFinished.
+    property var loadQueue: []
+    property string loadingId: ""
+    property Timer extensionLoadTimer: Timer {
+        interval: 100
+        repeat: false
+        onTriggered: host.loadNext()
+    }
+
     function norm(p) { return String(p || "").replace(/\/+$/, "") }
 
     function entries() { return JSON.parse(Core.extensions()) }
@@ -47,14 +59,20 @@ QtObject {
         target: host.supported ? host.manager : null
         function onLoadFinished(info) {
             var e = host.entryForPath(info.path)
-            if (!e) return
-            if (info.error) { host.setError(e.id, info.error); console.warn("OyNIx: extension", e.name, "failed:", info.error) }
-            else host.setError(e.id, "")
-            host.setInfo(e.id, info.isLoaded ? info : null)
-            if (info.isLoaded) {
-                Core.setExtensionWebId(e.id, info.id)
-                host.startBackground(e.id)
+            if (e && host.loadingId === e.id) host.loadingId = ""
+            if (e) {
+                if (info.error) { host.setError(e.id, info.error); console.warn("OyNIx: extension", e.name, "failed:", info.error) }
+                else host.setError(e.id, "")
+                host.setInfo(e.id, info.isLoaded ? info : null)
+                if (info.isLoaded && e.enabled) {
+                    Core.setExtensionWebId(e.id, info.id)
+                    host.startBackground(e.id)
+                } else if (info.isLoaded) {
+                    // It was disabled while the asynchronous load was pending.
+                    host.manager.unloadExtension(info)
+                }
             }
+            host.scheduleLoad()
         }
         function onUnloadFinished(info) {
             var e = host.entryForPath(info.path)
@@ -67,7 +85,7 @@ QtObject {
             host.setInfo(id, null)
             if (host.pendingReload[id]) {
                 delete host.pendingReload[id]
-                if (e && e.enabled) host.manager.loadExtension(e.path)
+                host.sync()
             }
             if (host.pendingRemove[id]) {
                 delete host.pendingRemove[id]
@@ -82,21 +100,62 @@ QtObject {
         function onExtensionsRevisionChanged() { host.sync() }
     }
 
-    function start() { sync() }
+    function start() {
+        // Let the first browser window/profile finish initialising before
+        // asking Chromium to load extensions.
+        Qt.callLater(sync)
+    }
 
-    // Make the loaded set match the registry's enabled set.
+    function scheduleLoad() {
+        if (supported && !loadingId && loadQueue.length && !extensionLoadTimer.running)
+            extensionLoadTimer.start()
+    }
+
+    function loadNext() {
+        if (!supported || loadingId) return
+        var queue = loadQueue.slice()
+        while (queue.length) {
+            var id = queue.shift()
+            var list = entries(), e = null
+            for (var i = 0; i < list.length; i++) if (list[i].id === id) { e = list[i]; break }
+            if (!e || !e.enabled || infos[id] || errors[id]) continue
+            loadingId = id
+            loadQueue = queue
+            try {
+                manager.loadExtension(e.path)
+            } catch (err) {
+                loadingId = ""
+                setError(id, String(err))
+                console.warn("OyNIx: could not load extension", e.name, err)
+                continue
+            }
+            return
+        }
+        loadQueue = []
+    }
+
+    // Make the loaded set match the registry's enabled set. MV2 extensions
+    // are no longer supported by current Chromium; report that explicitly
+    // instead of repeatedly handing them to Qt WebEngine at startup.
     function sync() {
         if (!supported) return
-        var list = entries(), wanted = {}
+        var list = entries(), wanted = {}, queue = loadQueue.slice()
         for (var i = 0; i < list.length; i++) {
             var e = list[i]
             if (e.kind === "oynix" && !e.manifestVersion) continue  // no Chrome/Firefox half
             wanted[e.id] = true
             var info = infos[e.id]
-            if (e.enabled && !info && !errors[e.id]) manager.loadExtension(e.path)
+            if (e.manifestVersion > 0 && e.manifestVersion < 3) {
+                if (!errors[e.id]) setError(e.id, qsTr("Manifest V%1 is not supported by this Chromium build. Update this extension to Manifest V3.").arg(e.manifestVersion))
+                continue
+            }
+            if (e.enabled && !info && !errors[e.id] && e.id !== loadingId && queue.indexOf(e.id) < 0)
+                queue.push(e.id)
             else if (!e.enabled && info) manager.unloadExtension(info)
         }
         for (var id in infos) if (!wanted[id] && !pendingRemove[id]) manager.unloadExtension(infos[id])
+        loadQueue = queue
+        scheduleLoad()
     }
 
     /// Install from a file/folder URL or path. Returns {ok, error, extension}.
