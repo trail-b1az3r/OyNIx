@@ -116,10 +116,52 @@ fn registry_file() -> PathBuf {
 }
 
 pub fn load() -> Vec<Entry> {
-    std::fs::read(registry_file())
+    let mut list: Vec<Entry> = std::fs::read(registry_file())
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or_default()
+        .unwrap_or_default();
+
+    // Older OyNIx releases stored MV2 manifests unchanged. Re-run the same
+    // compatibility conversion used by the installer so existing extensions
+    // (notably uBlock Origin) are migrated after a browser update too.
+    let mut migrated = false;
+    for entry in &mut list {
+        let manifest_path = Path::new(&entry.path).join("manifest.json");
+        let Ok(text) = std::fs::read_to_string(&manifest_path) else { continue };
+        let Ok(manifest) = parse_json_lenient(&text) else { continue };
+        if manifest.get("manifest_version").and_then(Value::as_u64) != Some(2) {
+            continue;
+        }
+        let old_kind = entry.kind.clone();
+        let old_enabled = entry.enabled;
+        let old_builtin = entry.builtin;
+        let old_power = entry.power;
+        let old_verified_by = entry.verified_by.clone();
+        let old_installed = entry.installed;
+        let old_first_run = entry.first_run;
+        let old_id = entry.id.clone();
+        match prepare_webext(Path::new(&entry.path), entry, None, false) {
+            Ok(()) => {
+                entry.id = old_id;
+                entry.kind = old_kind;
+                entry.enabled = old_enabled;
+                entry.builtin = old_builtin;
+                entry.power = old_power;
+                entry.verified_by = old_verified_by;
+                entry.installed = old_installed;
+                entry.first_run = old_first_run;
+                migrated = true;
+                eprintln!("oynix: migrated existing Manifest V2 extension {}", entry.name);
+            }
+            Err(err) => {
+                eprintln!("oynix: could not migrate Manifest V2 extension {}: {err}", entry.name);
+            }
+        }
+    }
+    if migrated {
+        save(&list);
+    }
+    list
 }
 
 pub fn save(list: &[Entry]) {
@@ -564,7 +606,19 @@ fn convert_mv2(m: &mut Map<String, Value>, warnings: &mut Vec<String>) {
             m.insert("action".into(), a);
         }
     }
-    // Host patterns moved to host_permissions in V3.
+    // Host patterns moved to host_permissions in V3. The MV2-only
+    // webRequestBlocking permission is invalid in MV3; keep webRequest so
+    // extensions can still observe requests through OyNIx's compatibility
+    // bridge, and report that synchronous blocking needs the native blocker.
+    for key in ["permissions", "optional_permissions"] {
+        if let Some(Value::Array(perms)) = m.get_mut(key) {
+            let had_blocking = perms.iter().any(|p| p.as_str() == Some("webRequestBlocking"));
+            perms.retain(|p| p.as_str() != Some("webRequestBlocking"));
+            if had_blocking {
+                warnings.push("Manifest V2 webRequestBlocking was migrated to OyNIx's request-observation API; synchronous blocking callbacks are not available in this build".into());
+            }
+        }
+    }
     for (from, to) in [("permissions", "host_permissions"), ("optional_permissions", "optional_host_permissions")] {
         let mut hosts = vec![];
         if let Some(Value::Array(perms)) = m.get_mut(from) {
@@ -1657,6 +1711,41 @@ mod tests {
 
     fn with_data_home() {
         std::env::set_var("XDG_DATA_HOME", std::env::temp_dir().join(format!("oynix-ext-data-{}", std::process::id())));
+    }
+
+    #[test]
+    fn chrome_mv2_is_converted_and_remains_loadable() {
+        with_data_home();
+        let d = tmp("chrome-mv2");
+        std::fs::write(
+            d.join("manifest.json"),
+            r#"{
+                "manifest_version": 2,
+                "name": "uBlock Origin Compatibility Test",
+                "version": "1.0",
+                "permissions": ["storage", "webRequest", "webRequestBlocking", "<all_urls>"],
+                "background": {"scripts": ["background.js"], "persistent": true},
+                "browser_action": {"default_popup": "popup.html"},
+                "web_accessible_resources": ["assets/*"]
+            }"#,
+        ).unwrap();
+        std::fs::write(d.join("background.js"), "chrome.runtime.onInstalled.addListener(function () {});").unwrap();
+        let mut list = vec![];
+        let e = install(&d, &mut list).unwrap();
+        assert_eq!(e.manifest_version, 2, "retain source manifest version for UI and diagnostics");
+        assert!(e.is_webext());
+        let installed = Path::new(&e.path);
+        let manifest: Value = serde_json::from_slice(&std::fs::read(installed.join("manifest.json")).unwrap()).unwrap();
+        assert_eq!(manifest["manifest_version"], 3, "the Qt WebEngine-facing manifest must be normalized");
+        assert_eq!(manifest["action"]["default_popup"], "popup.html");
+        assert_eq!(manifest["host_permissions"], json!(["<all_urls>"]));
+        assert_eq!(manifest["permissions"], json!(["storage", "webRequest"]));
+        assert!(manifest["permissions"].as_array().unwrap().iter().all(|p| p != "webRequestBlocking"));
+        assert!(e.warnings.iter().any(|w| w.contains("webRequestBlocking")));
+        assert!(installed.join(BG_FILE).exists(), "MV2 background scripts must be hosted by OyNIx");
+        assert_eq!(e.background_page, BG_FILE);
+        assert_eq!(manifest["web_accessible_resources"][0]["resources"], json!(["assets/*"]));
+        remove(&e.id, &mut list);
     }
 
     #[test]
