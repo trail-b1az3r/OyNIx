@@ -137,7 +137,9 @@ Rectangle {
                 visible: Core.startPageShowPrivacyReport
                 implicitHeight: Math.max(112, privacyRow.implicitHeight + 40)
                 radius: Theme.shapeXL
-                color: Theme.primaryContainer
+                // Neumorphic styles: a raised card rather than a coloured one.
+                color: Theme.neu ? Theme.surface : Theme.primaryContainer
+                Neu { z: -1; anchors.fill: parent; radius: parent.radius; depth: 8 }
                 RowLayout {
                     id: privacyRow
                     anchors.fill: parent
@@ -184,8 +186,9 @@ Rectangle {
                         Layout.fillWidth: true
                         implicitHeight: 56
                         radius: rh.hovered ? Theme.shapeXL : Theme.shapeL
-                        color: rh.hovered ? Theme.surfaceContainerHigh : Theme.surfaceContainerLow
+                        color: Theme.neu ? Theme.surface : rh.hovered ? Theme.surfaceContainerHigh : Theme.surfaceContainerLow
                         Behavior on radius { SpringAnimation { spring: Theme.springFast; damping: Theme.damping } }
+                        Neu { z: -1; anchors.fill: parent; radius: parent.radius; depth: rh.hovered ? 6 : 4 }
                         HoverHandler { id: rh }
                         TapHandler { onTapped: { Core.markRead(modelData.url, true); page.win.navigate(modelData.url) } }
                         RowLayout {
@@ -230,9 +233,12 @@ Rectangle {
             MShape {
                 anchors.horizontalCenter: parent.horizontalCenter
                 size: 72
-                shape: tile.hovered ? "circle" : tile.shapeName
-                color: tile.hovered ? Theme.secondaryContainer : Theme.surfaceContainerHigh
-                rotation: tile.hovered ? 20 : 0
+                // Neumorphic styles: round raised buttons, pressed in when clicked.
+                shape: Theme.neu || tile.hovered ? "circle" : tile.shapeName
+                color: Theme.neu ? Theme.surface : tile.hovered ? Theme.secondaryContainer : Theme.surfaceContainerHigh
+                neuDepth: tile.hovered ? 6 : 4
+                neuInset: tile.pressed
+                rotation: tile.hovered && !Theme.neu ? 20 : 0
                 scale: tile.pressed ? 0.92 : 1
                 Behavior on scale { SpringAnimation { spring: Theme.springFast; damping: Theme.damping } }
                 Behavior on rotation { SpringAnimation { spring: Theme.springDefault; damping: Theme.damping } }

@@ -34,6 +34,8 @@ AbstractButton {
         border.color: Theme.glassRim
         Behavior on radius { SpringAnimation { spring: Theme.springFast; damping: Theme.damping } }
         Behavior on color { ColorAnimation { duration: Theme.animFast } }
+        // Neumorphic theme: raised while hovered or checked, pressed in while pressed.
+        Neu { z: -1; anchors.fill: parent; radius: parent.radius; visible: Theme.neu && btn.glassy; inset: btn.pressed; depth: 3 }
         Rectangle {
             anchors.fill: parent
             radius: parent.radius

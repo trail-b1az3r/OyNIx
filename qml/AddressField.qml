@@ -39,6 +39,9 @@ Rectangle {
     Behavior on radius { SpringAnimation { spring: Theme.springDefault; damping: Theme.damping } }
     Behavior on color { ColorAnimation { duration: Theme.animFast } }
 
+    // Neumorphic theme: the field is pressed into the bar.
+    Neu { z: -1; anchors.fill: parent; radius: parent.radius; inset: true }
+
     HoverHandler { id: hover }
 
     function focusField() {

@@ -13,6 +13,7 @@ Rectangle {
     color: tone
     border.width: 1
     border.color: Theme.glassRim
+    Neu { z: -1; anchors.fill: parent; radius: card.radius; depth: 7 }
     ColumnLayout {
         id: col
         anchors.fill: parent
