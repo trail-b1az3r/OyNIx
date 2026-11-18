@@ -335,7 +335,7 @@ Rectangle {
                 Row_ {
                     label: qsTr("Appearance")
                     Repeater {
-                        model: [{ v: "auto", t: qsTr("Auto") }, { v: "light", t: qsTr("Light") }, { v: "dark", t: qsTr("Dark") }]
+                        model: [{ v: "auto", t: qsTr("Auto") }, { v: "light", t: qsTr("Light") }, { v: "dark", t: qsTr("Dark") }, { v: "neumorphic", t: qsTr("Neumorphic") }]
                         delegate: AbstractButton {
                             required property var modelData
                             implicitWidth: 72; implicitHeight: 62
@@ -347,6 +347,13 @@ Rectangle {
                                     width: 56; height: 38; radius: 7
                                     border.width: Core.theme === modelData.v ? 2.5 : 1
                                     border.color: Core.theme === modelData.v ? Theme.accent : Theme.separator
+                                    // Neumorphic's swatch: a raised graphite chip.
+                                    Rectangle {
+                                        visible: modelData.v === "neumorphic"
+                                        anchors.fill: parent; anchors.margins: 1; radius: 6; color: "#2b2d31"
+                                        Rectangle { anchors.centerIn: parent; width: 26; height: 14; radius: 7; color: "#2b2d31"; border.width: 1; border.color: "#3c3f45"
+                                            Rectangle { anchors.fill: parent; anchors.topMargin: 1; radius: 7; color: "transparent"; border.width: 1; border.color: Qt.rgba(1, 1, 1, 0.08) } }
+                                    }
                                     gradient: Gradient {
                                         orientation: Gradient.Horizontal
                                         GradientStop { position: 0; color: modelData.v === "dark" ? "#2a2a2d" : "#f3f3f4" }

@@ -17,6 +17,10 @@ Item {
     property real amplitude: -1
     property int lobes: -1
     default property alias content: holder.data
+    // Neumorphic theme: neumorphic depth under the shape (round shapes):
+    // 0 = none; raised by this many pixels, pressed in when neuInset.
+    property real neuDepth: 0
+    property bool neuInset: false
 
     implicitWidth: size
     implicitHeight: size
@@ -59,6 +63,7 @@ Item {
         }
     }
 
+    Neu { anchors.fill: parent; radius: width / 2; visible: Theme.neu && root.neuDepth > 0; depth: root.neuDepth; inset: root.neuInset }
     Shape {
         visible: custom.status !== Loader.Ready
         anchors.fill: parent

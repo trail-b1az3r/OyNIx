@@ -10,7 +10,7 @@ use super::paths;
 #[serde(default, rename_all = "camelCase")]
 pub struct Settings {
     // ── Appearance ────────────────────────────────────────────────
-    /// "auto" | "light" | "dark"
+    /// "auto" | "light" | "dark" | "neumorphic" (graphite neumorphism, a dark theme)
     pub theme: String,
     /// Accent colour (hex).
     pub accent: String,

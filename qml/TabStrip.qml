@@ -87,6 +87,8 @@ Item {
                 Behavior on x { enabled: !dragArea.drag.active; NumberAnimation { duration: Theme.anim; easing.type: Easing.OutCubic } }
                 Behavior on width { NumberAnimation { duration: Theme.animFast } }
                 HoverHandler { id: hov }
+                // Neumorphic theme: the selected tab stands out of the bar.
+                Neu { z: -1; anchors.fill: parent; radius: parent.radius; visible: Theme.neu && parent.current; depth: 3 }
 
                 // Hover preview card (thumbnail, title, address)
                 Timer {
