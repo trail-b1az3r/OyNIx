@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
-import QtQuick.Effects
 import QtQuick.Window
 import QtWebEngine
 import QtQuick.Dialogs
@@ -783,356 +782,312 @@ ApplicationWindow {
         anchors.fill: parent
         spacing: 0
 
-        // 5.4: the toolbar, tab bar and favourites bar float together on a
-        // translucent panel over a soft gradient backdrop (see Theme: glass).
-        Item {
-            id: chromePanel
+        // Toolbar
+        Rectangle {
+            id: toolbar
             Layout.fillWidth: true
-            Layout.preferredHeight: win.chromeVisible ? chromeRows.implicitHeight + 2 * Theme.panelMargin : 0
+            Layout.preferredHeight: win.chromeVisible ? Theme.toolbarHeight : 0
             visible: Layout.preferredHeight > 0
+            clip: true
+            color: win.privateMode ? Theme.toolbarPrivate : Theme.toolbar
+            Behavior on Layout.preferredHeight { enabled: win.focusMode; NumberAnimation { duration: Theme.animFast } }
+            // 5.4 Liquid Glass: a bright specular line along the top of the bar.
+            Rectangle { anchors.top: parent.top; width: parent.width; height: 1; color: Theme.glassSpecular; z: 1 }
 
-            Rectangle {
+            HoverHandler { id: toolbarHover; onHoveredChanged: if (!hovered && win.focusMode && !addressField.editing) win.peek = false }
+
+            // Drag the window by its toolbar; double-click to zoom.
+            Item {
                 anchors.fill: parent
-                gradient: Gradient {
-                    orientation: Gradient.Horizontal
-                    GradientStop { position: 0; color: Theme.backdropStart }
-                    GradientStop { position: 1; color: Theme.backdropEnd }
+                DragHandler { target: null; onActiveChanged: if (active) win.startSystemMove() }
+                TapHandler {
+                    acceptedButtons: Qt.LeftButton
+                    onDoubleTapped: win.visibility === Window.Maximized ? win.showNormal() : win.showMaximized()
                 }
             }
-            // Soft shadow under the panel.
-            Rectangle {
-                anchors.fill: glassPanel
-                anchors.topMargin: 4
-                anchors.bottomMargin: -4
-                radius: glassPanel.radius
-                color: Theme.alpha("#000000", Theme.dark ? 0.30 : 0.10)
-                layer.enabled: true
-                layer.effect: MultiEffect { blurEnabled: true; blur: 0.7; blurMax: 24 }
-            }
-            Rectangle {
-                id: glassPanel
+
+            RowLayout {
                 anchors.fill: parent
-                anchors.margins: Theme.panelMargin
-                radius: Theme.panelRadius
-                color: win.privateMode ? Theme.glassPrivate : Theme.glass
-                border.width: 1
-                border.color: Theme.highlightEdge
-            }
+                anchors.leftMargin: 12
+                anchors.rightMargin: 10
+                spacing: 4
 
-            ColumnLayout {
-                id: chromeRows
-                anchors.left: glassPanel.left
-                anchors.right: glassPanel.right
-                anchors.top: glassPanel.top
-                anchors.leftMargin: 2
-                anchors.rightMargin: 2
-                spacing: 0
-
-                // Toolbar
-                Rectangle {
-                    id: toolbar
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: win.chromeVisible ? Theme.toolbarHeight : 0
-                    visible: Layout.preferredHeight > 0
-                    clip: true
-                    color: "transparent"
-                    Behavior on Layout.preferredHeight { enabled: win.focusMode; NumberAnimation { duration: Theme.animFast } }
-
-                    HoverHandler { id: toolbarHover; onHoveredChanged: if (!hovered && win.focusMode && !addressField.editing) win.peek = false }
-
-                    // Drag the window by its toolbar; double-click to zoom.
-                    Item {
-                        anchors.fill: parent
-                        DragHandler { target: null; onActiveChanged: if (active) win.startSystemMove() }
-                        TapHandler {
-                            acceptedButtons: Qt.LeftButton
-                            onDoubleTapped: win.visibility === Window.Maximized ? win.showNormal() : win.showMaximized()
-                        }
-                    }
-
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 12
-                        anchors.rightMargin: 10
-                        spacing: 4
-
-                        WindowControls {
-                            window: win
-                            visible: !Core.useSystemTitleBar && Core.windowControlsSide !== "right"
-                            Layout.rightMargin: 10
-                        }
-                        IconButton {
-                            glyph: "sidebar"; tip: qsTr("Show Sidebar") + "  (Ctrl+Shift+L)"
-                            checked: win.sidebarOpen
-                            iconColor: Theme.text
-                            onClicked: win.sidebarOpen = !win.sidebarOpen
-                        }
-                        IconButton {
-                            id: backBtn
-                            glyph: "back"; tip: qsTr("Back — right-click for history")
-                            enabled: win.currentView !== null && win.currentView.canGoBack
-                            onClicked: win.currentView.goBack()
-                            TapHandler { acceptedButtons: Qt.RightButton; onTapped: win.showNavHistory(backBtn, true) }
-                            onPressAndHold: win.showNavHistory(backBtn, true)
-                        }
-                        IconButton {
-                            id: fwdBtn
-                            glyph: "forward"; tip: qsTr("Forward — right-click for history")
-                            enabled: win.currentView !== null && win.currentView.canGoForward
-                            onClicked: win.currentView.goForward()
-                            TapHandler { acceptedButtons: Qt.RightButton; onTapped: win.showNavHistory(fwdBtn, false) }
-                            onPressAndHold: win.showNavHistory(fwdBtn, false)
-                        }
-
-                        Item { Layout.fillWidth: !win.compactTabs; Layout.preferredWidth: win.compactTabs ? 4 : -1 }
-
-                        AddressField {
-                            id: addressField
-                            win: winRef
-                            Layout.preferredWidth: win.compactTabs ? Math.min(380, toolbar.width * 0.3) : Math.min(700, Math.max(280, toolbar.width * 0.46))
-                            Layout.minimumWidth: 200
-                            onSiteInfoRequested: function (anchor) {
-                                if (sitePopover.recentlyClosed()) return
-                                var p = anchor.mapToItem(win.contentItem, 0, anchor.height + 6)
-                                sitePopover.x = p.x - 8; sitePopover.y = p.y
-                                sitePopover.open()
-                            }
-                            onEditingChanged: if (!editing && win.focusMode && !toolbarHover.hovered) win.peek = false
-                        }
-
-                        TabStrip {
-                            visible: win.compactTabs
-                            win: winRef
-                            compact: true
-                            Layout.fillWidth: true
-                            Layout.leftMargin: 6
-                        }
-                        Item { Layout.fillWidth: !win.compactTabs; visible: !win.compactTabs }
-
-                        IconButton {
-                            id: claudeBtn
-                            visible: Core.agentEnabled && !win.privateMode
-                            glyph: "sparkles"; tip: qsTr("Claude")
-                            checked: win.sidebarOpen && sidebar.panel === "claude"
-                            onClicked: {
-                                if (win.sidebarOpen && sidebar.panel === "claude") win.sidebarOpen = false
-                                else { win.sidebarOpen = true; sidebar.panel = "claude" }
-                            }
-                        }
-                        IconButton {
-                            id: shieldBtn
-                            glyph: "shield"
-                            tip: qsTr("Privacy Report for This Site")
-                            property int count: 0
-                            badge: Core.contentBlocker ? count : 0
-                            iconColor: Core.contentBlocker ? Theme.text : Theme.textFaint
-                            Timer {
-                                interval: 1200; repeat: true; running: win.active && win.currentTab !== null
-                                onTriggered: shieldBtn.count = JSON.parse(Core.siteReport(win.currentTab.host)).blocked
-                            }
-                            onClicked: {
-                                if (privacyPopover.recentlyClosed()) return
-                                var p = shieldBtn.mapToItem(win.contentItem, shieldBtn.width - privacyPopover.width, shieldBtn.height + 6)
-                                privacyPopover.x = p.x; privacyPopover.y = p.y
-                                privacyPopover.open()
-                            }
-                        }
-                        IconButton {
-                            id: dlBtn
-                            visible: win.app.downloads.length > 0
-                            glyph: "download"; tip: qsTr("Downloads")
-                            badge: win.app.activeDownloads
-                            onClicked: { if (!downloadsPopover.recentlyClosed()) downloadsPopover.open() }
-                        }
-                        IconButton {
-                            id: shareBtn
-                            glyph: "share"; tip: qsTr("Share")
-                            enabled: win.currentTab !== null && !win.currentTab.internal
-                            onClicked: {
-                                if (shareMenu.recentlyClosed()) return
-                                var p = shareBtn.mapToItem(win.contentItem, shareBtn.width - shareMenu.width, shareBtn.height + 6)
-                                shareMenu.x = p.x; shareMenu.y = p.y
-                                shareMenu.open()
-                            }
-                        }
-                        ToolbarDivider { visible: extMenuBtn.visible }
-                        // Pinned extensions (pin them from the puzzle menu)
-                        Repeater {
-                            model: {
-                                var host = win.app.extensionHost
-                                host.revision; Core.extensionsRevision
-                                if (win.privateMode || !host.supported) return []
-                                return JSON.parse(Core.extensions()).filter(function (e) {
-                                    // Only pinned extensions get a toolbar button; the rest are in the puzzle menu.
-                                    if (!e.enabled || !Core.isExtensionPinned(e.id)) return false
-                                    // OyNIx extensions get a button when they have a panel or page.
-                                    if (e.kind === "oynix" && (e.hasPanel || e.hasPage)) return true
-                                    // Power extensions may also have a Chrome/Firefox half.
-                                    if (e.kind === "oynix" && !e.manifestVersion) return false
-                                    return host.isLoaded(e.id)
-                                })
-                            }
-                            delegate: AbstractButton {
-                                id: extBtn
-                                required property var modelData
-                                implicitWidth: 30; implicitHeight: 28
-                                hoverEnabled: true
-                                focusPolicy: Qt.NoFocus
-                                background: Rectangle { radius: 6; color: extBtn.pressed ? Theme.pressed : (extBtn.hovered ? Theme.hover : "transparent") }
-                                contentItem: Item {
-                                    Image {
-                                        anchors.centerIn: parent
-                                        width: 16; height: 16
-                                        sourceSize: Qt.size(32, 32)
-                                        source: extBtn.modelData.icon ? "file://" + extBtn.modelData.icon : ""
-                                        visible: status === Image.Ready
-                                    }
-                                    Icon { anchors.centerIn: parent; visible: !extBtn.modelData.icon; name: "puzzle"; size: 16 }
-                                    Rectangle {
-                                        readonly property var b: win.app.extensionHost.badgeFor(extBtn.modelData)
-                                        visible: b !== null && b.text !== ""
-                                        anchors.right: parent.right; anchors.bottom: parent.bottom
-                                        anchors.rightMargin: -2; anchors.bottomMargin: -1
-                                        height: 12; width: Math.max(12, bt.implicitWidth + 6); radius: 6
-                                        color: b ? b.color : "transparent"
-                                        Text { id: bt; anchors.centerIn: parent; text: parent.b ? parent.b.text : ""; color: "white"; font.pixelSize: 8; font.bold: true }
-                                    }
-                                }
-                                ToolTip.visible: hovered; ToolTip.delay: 600
-                                ToolTip.text: { var b = win.app.extensionHost.badgeFor(modelData); return b && b.title ? b.title : modelData.name }
-                                onClicked: win.activateExtension(modelData, extBtn)
-                            }
-                        }
-                        IconButton {
-                            id: extMenuBtn
-                            glyph: "puzzle"; tip: qsTr("Extensions")
-                            visible: !win.privateMode && Core.extensionsRevision >= 0 && JSON.parse(Core.extensions()).length > 0
-                            onClicked: {
-                                if (extMenu.recentlyClosed()) return
-                                var p = extMenuBtn.mapToItem(win.contentItem, extMenuBtn.width - extMenu.width, extMenuBtn.height + 6)
-                                extMenu.x = p.x; extMenu.y = p.y
-                                extMenu.open()
-                            }
-                        }
-                        ToolbarDivider {}
-                        // Red while an OyNIx update is waiting, even after "Later" on the banner.
-                        IconButton {
-                            id: updateBtn
-                            readonly property var u: win.app.updater
-                            readonly property var rel: u.release ? JSON.parse(u.release) : null
-                            visible: rel !== null && !win.privateMode
-                                && ["available", "downloading", "ready", "installing", "installed"].indexOf(u.state) >= 0
-                            glyph: u.state === "installed" ? "reload" : "download"
-                            iconColor: Theme.danger
-                            tip: !rel ? "" : u.state === "installed" ? qsTr("OyNIx %1 is installed: restart to use it").arg(rel.version)
-                                : u.state === "downloading" ? qsTr("Downloading OyNIx %1…").arg(rel.version)
-                                : qsTr("OyNIx %1 is available").arg(rel.version)
-                            onClicked: {
-                                if (u.state === "installed") {
-                                    if (!win.app.restartForUpdate()) win.toastMessage(qsTr("Couldn’t restart OyNIx; please start it again yourself."))
-                                } else if (u.state === "ready" || u.state === "installing" || (u.state === "available" && updateBanner.external)) {
-                                    updateBanner.dismissed = ""   // bring the banner back
-                                } else {
-                                    win.app.openSettings("about")
-                                }
-                            }
-                        }
-                        IconButton { glyph: "plus"; tip: qsTr("New Tab") + "  (Ctrl+T)"; onClicked: win.newTab() }
-                        IconButton {
-                            glyph: "tabs"; tip: qsTr("Show All Tabs") + "  (Ctrl+Shift+\\)"
-                            checked: win.overviewOpen
-                            iconColor: Theme.text
-                            onClicked: win.overviewOpen = !win.overviewOpen
-                        }
-                        IconButton {
-                            id: moreBtn
-                            glyph: "more"; tip: qsTr("Menu")
-                            onClicked: {
-                                if (mainMenu.recentlyClosed()) return
-                                var p = moreBtn.mapToItem(win.contentItem, moreBtn.width - mainMenu.width, moreBtn.height + 6)
-                                mainMenu.x = p.x; mainMenu.y = p.y
-                                mainMenu.open()
-                            }
-                        }
-                        WindowControls {
-                            window: win
-                            visible: !Core.useSystemTitleBar && Core.windowControlsSide === "right"
-                            Layout.leftMargin: 10
-                        }
-                    }
+                WindowControls {
+                    window: win
+                    visible: !Core.useSystemTitleBar && Core.windowControlsSide !== "right"
+                    Layout.rightMargin: 10
+                }
+                IconButton {
+                    glyph: "sidebar"; tip: qsTr("Show Sidebar") + "  (Ctrl+Shift+L)"
+                    checked: win.sidebarOpen
+                    iconColor: Theme.text
+                    onClicked: win.sidebarOpen = !win.sidebarOpen
+                }
+                IconButton {
+                    id: backBtn
+                    glyph: "back"; tip: qsTr("Back — right-click for history")
+                    enabled: win.currentView !== null && win.currentView.canGoBack
+                    onClicked: win.currentView.goBack()
+                    TapHandler { acceptedButtons: Qt.RightButton; onTapped: win.showNavHistory(backBtn, true) }
+                    onPressAndHold: win.showNavHistory(backBtn, true)
+                }
+                IconButton {
+                    id: fwdBtn
+                    glyph: "forward"; tip: qsTr("Forward — right-click for history")
+                    enabled: win.currentView !== null && win.currentView.canGoForward
+                    onClicked: win.currentView.goForward()
+                    TapHandler { acceptedButtons: Qt.RightButton; onTapped: win.showNavHistory(fwdBtn, false) }
+                    onPressAndHold: win.showNavHistory(fwdBtn, false)
                 }
 
-                // Standard tab bar
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: tabStrip.implicitHeight
-                    visible: win.chromeVisible && Core.tabLayout === "standard" && tabModel.count > 1
-                    color: "transparent"
-                    TabStrip {
-                        id: tabStrip
-                        anchors.fill: parent
-                        anchors.leftMargin: 8
-                        anchors.rightMargin: 8
-                        win: winRef
+                Item { Layout.fillWidth: !win.compactTabs; Layout.preferredWidth: win.compactTabs ? 4 : -1 }
+
+                AddressField {
+                    id: addressField
+                    win: winRef
+                    Layout.preferredWidth: win.compactTabs ? Math.min(380, toolbar.width * 0.3) : Math.min(700, Math.max(280, toolbar.width * 0.46))
+                    Layout.minimumWidth: 200
+                    onSiteInfoRequested: function (anchor) {
+                        if (sitePopover.recentlyClosed()) return
+                        var p = anchor.mapToItem(win.contentItem, 0, anchor.height + 6)
+                        sitePopover.x = p.x - 8; sitePopover.y = p.y
+                        sitePopover.open()
                     }
+                    onEditingChanged: if (!editing && win.focusMode && !toolbarHover.hovered) win.peek = false
                 }
 
-                // Favorites bar
-                Rectangle {
+                TabStrip {
+                    visible: win.compactTabs
+                    win: winRef
+                    compact: true
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 28
-                    visible: win.chromeVisible && Core.showFavoritesBar
-                    color: "transparent"
-                    Row {
-                        anchors.fill: parent
-                        anchors.leftMargin: 10
-                        anchors.rightMargin: allBmBtn.width + 16
-                        spacing: 2
-                        clip: true
-                        Repeater {
-                            model: { Core.bookmarksRevision; return JSON.parse(Core.bookmarks("favorites")) }
-                            delegate: AbstractButton {
-                                required property var modelData
-                                height: 24
-                                anchors.verticalCenter: parent.verticalCenter
-                                width: Math.min(180, favRow.implicitWidth + 16)
-                                hoverEnabled: true
-                                background: Rectangle { radius: 5; color: parent.hovered ? Theme.hover : "transparent" }
-                                contentItem: Row {
-                                    id: favRow
-                                    spacing: 6
-                                    leftPadding: 2
-                                    Favicon { size: 14; url: modelData.url; title: modelData.title; anchors.verticalCenter: parent.verticalCenter }
-                                    Txt { text: modelData.title; font.pixelSize: 12; width: Math.min(implicitWidth, 140); anchors.verticalCenter: parent.verticalCenter }
-                                }
-                                onClicked: win.navigate(modelData.url)
-                            }
-                        }
+                    Layout.leftMargin: 6
+                }
+                Item { Layout.fillWidth: !win.compactTabs; visible: !win.compactTabs }
+
+                IconButton {
+                    id: claudeBtn
+                    visible: Core.agentEnabled && !win.privateMode
+                    glyph: "sparkles"; tip: qsTr("Claude")
+                    checked: win.sidebarOpen && sidebar.panel === "claude"
+                    onClicked: {
+                        if (win.sidebarOpen && sidebar.panel === "claude") win.sidebarOpen = false
+                        else { win.sidebarOpen = true; sidebar.panel = "claude" }
                     }
-                    AbstractButton {
-                        id: allBmBtn
-                        anchors.right: parent.right; anchors.rightMargin: 8
-                        anchors.verticalCenter: parent.verticalCenter
-                        height: 24; width: allBmRow.implicitWidth + 16
+                }
+                IconButton {
+                    id: shieldBtn
+                    glyph: "shield"
+                    tip: qsTr("Privacy Report for This Site")
+                    property int count: 0
+                    badge: Core.contentBlocker ? count : 0
+                    iconColor: Core.contentBlocker ? Theme.text : Theme.textFaint
+                    Timer {
+                        interval: 1200; repeat: true; running: win.active && win.currentTab !== null
+                        onTriggered: shieldBtn.count = JSON.parse(Core.siteReport(win.currentTab.host)).blocked
+                    }
+                    onClicked: {
+                        if (privacyPopover.recentlyClosed()) return
+                        var p = shieldBtn.mapToItem(win.contentItem, shieldBtn.width - privacyPopover.width, shieldBtn.height + 6)
+                        privacyPopover.x = p.x; privacyPopover.y = p.y
+                        privacyPopover.open()
+                    }
+                }
+                IconButton {
+                    id: dlBtn
+                    visible: win.app.downloads.length > 0
+                    glyph: "download"; tip: qsTr("Downloads")
+                    badge: win.app.activeDownloads
+                    onClicked: { if (!downloadsPopover.recentlyClosed()) downloadsPopover.open() }
+                }
+                IconButton {
+                    id: shareBtn
+                    glyph: "share"; tip: qsTr("Share")
+                    enabled: win.currentTab !== null && !win.currentTab.internal
+                    onClicked: {
+                        if (shareMenu.recentlyClosed()) return
+                        var p = shareBtn.mapToItem(win.contentItem, shareBtn.width - shareMenu.width, shareBtn.height + 6)
+                        shareMenu.x = p.x; shareMenu.y = p.y
+                        shareMenu.open()
+                    }
+                }
+                ToolbarDivider { visible: extMenuBtn.visible }
+                // Pinned extensions (pin them from the puzzle menu)
+                Repeater {
+                    model: {
+                        var host = win.app.extensionHost
+                        host.revision; Core.extensionsRevision
+                        if (win.privateMode || !host.supported) return []
+                        return JSON.parse(Core.extensions()).filter(function (e) {
+                            // Only pinned extensions get a toolbar button; the rest are in the puzzle menu.
+                            if (!e.enabled || !Core.isExtensionPinned(e.id)) return false
+                            // OyNIx extensions get a button when they have a panel or page.
+                            if (e.kind === "oynix" && (e.hasPanel || e.hasPage)) return true
+                            // Power extensions may also have a Chrome/Firefox half.
+                            if (e.kind === "oynix" && !e.manifestVersion) return false
+                            return host.isLoaded(e.id)
+                        })
+                    }
+                    delegate: AbstractButton {
+                        id: extBtn
+                        required property var modelData
+                        implicitWidth: 30; implicitHeight: 28
                         hoverEnabled: true
-                        background: Rectangle { radius: 5; color: allBmBtn.hovered ? Theme.hover : "transparent" }
-                        contentItem: Row {
-                            id: allBmRow
-                            spacing: 6; leftPadding: 2
-                            Icon { name: "folder"; size: 14; color: Theme.textDim; anchors.verticalCenter: parent.verticalCenter }
-                            Txt { text: qsTr("All Bookmarks"); font.pixelSize: 12; anchors.verticalCenter: parent.verticalCenter }
+                        focusPolicy: Qt.NoFocus
+                        background: Rectangle { radius: 6; color: extBtn.pressed ? Theme.pressed : (extBtn.hovered ? Theme.hover : "transparent") }
+                        contentItem: Item {
+                            Image {
+                                anchors.centerIn: parent
+                                width: 16; height: 16
+                                sourceSize: Qt.size(32, 32)
+                                source: extBtn.modelData.icon ? "file://" + extBtn.modelData.icon : ""
+                                visible: status === Image.Ready
+                            }
+                            Icon { anchors.centerIn: parent; visible: !extBtn.modelData.icon; name: "puzzle"; size: 16 }
+                            Rectangle {
+                                readonly property var b: win.app.extensionHost.badgeFor(extBtn.modelData)
+                                visible: b !== null && b.text !== ""
+                                anchors.right: parent.right; anchors.bottom: parent.bottom
+                                anchors.rightMargin: -2; anchors.bottomMargin: -1
+                                height: 12; width: Math.max(12, bt.implicitWidth + 6); radius: 6
+                                color: b ? b.color : "transparent"
+                                Text { id: bt; anchors.centerIn: parent; text: parent.b ? parent.b.text : ""; color: "white"; font.pixelSize: 8; font.bold: true }
+                            }
                         }
-                        onClicked: {
-                            if (allBookmarks.recentlyClosed()) return
-                            var p = allBmBtn.mapToItem(win.contentItem, allBmBtn.width - allBookmarks.width, allBmBtn.height + 4)
-                            allBookmarks.x = Math.max(8, p.x); allBookmarks.y = p.y
-                            allBookmarks.open()
+                        ToolTip.visible: hovered; ToolTip.delay: 600
+                        ToolTip.text: { var b = win.app.extensionHost.badgeFor(modelData); return b && b.title ? b.title : modelData.name }
+                        onClicked: win.activateExtension(modelData, extBtn)
+                    }
+                }
+                IconButton {
+                    id: extMenuBtn
+                    glyph: "puzzle"; tip: qsTr("Extensions")
+                    visible: !win.privateMode && Core.extensionsRevision >= 0 && JSON.parse(Core.extensions()).length > 0
+                    onClicked: {
+                        if (extMenu.recentlyClosed()) return
+                        var p = extMenuBtn.mapToItem(win.contentItem, extMenuBtn.width - extMenu.width, extMenuBtn.height + 6)
+                        extMenu.x = p.x; extMenu.y = p.y
+                        extMenu.open()
+                    }
+                }
+                ToolbarDivider {}
+                // Red while an OyNIx update is waiting, even after "Later" on the banner.
+                IconButton {
+                    id: updateBtn
+                    readonly property var u: win.app.updater
+                    readonly property var rel: u.release ? JSON.parse(u.release) : null
+                    visible: rel !== null && !win.privateMode
+                        && ["available", "downloading", "ready", "installing", "installed"].indexOf(u.state) >= 0
+                    glyph: u.state === "installed" ? "reload" : "download"
+                    iconColor: Theme.danger
+                    tip: !rel ? "" : u.state === "installed" ? qsTr("OyNIx %1 is installed: restart to use it").arg(rel.version)
+                        : u.state === "downloading" ? qsTr("Downloading OyNIx %1…").arg(rel.version)
+                        : qsTr("OyNIx %1 is available").arg(rel.version)
+                    onClicked: {
+                        if (u.state === "installed") {
+                            if (!win.app.restartForUpdate()) win.toastMessage(qsTr("Couldn’t restart OyNIx; please start it again yourself."))
+                        } else if (u.state === "ready" || u.state === "installing" || (u.state === "available" && updateBanner.external)) {
+                            updateBanner.dismissed = ""   // bring the banner back
+                        } else {
+                            win.app.openSettings("about")
                         }
                     }
+                }
+                IconButton { glyph: "plus"; tip: qsTr("New Tab") + "  (Ctrl+T)"; onClicked: win.newTab() }
+                IconButton {
+                    glyph: "tabs"; tip: qsTr("Show All Tabs") + "  (Ctrl+Shift+\\)"
+                    checked: win.overviewOpen
+                    iconColor: Theme.text
+                    onClicked: win.overviewOpen = !win.overviewOpen
+                }
+                IconButton {
+                    id: moreBtn
+                    glyph: "more"; tip: qsTr("Menu")
+                    onClicked: {
+                        if (mainMenu.recentlyClosed()) return
+                        var p = moreBtn.mapToItem(win.contentItem, moreBtn.width - mainMenu.width, moreBtn.height + 6)
+                        mainMenu.x = p.x; mainMenu.y = p.y
+                        mainMenu.open()
+                    }
+                }
+                WindowControls {
+                    window: win
+                    visible: !Core.useSystemTitleBar && Core.windowControlsSide === "right"
+                    Layout.leftMargin: 10
                 }
             }
         }
 
+        // Standard tab bar
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: tabStrip.implicitHeight
+            visible: win.chromeVisible && Core.tabLayout === "standard" && tabModel.count > 1
+            color: win.privateMode ? Theme.toolbarPrivate : Theme.toolbar
+            TabStrip {
+                id: tabStrip
+                anchors.fill: parent
+                anchors.leftMargin: 8
+                anchors.rightMargin: 8
+                win: winRef
+            }
+        }
+
+        // Favorites bar
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 28
+            visible: win.chromeVisible && Core.showFavoritesBar
+            color: win.privateMode ? Theme.toolbarPrivate : Theme.toolbar
+            Row {
+                anchors.fill: parent
+                anchors.leftMargin: 10
+                anchors.rightMargin: allBmBtn.width + 16
+                spacing: 2
+                clip: true
+                Repeater {
+                    model: { Core.bookmarksRevision; return JSON.parse(Core.bookmarks("favorites")) }
+                    delegate: AbstractButton {
+                        required property var modelData
+                        height: 24
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Math.min(180, favRow.implicitWidth + 16)
+                        hoverEnabled: true
+                        background: Rectangle { radius: 5; color: parent.hovered ? Theme.hover : "transparent" }
+                        contentItem: Row {
+                            id: favRow
+                            spacing: 6
+                            leftPadding: 2
+                            Favicon { size: 14; url: modelData.url; title: modelData.title; anchors.verticalCenter: parent.verticalCenter }
+                            Txt { text: modelData.title; font.pixelSize: 12; width: Math.min(implicitWidth, 140); anchors.verticalCenter: parent.verticalCenter }
+                        }
+                        onClicked: win.navigate(modelData.url)
+                    }
+                }
+            }
+            AbstractButton {
+                id: allBmBtn
+                anchors.right: parent.right; anchors.rightMargin: 8
+                anchors.verticalCenter: parent.verticalCenter
+                height: 24; width: allBmRow.implicitWidth + 16
+                hoverEnabled: true
+                background: Rectangle { radius: 5; color: allBmBtn.hovered ? Theme.hover : "transparent" }
+                contentItem: Row {
+                    id: allBmRow
+                    spacing: 6; leftPadding: 2
+                    Icon { name: "folder"; size: 14; color: Theme.textDim; anchors.verticalCenter: parent.verticalCenter }
+                    Txt { text: qsTr("All Bookmarks"); font.pixelSize: 12; anchors.verticalCenter: parent.verticalCenter }
+                }
+                onClicked: {
+                    if (allBookmarks.recentlyClosed()) return
+                    var p = allBmBtn.mapToItem(win.contentItem, allBmBtn.width - allBookmarks.width, allBmBtn.height + 4)
+                    allBookmarks.x = Math.max(8, p.x); allBookmarks.y = p.y
+                    allBookmarks.open()
+                }
+            }
+        }
+
+        Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.separator; visible: win.chromeVisible }
 
         FindBar { id: findBar; win: winRef; visible: false; Layout.fillWidth: true }
 

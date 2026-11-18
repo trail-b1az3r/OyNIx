@@ -20,11 +20,22 @@ Rectangle {
     signal siteInfoRequested(var anchor)
 
     implicitHeight: 44
-    // 5.4: a softly inset capsule in the glass panel; a primary ring while editing.
-    radius: height / 2
-    color: editing ? Theme.surfaceContainerLowest : (hover.hovered ? Qt.tint(Theme.inset, Theme.hover) : Theme.inset)
+    // 5.4 Liquid Glass: a glass capsule with a light rim and a bright top
+    // edge; while editing it firms up and shows a primary ring.
+    radius: editing ? Theme.shapeL : height / 2
+    color: editing ? Theme.surfaceContainerLowest : (hover.hovered ? Theme.glassFillStrong : Theme.glassFill)
     border.width: editing ? 2 : 1
-    border.color: editing ? Theme.primary : Theme.insetEdge
+    border.color: editing ? Theme.primary : Theme.glassRim
+    Rectangle {
+        // Specular line along the top of the glass.
+        visible: !parent.editing
+        anchors.top: parent.top
+        anchors.topMargin: 1
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: parent.width - parent.radius * 2
+        height: 1
+        color: Theme.glassSpecular
+    }
     Behavior on radius { SpringAnimation { spring: Theme.springDefault; damping: Theme.damping } }
     Behavior on color { ColorAnimation { duration: Theme.animFast } }
 

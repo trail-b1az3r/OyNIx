@@ -24,9 +24,14 @@ AbstractButton {
     hoverEnabled: true
     focusPolicy: Qt.NoFocus
 
+    // 5.4 Liquid Glass: clear at rest; a glass capsule (translucent fill,
+    // light rim) while hovered, pressed or checked; filled stays solid.
+    readonly property bool glassy: !filled && enabled && (hovered || pressed || checked || tonal)
     background: Rectangle {
         radius: btn.pressed ? Math.min(height / 2, Theme.shapeM) : height / 2
-        color: btn.filled ? Theme.primary : (btn.checked || btn.tonal) ? Theme.secondaryContainer : "transparent"
+        color: btn.filled ? Theme.primary : btn.glassy ? ((btn.checked || btn.tonal) ? Qt.tint(Theme.glassFill, Theme.alpha(Theme.secondaryContainer, 0.55)) : Theme.glassFill) : "transparent"
+        border.width: btn.glassy ? 1 : 0
+        border.color: Theme.glassRim
         Behavior on radius { SpringAnimation { spring: Theme.springFast; damping: Theme.damping } }
         Behavior on color { ColorAnimation { duration: Theme.animFast } }
         Rectangle {
@@ -45,7 +50,7 @@ AbstractButton {
             size: btn.iconSize
             color: btn.iconColor
             filled: btn.filledIcon
-            scale: btn.pressed ? 0.9 : 1
+            scale: btn.pressed ? 0.88 : 1
             Behavior on scale { SpringAnimation { spring: Theme.springFast; damping: Theme.damping } }
         }
         Rectangle {

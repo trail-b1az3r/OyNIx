@@ -64,6 +64,7 @@ Popup {
 
     background: Item {
         Rectangle { anchors.fill: parent; anchors.topMargin: 3; anchors.margins: -1; radius: Theme.shapeL + 2; color: Theme.shadow; opacity: 0.45 }
-        Rectangle { anchors.fill: parent; radius: Theme.shapeL; color: Theme.surfaceContainer }
+        // 5.4 Liquid Glass: a translucent sheet with a light rim.
+        Rectangle { anchors.fill: parent; radius: Theme.shapeL; color: Theme.alpha(Theme.surfaceContainer, 0.94); border.width: 1; border.color: Theme.glassRim }
     }
 }

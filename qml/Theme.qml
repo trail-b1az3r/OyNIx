@@ -68,8 +68,8 @@ QtObject {
     readonly property color accent: primary
     readonly property color accentText: primaryFg
     readonly property color window: surface
-    readonly property color toolbar: surfaceContainer
-    readonly property color toolbarPrivate: dark ? Qt.tint(surfaceContainer, alpha(tertiary, 0.18)) : Qt.tint(surfaceContainer, alpha(tertiary, 0.14))
+    readonly property color toolbar: glassBar
+    readonly property color toolbarPrivate: glassBarPrivate
     readonly property color tabActive: secondaryContainer
     readonly property color tabHover: hover
     readonly property color sidebar: surfaceContainerLow
@@ -87,19 +87,18 @@ QtObject {
     readonly property color warning: dark ? "#ffb95c" : "#a05a00"
     readonly property color purple: tertiary
 
-    // ── 5.4 surfaces (StonedGem docs/DESIGN.md): controls float on a
-    // translucent panel over a soft gradient backdrop; the selected tab is
-    // softly raised, fields softly inset. ──
-    readonly property color backdropStart: Qt.tint(surface, alpha(primary, dark ? 0.16 : 0.12))
-    readonly property color backdropEnd: Qt.tint(surface, alpha(tertiary, dark ? 0.10 : 0.08))
-    readonly property color glass: alpha(surfaceContainerHigh, dark ? 0.72 : 0.74)
-    readonly property color glassPrivate: alpha(Qt.tint(surfaceContainerHigh, alpha(tertiary, 0.22)), dark ? 0.80 : 0.82)
-    readonly property color highlightEdge: dark ? alpha("#ffffff", 0.10) : alpha("#ffffff", 0.70)
-    readonly property color raised: surfaceContainerHighest
-    readonly property color inset: alpha(surfaceContainerLowest, dark ? 0.55 : 0.65)
-    readonly property color insetEdge: alpha(outlineVariant, 0.7)
-    readonly property int panelMargin: 8
-    readonly property int panelRadius: Math.round(22 * cornerScale)
+    // ── 5.4: Liquid Glass on the classic layout. Controls are clear until
+    // used, then a translucent glass capsule with a light rim and a bright
+    // top edge (specular line); the address field and the selected tab are
+    // glass at rest; bars are translucent with a specular top line. No
+    // gradient backdrops. ──
+    readonly property color glassFill: alpha(surfaceContainerHighest, dark ? 0.55 : 0.62)
+    readonly property color glassFillStrong: alpha(surfaceContainerHighest, dark ? 0.78 : 0.86)
+    readonly property color glassRim: dark ? alpha("#ffffff", 0.14) : alpha(outlineVariant, 0.65)
+    readonly property color glassSpecular: dark ? alpha("#ffffff", 0.20) : alpha("#ffffff", 0.95)
+    readonly property color glassShadow: alpha("#000000", dark ? 0.35 : 0.10)
+    readonly property color glassBar: alpha(surfaceContainer, dark ? 0.88 : 0.86)
+    readonly property color glassBarPrivate: alpha(Qt.tint(surfaceContainer, alpha(tertiary, dark ? 0.18 : 0.14)), 0.9)
     // Smallest click target for icon buttons (Apple / M3 guidance).
     readonly property int target: 40
 
@@ -113,7 +112,7 @@ QtObject {
     readonly property int radiusLarge: shapeXL
 
     // ── Metrics ──
-    readonly property int toolbarHeight: 56
+    readonly property int toolbarHeight: 60
     readonly property int tabHeight: 38
     readonly property int sidebarWidth: 300
 

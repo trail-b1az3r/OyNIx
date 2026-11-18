@@ -78,10 +78,10 @@ Item {
                 height: flick.height
                 z: dragArea.drag.active ? 10 : 0
                 radius: current ? height / 2 : (hov.hovered ? height / 2 : Theme.shapeM)
-                // 5.4: the selected tab is softly raised off the glass panel.
-                color: current ? Theme.raised : (hov.hovered ? Theme.hover : "transparent")
-                border.width: current ? 1 : 0
-                border.color: Theme.highlightEdge
+                // 5.4 Liquid Glass: the selected tab is a glass pill.
+                color: current ? Theme.glassFillStrong : (hov.hovered ? Theme.glassFill : "transparent")
+                border.width: current || hov.hovered ? 1 : 0
+                border.color: Theme.glassRim
                 Behavior on radius { SpringAnimation { spring: Theme.springFast; damping: Theme.damping } }
                 Behavior on color { ColorAnimation { duration: Theme.animFast } }
                 Behavior on x { enabled: !dragArea.drag.active; NumberAnimation { duration: Theme.anim; easing.type: Easing.OutCubic } }
