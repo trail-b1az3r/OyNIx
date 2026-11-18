@@ -1,6 +1,6 @@
 [package]
 name = "oynix"
-version = "5.3.1"
+version = "5.4.0"
 edition = "2021"
 rust-version = "1.80"
 license = "MIT"
@@ -21,9 +21,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 url = "2"
 ash = { version = "0.38", default-features = false, features = ["loaded", "debug"] }
-zip = { version = "2", default-features = false, features = ["deflate"] }
 rusb = { version = "0.9", features = ["vendored"] }
-oxc = { version = "0.158", features = ["transformer", "codegen", "semantic"] }
 ureq = { version = "3", default-features = false, features = ["rustls", "platform-verifier"] }
 sha2 = "0.11"
 ring = "0.17"
@@ -36,16 +34,15 @@ cbc = "0.1"
 des = "0.8"
 sha1 = "0.10"
 base64 = "0.23.1"
-rusqlite = { version = "0.40.2", features = ["bundled"] }
-pulldown-cmark = { version = "0.13.6", default-features = false, features = ["html"] }
 sha3 = "0.10"
 
 # StonedGem: the platform OyNIx is moving onto (see its docs/MIGRATION.md).
-stonedgem-url = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "08436298e0bc93045bb5d79ec71fe06efc94cd66" }
-stonedgem-poweroynix = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "08436298e0bc93045bb5d79ec71fe06efc94cd66" }
-stonedgem-vault = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "08436298e0bc93045bb5d79ec71fe06efc94cd66" }
-stonedgem-profile = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "08436298e0bc93045bb5d79ec71fe06efc94cd66" }
-stonedgem-blocker = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "08436298e0bc93045bb5d79ec71fe06efc94cd66" }
+stonedgem-url = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "fc9ccfff3ec412ccbddfe00cf339cdaf4f9ba7c0" }
+stonedgem-vault = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "fc9ccfff3ec412ccbddfe00cf339cdaf4f9ba7c0" }
+stonedgem-profile = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "fc9ccfff3ec412ccbddfe00cf339cdaf4f9ba7c0" }
+stonedgem-blocker = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "fc9ccfff3ec412ccbddfe00cf339cdaf4f9ba7c0" }
+stonedgem-library = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "fc9ccfff3ec412ccbddfe00cf339cdaf4f9ba7c0" }
+stonedgem-extensions = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "fc9ccfff3ec412ccbddfe00cf339cdaf4f9ba7c0" }
 
 [build-dependencies]
 cxx-qt-build = "0.10"

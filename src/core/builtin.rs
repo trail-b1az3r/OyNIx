@@ -77,6 +77,7 @@ pub fn sync(list: &mut Vec<Entry>) -> bool {
 mod tests {
     #[test]
     fn builtins_are_valid() {
+        crate::core::extensions::init_host();
         for (dir, files) in super::BUILTINS {
             let tmp = std::env::temp_dir().join(format!("oynix-builtin-test-{dir}"));
             let _ = std::fs::remove_dir_all(&tmp);

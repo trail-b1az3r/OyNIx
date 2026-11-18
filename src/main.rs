@@ -179,6 +179,7 @@ fn system_prefers_dark() -> Option<bool> {
 fn main() {
     let args = parse_args();
     core::paths::set_profile(&args.profile);
+    core::extensions::init_host();
 
     if args.mcp {
         std::process::exit(mcp::run());

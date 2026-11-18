@@ -791,6 +791,8 @@ ApplicationWindow {
             clip: true
             color: win.privateMode ? Theme.toolbarPrivate : Theme.toolbar
             Behavior on Layout.preferredHeight { enabled: win.focusMode; NumberAnimation { duration: Theme.animFast } }
+            // 5.4 Liquid Glass: a bright specular line along the top of the bar.
+            Rectangle { anchors.top: parent.top; width: parent.width; height: 1; color: Theme.glassSpecular; z: 1 }
 
             HoverHandler { id: toolbarHover; onHoveredChanged: if (!hovered && win.focusMode && !addressField.editing) win.peek = false }
 

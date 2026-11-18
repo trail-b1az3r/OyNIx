@@ -11,6 +11,8 @@ Rectangle {
     implicitHeight: col.implicitHeight + 32
     radius: Theme.shapeXL - 4
     color: tone
+    border.width: 1
+    border.color: Theme.glassRim
     ColumnLayout {
         id: col
         anchors.fill: parent

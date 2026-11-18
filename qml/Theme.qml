@@ -68,8 +68,8 @@ QtObject {
     readonly property color accent: primary
     readonly property color accentText: primaryFg
     readonly property color window: surface
-    readonly property color toolbar: surfaceContainer
-    readonly property color toolbarPrivate: dark ? Qt.tint(surfaceContainer, alpha(tertiary, 0.18)) : Qt.tint(surfaceContainer, alpha(tertiary, 0.14))
+    readonly property color toolbar: glassBar
+    readonly property color toolbarPrivate: glassBarPrivate
     readonly property color tabActive: secondaryContainer
     readonly property color tabHover: hover
     readonly property color sidebar: surfaceContainerLow
@@ -86,6 +86,21 @@ QtObject {
     readonly property color success: dark ? "#7bdc8f" : "#1b7f3b"
     readonly property color warning: dark ? "#ffb95c" : "#a05a00"
     readonly property color purple: tertiary
+
+    // ── 5.4: Liquid Glass on the classic layout. Controls are clear until
+    // used, then a translucent glass capsule with a light rim and a bright
+    // top edge (specular line); the address field and the selected tab are
+    // glass at rest; bars are translucent with a specular top line. No
+    // gradient backdrops. ──
+    readonly property color glassFill: alpha(surfaceContainerHighest, dark ? 0.55 : 0.62)
+    readonly property color glassFillStrong: alpha(surfaceContainerHighest, dark ? 0.78 : 0.86)
+    readonly property color glassRim: dark ? alpha("#ffffff", 0.14) : alpha(outlineVariant, 0.65)
+    readonly property color glassSpecular: dark ? alpha("#ffffff", 0.20) : alpha("#ffffff", 0.95)
+    readonly property color glassShadow: alpha("#000000", dark ? 0.35 : 0.10)
+    readonly property color glassBar: alpha(surfaceContainer, dark ? 0.88 : 0.86)
+    readonly property color glassBarPrivate: alpha(Qt.tint(surfaceContainer, alpha(tertiary, dark ? 0.18 : 0.14)), 0.9)
+    // Smallest click target for icon buttons (Apple / M3 guidance).
+    readonly property int target: 40
 
     // ── Shape scale ──
     readonly property int shapeXS: Math.round(4 * cornerScale)

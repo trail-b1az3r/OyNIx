@@ -64,6 +64,12 @@ Popup {
 
     background: Item {
         Rectangle { anchors.fill: parent; anchors.topMargin: 3; anchors.margins: -1; radius: Theme.shapeL + 2; color: Theme.shadow; opacity: 0.45 }
-        Rectangle { anchors.fill: parent; radius: Theme.shapeL; color: Theme.surfaceContainer }
+        // 5.4 Liquid Glass: refracts the page behind it (the window's
+        // content; popovers live in the overlay, so they aren't in it).
+        LiquidGlass {
+            anchors.fill: parent
+            radius: Theme.shapeL
+            backdrop: pop.Window.window ? pop.Window.window.contentItem : null
+        }
     }
 }

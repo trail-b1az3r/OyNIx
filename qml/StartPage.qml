@@ -12,7 +12,7 @@ Rectangle {
     color: Theme.window
 
     gradient: Gradient {
-        GradientStop { position: 0; color: Core.startPageBackground === "plain" ? Theme.surface : Theme.surfaceContainerLow }
+        GradientStop { position: 0; color: Theme.window }
         GradientStop { position: 1; color: Theme.window }
     }
 
