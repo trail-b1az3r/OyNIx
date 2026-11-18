@@ -4,7 +4,13 @@
 
 A fast, private desktop web browser written in **Rust** and **QML**. The interface is drawn by Qt Quick on **Vulkan 1.3 / 1.2**, with **OpenGL ES** as the fallback.
 
-The interface follows **Material 3 Expressive**: dynamic colour generated from your accent colour, the M3 shape and type scales, shape-morphing controls and spring motion. It ships with tracker and ad blocking switched on and sends no telemetry. **Claude for OyNIx** lets Claude (from Claude Desktop or Claude Code with your Claude account, or from a built-in panel) read pages and act in the browser, under your site permissions.
+The interface follows **Material 3 Expressive**: dynamic colour generated from your accent colour, the M3 shape and type scales, shape-morphing controls and spring motion; since 5.4 its controls sit on a floating glass-like panel. It ships with tracker and ad blocking switched on and sends no telemetry. **Claude for OyNIx** lets Claude (from Claude Desktop or Claude Code with your Claude account, or from a built-in panel) read pages and act in the browser, under your site permissions.
+
+**New in 5.4:** the toolbar, tabs and favourites float together on a translucent panel over a soft wash of your accent colour; the selected tab is gently raised and the address field is set into the panel as a capsule.
+
+| 5.4, light | 5.4, dark |
+|---|---|
+| ![OyNIx 5.4 start page, light](docs/screenshot-5.4-light.png) | ![OyNIx 5.4 with a page open, dark](docs/screenshot-5.4-dark.png) |
 
 ![Start page and Claude panel](docs/screenshot-start-claude.png)
 
