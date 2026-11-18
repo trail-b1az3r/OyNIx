@@ -14,7 +14,7 @@ Rectangle {
     readonly property var topics: [
         { id: "new", icon: "star", title: qsTr("What's new in 5.4"), body: qsTr(
 "## What's new in 5.4\n\n" +
-"**Liquid Glass.** The familiar OyNIx layout, now in glass: the address field and the tab you're on are translucent glass capsules with a light rim, toolbar buttons turn into glass when you point at them, and the toolbar and popovers are see-through sheets with a bright top edge. Colours still come from your accent (Settings › Appearance), in light and dark.\n\n" +
+"**Liquid Glass.** The familiar OyNIx layout, now in glass: the address field and the tab you're on are translucent glass capsules with a light rim, toolbar buttons turn into glass when you point at them, and the toolbar has a bright top edge. Menus and popovers are real glass: the page behind them shows through, frosted, and bends at their rounded edges like a lens, with a highlight that follows your pointer. Colours still come from your accent (Settings › Appearance), in light and dark.\n\n" +
 "**Power extensions: GemSig.** `.poweroynix` packages can now be signed with GemSig (SHA3-512 and Ed25519, tied to the extension's name and version), and show a short **GemPrint** next to \"Verified by\" so you can compare two copies at a glance. Older signatures still work.\n\n" +
 "**Under the hood.** Much of OyNIx now lives in StonedGem, a shared base for the next OyNIx: the address bar, password vault, content blocker, history and bookmarks, and extension packages. Nothing changes where your data is kept.\n\n" +
 "**OyNIx Next (preview).** A separate preview of the next OyNIx — Servo engine, new window — runs alongside this one with its own profile. It's not a replacement yet.")

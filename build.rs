@@ -102,6 +102,8 @@ fn main() {
     resources.push("assets/icon.png".into());
     resources.push("assets/icon.svg".into());
     resources.push("assets/logo.svg".into());
+    // Liquid Glass refraction shader (compiled with qsb; source alongside).
+    resources.push("assets/shaders/liquidglass.frag.qsb".into());
 
     println!("cargo::rerun-if-changed=qml");
     println!("cargo::rerun-if-changed=cpp");
