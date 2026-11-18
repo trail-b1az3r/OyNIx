@@ -11,37 +11,31 @@ QtObject {
 
     readonly property SystemPalette sys: SystemPalette { colorGroup: SystemPalette.Active }
     readonly property bool systemDark: (0.299 * sys.window.r + 0.587 * sys.window.g + 0.114 * sys.window.b) < 0.5
-    // "neumorphic": the built-in Neumorphic theme (graphite) — dark, monochrome,
-    // with soft raised and pressed-in surfaces instead of glass (Neu.qml).
-    readonly property bool neu: Core.theme === "neumorphic"
-    readonly property bool dark: neu || Core.theme === "dark" || (Core.theme === "auto" && systemDark)
+    // Mode (Core.theme): auto, light, dark, oled (pure black), midnight
+    // (deep blue-black). Style (settings.uiStyle): normal (Liquid Glass),
+    // classic (flat), neumorphic and graphite (soft raised and pressed-in
+    // surfaces, Neu.qml). The palettes are a Z#++ program: assets/themes.zsp.
+    // ("neumorphic" as a mode is from a 5.4 preview: graphite, dark.)
+    readonly property string mode: Core.theme === "auto" ? (systemDark ? "dark" : "light")
+                                 : Core.theme === "neumorphic" ? "dark" : Core.theme
+    readonly property string style: { var s = JSON.parse(Core.settingsJson); return Core.theme === "neumorphic" ? "graphite" : (s.uiStyle || "normal") }
+    readonly property bool neu: style === "neumorphic" || style === "graphite"
+    readonly property bool classic: style === "classic"
+    readonly property bool glass: style === "normal"
+    readonly property bool dark: mode !== "light"
 
     // A browser style from an extension's theme.json: its accent, colour
     // role overrides for light and dark, fonts and corner scale.
     readonly property var custom: { Core.settingsJson; Core.extensionsRevision; return JSON.parse(Core.browserStyleJson()) }
     readonly property var scheme: {
-        var s = JSON.parse(Core.materialScheme(custom.accent || Core.accent, dark))
-        if (neu) for (var g in graphite) s[g] = graphite[g]
+        var s = JSON.parse(Core.themeScheme(custom.accent || Core.accent, mode, style))
         var o = dark ? custom.dark : custom.light
         if (o) for (var k in o) s[k] = o[k]
         return s
     }
-    // Neumorphic (graphite): every surface is (nearly) the same graphite grey,
-    // so depth comes from shadows, not colour; one muted steel-blue accent.
-    // Text keeps ≥ 4.5:1 contrast on the base (onSurface ~11:1, variant ~6.5:1).
-    readonly property var graphite: ({
-        surface: "#2b2d31", surfaceDim: "#242629", surfaceBright: "#36383d",
-        surfaceContainerLowest: "#26282b", surfaceContainerLow: "#2b2d31", surfaceContainer: "#2b2d31",
-        surfaceContainerHigh: "#2f3135", surfaceContainerHighest: "#33353a",
-        onSurface: "#e3e5e8", onSurfaceVariant: "#a9adb3", outline: "#858a92", outlineVariant: "#3c3f45",
-        primary: "#a9bdd3", onPrimary: "#1a2330", primaryContainer: "#3a4552", onPrimaryContainer: "#d6e3f1",
-        secondary: "#b4bcc6", onSecondary: "#1f252c", secondaryContainer: "#34373c", onSecondaryContainer: "#e1e5ea",
-        tertiary: "#c9b9a7", onTertiary: "#2c241b", tertiaryContainer: "#463d33", onTertiaryContainer: "#efe0cf",
-        inverseSurface: "#e3e5e8", inverseOnSurface: "#2b2d31", inversePrimary: "#4a5d72"
-    })
     // The two neumorphic shadows: light from the top-left, dark below-right.
-    readonly property color neuHighlight: alpha("#ffffff", 0.11)
-    readonly property color neuShadow: alpha("#000000", 0.5)
+    readonly property color neuHighlight: scheme.neuHighlight || alpha("#ffffff", 0.11)
+    readonly property color neuShadow: scheme.neuShadow || alpha("#000000", 0.5)
     readonly property real cornerScale: custom.corners !== undefined ? custom.corners : 1
     function role(n) { return scheme[n] || "#ff00ff" }
     function alpha(c, a) { return Qt.rgba(c.r, c.g, c.b, a) }
@@ -112,13 +106,14 @@ QtObject {
     // top edge (specular line); the address field and the selected tab are
     // glass at rest; bars are translucent with a specular top line. No
     // gradient backdrops. ──
-    // In Neumorphic these are solid graphite with a faint rim: depth comes from Neu.
-    readonly property color glassFill: neu ? surface : alpha(surfaceContainerHighest, dark ? 0.55 : 0.62)
-    readonly property color glassFillStrong: neu ? surface : alpha(surfaceContainerHighest, dark ? 0.78 : 0.86)
-    readonly property color glassRim: neu ? alpha("#ffffff", 0.04) : dark ? alpha("#ffffff", 0.14) : alpha(outlineVariant, 0.65)
-    readonly property color glassSpecular: neu ? "transparent" : dark ? alpha("#ffffff", 0.20) : alpha("#ffffff", 0.95)
+    // Neumorphic styles: solid surface with a faint rim (depth comes from Neu).
+    // Classic: OyNIx's flat look — solid containers, no rim or specular line.
+    readonly property color glassFill: neu ? surface : classic ? surfaceContainerHighest : alpha(surfaceContainerHighest, dark ? 0.55 : 0.62)
+    readonly property color glassFillStrong: neu ? surface : classic ? surfaceContainerHighest : alpha(surfaceContainerHighest, dark ? 0.78 : 0.86)
+    readonly property color glassRim: neu ? alpha(dark ? "#ffffff" : "#000000", 0.04) : classic ? "transparent" : dark ? alpha("#ffffff", 0.14) : alpha(outlineVariant, 0.65)
+    readonly property color glassSpecular: !glass ? "transparent" : dark ? alpha("#ffffff", 0.20) : alpha("#ffffff", 0.95)
     readonly property color glassShadow: alpha("#000000", dark ? 0.35 : 0.10)
-    readonly property color glassBar: neu ? surface : alpha(surfaceContainer, dark ? 0.88 : 0.86)
+    readonly property color glassBar: neu ? surface : classic ? surfaceContainer : alpha(surfaceContainer, dark ? 0.88 : 0.86)
     readonly property color glassBarPrivate: alpha(Qt.tint(surfaceContainer, alpha(tertiary, dark ? 0.18 : 0.14)), 0.9)
     // Smallest click target for icon buttons (Apple / M3 guidance).
     readonly property int target: 40

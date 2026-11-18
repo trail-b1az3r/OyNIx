@@ -1,0 +1,140 @@
+// OyNIx's themes, written in Z#++ (StonedGem's scripting language).
+//
+// OyNIx calls theme(mode, style, base) and applies the colour roles it
+// returns on top of the Material 3 scheme generated from the accent:
+//   mode   "light" | "dark" | "oled" | "midnight"
+//   style  "normal" (Liquid Glass) | "classic" (flat) | "neumorphic" | "graphite"
+//   base   the accent's Material scheme: role name → colour
+// Besides Material roles it may return neuHighlight / neuShadow, the two
+// soft shadows the neumorphic styles draw with.
+//
+// Text roles keep at least 4.5:1 contrast on their surfaces (checked by
+// OyNIx's tests for every mode × style).
+
+const GRAPHITE = #2b2d31
+const GRAPHITE_LIGHT = #e3e5e9
+const MIDNIGHT = #0b1022
+const STEEL = #a9bdd3
+
+// Copy every role of `src` into `dst`.
+func merge(dst, src) {
+    for k in keys(src) {
+        dst[k] = src[k]
+    }
+    return dst
+}
+
+// A dark surface ramp from `b`: containers lift towards white by `step`
+// each. Neumorphic styles use a tiny step (depth comes from shadows).
+func dark_ramp(b, step) {
+    return {
+        surface: b,
+        surfaceDim: mix(b, #000000, 0.3),
+        surfaceBright: mix(b, #ffffff, step * 5 + 0.04),
+        surfaceContainerLowest: mix(b, #000000, 0.35),
+        surfaceContainerLow: mix(b, #ffffff, step),
+        surfaceContainer: mix(b, #ffffff, step * 1.7),
+        surfaceContainerHigh: mix(b, #ffffff, step * 2.5),
+        surfaceContainerHighest: mix(b, #ffffff, step * 3.3),
+        inverseOnSurface: b
+    }
+}
+
+// A light ramp: containers darken slightly from `b`.
+func light_ramp(b, step) {
+    return {
+        surface: b,
+        surfaceDim: mix(b, #000000, 0.12),
+        surfaceBright: mix(b, #ffffff, 0.5),
+        surfaceContainerLowest: mix(b, #ffffff, 0.6),
+        surfaceContainerLow: mix(b, #000000, step),
+        surfaceContainer: mix(b, #000000, step * 1.6),
+        surfaceContainerHigh: mix(b, #000000, step * 2.3),
+        surfaceContainerHighest: mix(b, #000000, step * 3),
+        inverseOnSurface: b
+    }
+}
+
+// Text and outline roles for a dark background `b`, cooled by `tint`.
+func dark_text(b, tint) {
+    return {
+        onSurface: mix(#e6e7ea, tint, 0.08),
+        onSurfaceVariant: mix(#aeb2b9, tint, 0.12),
+        outline: mix(#878c94, tint, 0.12),
+        outlineVariant: mix(b, #ffffff, 0.13),
+        inverseSurface: #e6e7ea
+    }
+}
+
+// Graphite: a monochrome palette with one muted steel accent.
+func graphite_accent(dark) {
+    if dark {
+        return {
+            primary: STEEL, onPrimary: #1a2330, primaryContainer: #3a4552, onPrimaryContainer: #d6e3f1,
+            secondary: #b4bcc6, onSecondary: #1f252c, secondaryContainer: #34373c, onSecondaryContainer: #e1e5ea,
+            tertiary: #c9b9a7, onTertiary: #2c241b, tertiaryContainer: #463d33, onTertiaryContainer: #efe0cf,
+            inversePrimary: #4a5d72
+        }
+    }
+    return {
+        primary: #44576b, onPrimary: #ffffff, primaryContainer: #d0dae5, onPrimaryContainer: #1a2330,
+        secondary: #50565e, onSecondary: #ffffff, secondaryContainer: #d9dce1, onSecondaryContainer: #1f252c,
+        tertiary: #6b5c4b, onTertiary: #ffffff, tertiaryContainer: #efe0cf, onTertiaryContainer: #2c241b,
+        inversePrimary: STEEL, onSurface: #1d1f23, onSurfaceVariant: #4a4e55, outline: #6f747c, outlineVariant: #c4c7cc
+    }
+}
+
+func theme(mode, style, base) {
+    let neu = style == "neumorphic" or style == "graphite"
+    let graphite = style == "graphite"
+    let step = neu ? 0.012 : 0.045
+    var out = {}
+    if graphite {
+        merge(out, graphite_accent(mode != "light"))
+    }
+    match mode {
+        "light" => {
+            if neu {
+                // Soft light neumorphism: one pale surface, white highlight, grey shadow.
+                merge(out, light_ramp(graphite ? GRAPHITE_LIGHT : mix(base["surfaceContainer"], #ffffff, 0.2), 0.01))
+            }
+        },
+        "dark" => {
+            if graphite {
+                merge(out, dark_ramp(GRAPHITE, step))
+                merge(out, dark_text(GRAPHITE, #ffffff))
+            } else if neu {
+                merge(out, dark_ramp(base["surfaceContainer"], step))
+            }
+        },
+        "oled" => {
+            // Pure black: pixels off on OLED screens. Graphite keeps grey controls.
+            merge(out, dark_ramp(#000000, graphite ? 0.07 : step))
+            merge(out, dark_text(#000000, graphite ? #ffffff : base["primary"]))
+            out["surfaceDim"] = #000000
+            out["surfaceContainerLowest"] = #000000
+        },
+        "midnight" => {
+            // Deep blue-black; Graphite turns blue-grey.
+            let b = graphite ? mix(GRAPHITE, MIDNIGHT, 0.65) : MIDNIGHT
+            merge(out, dark_ramp(b, step))
+            merge(out, dark_text(b, #9fb7ff))
+        },
+        _ => {}
+    }
+    if neu {
+        let surface = out["surface"] ?? base["surface"]
+        if mode == "light" {
+            out["neuHighlight"] = with_alpha(#ffffff, 0.9)
+            out["neuShadow"] = with_alpha(mix(surface, #000000, 0.6), 0.35)
+        } else if mode == "oled" {
+            // Nothing is darker than black: the lit edge carries the depth.
+            out["neuHighlight"] = with_alpha(#ffffff, 0.16)
+            out["neuShadow"] = with_alpha(#000000, 0.0)
+        } else {
+            out["neuHighlight"] = with_alpha(#ffffff, mode == "midnight" ? 0.09 : 0.11)
+            out["neuShadow"] = with_alpha(#000000, 0.5)
+        }
+    }
+    return out
+}

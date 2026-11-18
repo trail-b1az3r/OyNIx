@@ -14,6 +14,10 @@ The interface follows **Material 3 Expressive**: dynamic colour generated from y
 |---|---|
 | ![OyNIx 5.4 start page, light](docs/screenshot-5.4-light.png) | ![OyNIx 5.4 with a page open, dark](docs/screenshot-5.4-dark.png) |
 
+5.4.1 modes and styles — OLED Graphite, Midnight Glass, OLED Classic, Light Neumorphic:
+
+![Modes and styles](docs/screenshot-5.4.1-modes-styles.png)
+
 ![Start page and Claude panel](docs/screenshot-start-claude.png)
 
 | Claude asks before using a site | Tab hover preview |
@@ -47,7 +51,7 @@ The interface follows **Material 3 Expressive**: dynamic colour generated from y
 | **Built-in extensions** | **Wallbreaker** (power): gets past "turn off your ad blocker" walls. **Scraper**: collects a page's text, images, links and tables, and reads text that isn't really text (scans, canvas apps, words in pictures) with on-device OCR. **Firefox Add-ons Button** and the **Graphite** browser style. All in the ordinary `.oynix` format, in [`builtin/`](builtin/). |
 | **Extensions** | Chrome and Firefox WebExtensions (`.crx`, `.xpi`, `.zip` or unpacked folder; Manifest V2 and V3) plus lightweight **OyNIx extensions** (`oynix.json` + `code.ts` + `content.css`, optional `graphics.qt` panel, `extra.html` page, `extra.jsonl` data and `theme.json` browser style; `"permissions": ["ocr"]` lets them read text from pixels; `widget.tsx` adds a Start Page card). **Power extensions** (`.poweroynix`, signed with a trusted key) add `network.ts`, `theme-shape.qml`, `extra.md`, `images/` and the powerful APIs; see [packaging/poweroynix](packaging/poweroynix/README.md). Toolbar buttons for pinned extensions, popups and badges, options pages, per-extension enable/disable. |
 | **Power users** | Developer Tools (`F12`, `Ctrl+Shift+C` inspects the element under the pointer), user scripts (`*.user.js` with Greasemonkey metadata) and user styles (`*.user.css`), custom user agent, Print to PDF, view source. |
-| **Design** | Material 3 Expressive: colour roles generated from any accent colour (light and dark), pill-shaped controls that morph when pressed, the M3 switch, segmented buttons, navigation rail in Settings, expressive shapes on the Start Page, a wavy loading indicator. Built-in themes: **Light**, **Dark**, **Auto** (follows the system) and **Neumorphic** (dark graphite surfaces that stand out of or press into the window with soft shadows instead of glass), in *Settings › Appearance*. Frameless window with M3 window buttons (left or right), or the system title bar. |
+| **Design** | Material 3 Expressive: colour roles generated from any accent colour (light and dark), pill-shaped controls that morph when pressed, the M3 switch, segmented buttons, navigation rail in Settings, expressive shapes on the Start Page, a wavy loading indicator. Themes in *Settings › Appearance*: a **mode** — Auto, Light, Dark, **OLED** (pure black) or **Midnight** (deep blue-black) — and a **style** for any mode: **Glass** (Liquid Glass), **Classic** (flat), **Neumorphic** (soft raised and pressed-in surfaces) or **Graphite** (neumorphic, monochrome graphite). The palettes are written in Z#++ ([`assets/themes.zsp`](assets/themes.zsp)), and a test checks text contrast in every combination. Frameless window with M3 window buttons (left or right), or the system title bar. |
 | **Downloads** | Pause, resume, cancel, open and show in folder; optional "Ask where to save each file". |
 | **Settings** | Open in a tab (default) or in their own window: *Settings › Appearance › Open settings in*. |
 

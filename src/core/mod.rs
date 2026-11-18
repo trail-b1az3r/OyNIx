@@ -7,6 +7,7 @@ pub mod extensions;
 pub mod filterlists;
 pub mod library;
 pub mod material;
+pub mod themes;
 pub mod omnibox;
 pub mod paths;
 pub mod scripts;

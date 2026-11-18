@@ -10,8 +10,10 @@ use super::paths;
 #[serde(default, rename_all = "camelCase")]
 pub struct Settings {
     // ── Appearance ────────────────────────────────────────────────
-    /// "auto" | "light" | "dark" | "neumorphic" (graphite neumorphism, a dark theme)
+    /// Mode: "auto" | "light" | "dark" | "oled" (pure black) | "midnight" (deep blue-black).
     pub theme: String,
+    /// Style: "normal" (Liquid Glass) | "classic" (flat) | "neumorphic" | "graphite".
+    pub ui_style: String,
     /// Accent colour (hex).
     pub accent: String,
     /// "standard" (tabs under toolbar) | "compact" (tabs inside toolbar) | "vertical" (sidebar)
@@ -133,6 +135,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             theme: "auto".into(),
+            ui_style: "normal".into(),
             accent: "#2f7cf6".into(),
             tab_layout: "standard".into(),
             show_favorites_bar: false,

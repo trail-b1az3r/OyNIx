@@ -315,6 +315,8 @@ pub mod qobject {
         #[qinvokable]
         fn material_scheme(self: &Core, seed: &QString, dark: bool) -> QString;
         #[qinvokable]
+        fn theme_scheme(self: &Core, seed: &QString, mode: &QString, style: &QString) -> QString;
+        #[qinvokable]
         unsafe fn attach_profile(self: &Core, profile: *mut QObject);
 
         // ── scripts ──
@@ -1264,6 +1266,12 @@ impl qobject::Core {
     /// Material 3 colour roles for a seed colour (JSON object of #rrggbb).
     pub fn material_scheme(&self, seed: &QString, dark: bool) -> QString {
         to_qjson(&crate::core::material::scheme(&s(seed), dark))
+    }
+
+    /// The colour roles for a mode and style (see core/themes.rs and
+    /// assets/themes.zsp, written in Z#++).
+    pub fn theme_scheme(&self, seed: &QString, mode: &QString, style: &QString) -> QString {
+        to_qjson(&crate::core::themes::scheme(&s(seed), &s(mode), &s(style)))
     }
 
     /// Desktop notification (used by extensions' notifications API).

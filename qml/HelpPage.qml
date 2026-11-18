@@ -13,6 +13,9 @@ Rectangle {
 
     readonly property var topics: [
         { id: "new", icon: "star", title: qsTr("What's new in 5.4"), body: qsTr(
+"## What's new in 5.4.1\n\n" +
+"**Modes and styles.** Settings › Appearance now has a **Mode** — Auto, Light, Dark, **OLED** (pure black, so OLED screens switch those pixels off) and **Midnight** (a deep blue-black) — and a **Style**, which works in every mode: **Glass** (Liquid Glass), **Classic** (OyNIx's flat look), **Neumorphic** (soft surfaces that stand out of the window or press into it) and **Graphite** (neumorphic in monochrome graphite with a steel-blue accent).\n\n" +
+"**Themes in Z#++.** The palettes for these modes and styles are a program in Z#++, StonedGem's scripting language (assets/themes.zsp), and every combination is tested to keep text readable.\n\n" +
 "## What's new in 5.4\n\n" +
 "**Liquid Glass.** The familiar OyNIx layout, now in glass: the address field and the tab you're on are translucent glass capsules with a light rim, toolbar buttons turn into glass when you point at them, and the toolbar has a bright top edge. Menus and popovers are real glass: the page behind them shows through, frosted, and bends at their rounded edges like a lens, with a highlight that follows your pointer. Colours still come from your accent (Settings › Appearance), in light and dark.\n\n" +
 "**Power extensions: GemSig.** `.poweroynix` packages can now be signed with GemSig (SHA3-512 and Ed25519, tied to the extension's name and version), and show a short **GemPrint** next to \"Verified by\" so you can compare two copies at a glance. Older signatures still work.\n\n" +

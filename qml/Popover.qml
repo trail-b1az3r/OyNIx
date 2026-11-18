@@ -66,18 +66,19 @@ Popup {
         Rectangle { visible: !Theme.neu; anchors.fill: parent; anchors.topMargin: 3; anchors.margins: -1; radius: Theme.shapeL + 2; color: Theme.shadow; opacity: 0.45 }
         // 5.4 Liquid Glass: refracts the page behind it (the window's
         // content; popovers live in the overlay, so they aren't in it).
-        // Neumorphic theme: a raised graphite surface instead of glass.
+        // Classic and neumorphic styles: a solid surface (raised in neumorphic)
+        // instead of refracting glass.
         Rectangle {
-            visible: Theme.neu
+            visible: !Theme.glass
             anchors.fill: parent
             radius: Theme.shapeL
-            color: Theme.surface
+            color: Theme.neu ? Theme.surface : Theme.surfaceContainer
             border.width: 1
             border.color: Theme.glassRim
             Neu { z: -1; anchors.fill: parent; radius: parent.radius; depth: 8 }
         }
         LiquidGlass {
-            visible: !Theme.neu
+            visible: Theme.glass
             anchors.fill: parent
             radius: Theme.shapeL
             backdrop: Window.window ? Window.window.contentItem : null

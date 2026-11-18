@@ -137,7 +137,7 @@ Rectangle {
                 visible: Core.startPageShowPrivacyReport
                 implicitHeight: Math.max(112, privacyRow.implicitHeight + 40)
                 radius: Theme.shapeXL
-                // Neumorphic theme: a raised graphite card rather than a coloured one.
+                // Neumorphic styles: a raised card rather than a coloured one.
                 color: Theme.neu ? Theme.surface : Theme.primaryContainer
                 Neu { z: -1; anchors.fill: parent; radius: parent.radius; depth: 8 }
                 RowLayout {
@@ -233,7 +233,7 @@ Rectangle {
             MShape {
                 anchors.horizontalCenter: parent.horizontalCenter
                 size: 72
-                // Neumorphic theme: round graphite buttons, raised; pressed in when clicked.
+                // Neumorphic styles: round raised buttons, pressed in when clicked.
                 shape: Theme.neu || tile.hovered ? "circle" : tile.shapeName
                 color: Theme.neu ? Theme.surface : tile.hovered ? Theme.secondaryContainer : Theme.surfaceContainerHigh
                 neuDepth: tile.hovered ? 6 : 4

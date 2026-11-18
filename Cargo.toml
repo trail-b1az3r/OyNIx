@@ -1,6 +1,6 @@
 [package]
 name = "oynix"
-version = "5.4.0"
+version = "5.4.1"
 edition = "2021"
 rust-version = "1.80"
 license = "MIT"
@@ -43,6 +43,8 @@ stonedgem-profile = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "
 stonedgem-blocker = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "fc9ccfff3ec412ccbddfe00cf339cdaf4f9ba7c0" }
 stonedgem-library = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "fc9ccfff3ec412ccbddfe00cf339cdaf4f9ba7c0" }
 stonedgem-extensions = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "fc9ccfff3ec412ccbddfe00cf339cdaf4f9ba7c0" }
+# Z#++: OyNIx's theme palettes are a Z#++ program (assets/themes.zsp).
+stonedgem-zsharp = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "accf6928f9dadab51e1c20fbbd44142a23f5f375" }
 
 [build-dependencies]
 cxx-qt-build = "0.10"

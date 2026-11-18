@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Effects
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import QtQuick.Window
@@ -333,36 +334,79 @@ Rectangle {
             Section {
                 title: qsTr("Theme")
                 Row_ {
-                    label: qsTr("Appearance")
+                    label: qsTr("Mode")
                     Repeater {
-                        model: [{ v: "auto", t: qsTr("Auto") }, { v: "light", t: qsTr("Light") }, { v: "dark", t: qsTr("Dark") }, { v: "neumorphic", t: qsTr("Neumorphic") }]
+                        // Left half / right half of each swatch.
+                        model: [{ v: "auto", t: qsTr("Auto"), a: "#f3f3f4", b: "#2a2a2d" },
+                                { v: "light", t: qsTr("Light"), a: "#f3f3f4", b: "#f3f3f4" },
+                                { v: "dark", t: qsTr("Dark"), a: "#2a2a2d", b: "#2a2a2d" },
+                                { v: "oled", t: qsTr("OLED"), a: "#000000", b: "#000000" },
+                                { v: "midnight", t: qsTr("Midnight"), a: "#0b1022", b: "#0b1022" }]
                         delegate: AbstractButton {
                             required property var modelData
-                            implicitWidth: 72; implicitHeight: 62
+                            readonly property bool chosen: Core.theme === modelData.v || (modelData.v === "dark" && Core.theme === "neumorphic")
+                            implicitWidth: 66; implicitHeight: 62
                             onClicked: sw.set("theme", modelData.v)
                             contentItem: Column {
                                 spacing: 5
                                 Rectangle {
                                     anchors.horizontalCenter: parent.horizontalCenter
-                                    width: 56; height: 38; radius: 7
-                                    border.width: Core.theme === modelData.v ? 2.5 : 1
-                                    border.color: Core.theme === modelData.v ? Theme.accent : Theme.separator
-                                    // Neumorphic's swatch: a raised graphite chip.
-                                    Rectangle {
-                                        visible: modelData.v === "neumorphic"
-                                        anchors.fill: parent; anchors.margins: 1; radius: 6; color: "#2b2d31"
-                                        Rectangle { anchors.centerIn: parent; width: 26; height: 14; radius: 7; color: "#2b2d31"; border.width: 1; border.color: "#3c3f45"
-                                            Rectangle { anchors.fill: parent; anchors.topMargin: 1; radius: 7; color: "transparent"; border.width: 1; border.color: Qt.rgba(1, 1, 1, 0.08) } }
-                                    }
+                                    width: 52; height: 38; radius: 7
+                                    border.width: parent.parent.chosen ? 2.5 : 1
+                                    border.color: parent.parent.chosen ? Theme.accent : Theme.separator
                                     gradient: Gradient {
                                         orientation: Gradient.Horizontal
-                                        GradientStop { position: 0; color: modelData.v === "dark" ? "#2a2a2d" : "#f3f3f4" }
-                                        GradientStop { position: 0.5; color: modelData.v === "dark" ? "#2a2a2d" : "#f3f3f4" }
-                                        GradientStop { position: 0.51; color: modelData.v === "light" ? "#f3f3f4" : "#2a2a2d" }
-                                        GradientStop { position: 1; color: modelData.v === "light" ? "#f3f3f4" : "#2a2a2d" }
+                                        GradientStop { position: 0; color: modelData.a }
+                                        GradientStop { position: 0.5; color: modelData.a }
+                                        GradientStop { position: 0.51; color: modelData.b }
+                                        GradientStop { position: 1; color: modelData.b }
                                     }
+                                    // The accent, as it shows on each mode.
+                                    Rectangle { anchors.bottom: parent.bottom; anchors.bottomMargin: 7; anchors.horizontalCenter: parent.horizontalCenter; width: 18; height: 4; radius: 2; color: Theme.accent; opacity: 0.85 }
                                 }
                                 Txt { anchors.horizontalCenter: parent.horizontalCenter; text: modelData.t; font.pixelSize: 12 }
+                            }
+                        }
+                    }
+                }
+                Divider {}
+                Row_ {
+                    label: qsTr("Style")
+                    Repeater {
+                        model: [{ v: "normal", t: qsTr("Glass") }, { v: "classic", t: qsTr("Classic") },
+                                { v: "neumorphic", t: qsTr("Neumorphic") }, { v: "graphite", t: qsTr("Graphite") }]
+                        delegate: AbstractButton {
+                            id: styleBtn
+                            required property var modelData
+                            readonly property bool chosen: Theme.style === modelData.v
+                            implicitWidth: 76; implicitHeight: 62
+                            onClicked: { if (Core.theme === "neumorphic") sw.set("theme", "dark"); sw.set("uiStyle", modelData.v) }
+                            contentItem: Column {
+                                spacing: 5
+                                Rectangle {
+                                    id: chip
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    width: 56; height: 38; radius: 7
+                                    readonly property color base: styleBtn.modelData.v === "graphite" ? (Theme.dark ? "#2b2d31" : "#e3e5e9") : Theme.surface
+                                    color: base
+                                    border.width: styleBtn.chosen ? 2.5 : 1
+                                    border.color: styleBtn.chosen ? Theme.accent : Theme.separator
+                                    // A small control drawn in each style.
+                                    Rectangle {
+                                        anchors.centerIn: parent
+                                        width: 30; height: 14; radius: 7
+                                        color: styleBtn.modelData.v === "normal" ? Theme.alpha(Theme.surfaceContainerHighest, 0.6)
+                                             : styleBtn.modelData.v === "classic" ? Theme.surfaceContainerHighest : chip.base
+                                        border.width: styleBtn.modelData.v === "normal" ? 1 : 0
+                                        border.color: Theme.alpha("#ffffff", Theme.dark ? 0.2 : 0.9)
+                                        Neu { z: -1; anchors.fill: parent; radius: 7; depth: 2.5; visible: Theme.neu && (styleBtn.modelData.v === "neumorphic" || styleBtn.modelData.v === "graphite") }
+                                        RectangularShadow {
+                                            z: -1; anchors.fill: parent; radius: 7; blur: 4; offset.x: 2; offset.y: 2; color: Theme.alpha("#000000", 0.45)
+                                            visible: !Theme.neu && (styleBtn.modelData.v === "neumorphic" || styleBtn.modelData.v === "graphite")
+                                        }
+                                    }
+                                }
+                                Txt { anchors.horizontalCenter: parent.horizontalCenter; text: styleBtn.modelData.t; font.pixelSize: 12 }
                             }
                         }
                     }
@@ -387,7 +431,7 @@ Rectangle {
                 title: qsTr("Browser Style")
                 ChoiceRow {
                     label: qsTr("Style")
-                    hint: qsTr("Extensions can restyle OyNIx with a theme.json: colours, fonts and corners. Graphite comes with OyNIx.")
+                    hint: qsTr("Extensions can restyle OyNIx with a theme.json: colours, fonts and corners. The Graphite browser style (colours only) comes with OyNIx; the Graphite style above also changes how controls look.")
                     key: "browserStyle"
                     options: { Core.extensionsRevision; return [{ v: "", t: qsTr("OyNIx (default)") }].concat(JSON.parse(Core.browserStyles()).map(function (x) { return { v: x.id, t: x.name } })) }
                 }

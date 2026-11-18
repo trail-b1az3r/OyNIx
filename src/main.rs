@@ -152,7 +152,7 @@ fn website_scheme(st: &core::settings::Settings) -> Option<bool> {
         _ => {}
     }
     match st.theme.as_str() {
-        "dark" | "neumorphic" => Some(true),
+        "dark" | "oled" | "midnight" | "neumorphic" => Some(true),
         "light" => Some(false),
         _ => system_prefers_dark(),
     }
