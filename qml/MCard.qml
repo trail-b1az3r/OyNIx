@@ -9,8 +9,11 @@ Rectangle {
     property color tone: Theme.surfaceContainerLow
     default property alias content: col.data
     implicitHeight: col.implicitHeight + 32
-    radius: Theme.shapeXL - 4
+    // 5.4: cards sit softly raised: larger radius and a light edge.
+    radius: Math.round(24 * Theme.cornerScale)
     color: tone
+    border.width: 1
+    border.color: Theme.highlightEdge
     ColumnLayout {
         id: col
         anchors.fill: parent

@@ -12,6 +12,13 @@ Rectangle {
     color: Theme.window
 
     readonly property var topics: [
+        { id: "new", icon: "star", title: qsTr("What's new in 5.4"), body: qsTr(
+"## What's new in 5.4\n\n" +
+"**A fresh look.** The toolbar, tabs and favourites now float together on a translucent panel over a soft wash of your accent colour. The tab you're on is gently raised, the address field is set into the panel as a capsule, and cards have softer, rounder corners. Colours still come from your accent (Settings › Appearance), in light and dark.\n\n" +
+"**Power extensions: GemSig.** `.poweroynix` packages can now be signed with GemSig (SHA3-512 and Ed25519, tied to the extension's name and version), and show a short **GemPrint** next to \"Verified by\" so you can compare two copies at a glance. Older signatures still work.\n\n" +
+"**Under the hood.** Much of OyNIx now lives in StonedGem, a shared base for the next OyNIx: the address bar, password vault, content blocker, history and bookmarks, and extension packages. Nothing changes where your data is kept.\n\n" +
+"**OyNIx Next (preview).** A separate preview of the next OyNIx — Servo engine, new window — runs alongside this one with its own profile. It's not a replacement yet.")
+        },
         { id: "start", icon: "home", title: qsTr("Getting around"), body: qsTr(
 "## Getting around\n\n" +
 "**Tabs.** Ctrl+T opens one, Ctrl+W closes it, Ctrl+Shift+T brings back the last one you closed. Drag tabs to reorder them; right-click one to pin, mute or duplicate it.\n\n" +

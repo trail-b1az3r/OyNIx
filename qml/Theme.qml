@@ -87,6 +87,22 @@ QtObject {
     readonly property color warning: dark ? "#ffb95c" : "#a05a00"
     readonly property color purple: tertiary
 
+    // ── 5.4 surfaces (StonedGem docs/DESIGN.md): controls float on a
+    // translucent panel over a soft gradient backdrop; the selected tab is
+    // softly raised, fields softly inset. ──
+    readonly property color backdropStart: Qt.tint(surface, alpha(primary, dark ? 0.16 : 0.12))
+    readonly property color backdropEnd: Qt.tint(surface, alpha(tertiary, dark ? 0.10 : 0.08))
+    readonly property color glass: alpha(surfaceContainerHigh, dark ? 0.72 : 0.74)
+    readonly property color glassPrivate: alpha(Qt.tint(surfaceContainerHigh, alpha(tertiary, 0.22)), dark ? 0.80 : 0.82)
+    readonly property color highlightEdge: dark ? alpha("#ffffff", 0.10) : alpha("#ffffff", 0.70)
+    readonly property color raised: surfaceContainerHighest
+    readonly property color inset: alpha(surfaceContainerLowest, dark ? 0.55 : 0.65)
+    readonly property color insetEdge: alpha(outlineVariant, 0.7)
+    readonly property int panelMargin: 8
+    readonly property int panelRadius: Math.round(22 * cornerScale)
+    // Smallest click target for icon buttons (Apple / M3 guidance).
+    readonly property int target: 40
+
     // ── Shape scale ──
     readonly property int shapeXS: Math.round(4 * cornerScale)
     readonly property int shapeS: Math.round(8 * cornerScale)
@@ -97,7 +113,7 @@ QtObject {
     readonly property int radiusLarge: shapeXL
 
     // ── Metrics ──
-    readonly property int toolbarHeight: 60
+    readonly property int toolbarHeight: 56
     readonly property int tabHeight: 38
     readonly property int sidebarWidth: 300
 

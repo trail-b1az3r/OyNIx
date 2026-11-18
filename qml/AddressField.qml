@@ -20,10 +20,11 @@ Rectangle {
     signal siteInfoRequested(var anchor)
 
     implicitHeight: 44
-    radius: editing ? Theme.shapeL : height / 2
-    color: editing ? Theme.surfaceContainerLowest : (hover.hovered ? Theme.surfaceContainerHighest : Theme.surfaceContainerHigh)
-    border.width: editing ? 2 : 0
-    border.color: Theme.primary
+    // 5.4: a softly inset capsule in the glass panel; a primary ring while editing.
+    radius: height / 2
+    color: editing ? Theme.surfaceContainerLowest : (hover.hovered ? Qt.tint(Theme.inset, Theme.hover) : Theme.inset)
+    border.width: editing ? 2 : 1
+    border.color: editing ? Theme.primary : Theme.insetEdge
     Behavior on radius { SpringAnimation { spring: Theme.springDefault; damping: Theme.damping } }
     Behavior on color { ColorAnimation { duration: Theme.animFast } }
 
