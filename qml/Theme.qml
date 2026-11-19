@@ -79,6 +79,12 @@ QtObject {
     // The two neumorphic shadows: light from the top-left, dark below-right.
     readonly property color neuHighlight: scheme.neuHighlight || alpha("#ffffff", 0.11)
     readonly property color neuShadow: scheme.neuShadow || alpha("#000000", 0.5)
+    // The extruded side of neumorphic headings (NeuTextEffect): between the text and the surface.
+    readonly property color neuSide: Qt.rgba(text.r * 0.5 + surface.r * 0.5, text.g * 0.5 + surface.g * 0.5, text.b * 0.5 + surface.b * 0.5, 1)
+    // OyNIx Neu: the round monoline typeface of the neumorphic styles'
+    // headings (assets/fonts, made by scripts/make-neu-font.py).
+    readonly property FontLoader neuFont: FontLoader { source: "qrc:/qt/qml/OyNIx/assets/fonts/OyNIxNeu-Regular.ttf" }
+    readonly property string neuFamily: neuFont.status === FontLoader.Ready ? neuFont.name : ""
     readonly property real cornerScale: hyperOn ? ht("radius", 12) / 12 : custom.corners !== undefined ? custom.corners : 1
     function role(n) { return scheme[n] || "#ff00ff" }
     function alpha(c, a) { return Qt.rgba(c.r, c.g, c.b, a) }
@@ -177,7 +183,8 @@ QtObject {
 
     // ── Type scale (Roboto Flex / Google Sans Flex when installed) ──
     readonly property string font: (hyperOn && ht("font_family", "") ? ht("font_family", "") + ", " : "") + (custom.font ? custom.font + ", " : "") + "Roboto Flex, Google Sans Flex, Google Sans Text, Roboto, Inter, Noto Sans, Cantarell, sans-serif"
-    readonly property string displayFont: (hyperOn && ht("font_family", "") ? ht("font_family", "") + ", " : "") + (custom.displayFont ? custom.displayFont + ", " : "") + "Google Sans Flex, Roboto Flex, Google Sans, Roboto, Inter, Noto Sans, sans-serif"
+    // (Qt takes one family name, not a CSS list: the neumorphic styles name OyNIx Neu alone.)
+    readonly property string displayFont: neu && neuFamily ? neuFamily : ((hyperOn && ht("font_family", "") ? ht("font_family", "") + ", " : "") + (custom.displayFont ? custom.displayFont + ", " : "") + "Google Sans Flex, Roboto Flex, Google Sans, Roboto, Inter, Noto Sans, sans-serif")
     readonly property int fontSize: 14
     readonly property int smallFont: 12
     readonly property int titleSize: 16

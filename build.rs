@@ -104,6 +104,10 @@ fn main() {
     resources.push("assets/logo.svg".into());
     // Liquid Glass refraction shader (compiled with qsb; source alongside).
     resources.push("assets/shaders/liquidglass.frag.qsb".into());
+    // Neumorphic headings: the OyNIx Neu typeface (scripts/make-neu-font.py)
+    // and its light, shadow and depth (NeuTextEffect.qml).
+    resources.push("assets/shaders/neutext.frag.qsb".into());
+    resources.push("assets/fonts/OyNIxNeu-Regular.ttf".into());
 
     println!("cargo::rerun-if-changed=qml");
     println!("cargo::rerun-if-changed=cpp");
