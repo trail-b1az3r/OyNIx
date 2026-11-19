@@ -11,9 +11,10 @@ Rectangle {
     implicitHeight: col.implicitHeight + 32
     radius: Theme.shapeXL - 4
     color: tone
-    border.width: 1
+    border.width: Theme.edgeW(1)
     border.color: Theme.glassRim
     Neu { z: -1; anchors.fill: parent; radius: card.radius; depth: 7 }
+    HardShadow { radius: card.radius }
     ColumnLayout {
         id: col
         anchors.fill: parent

@@ -40,7 +40,7 @@ Rectangle {
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: 52
-            radius: 26
+            radius: Theme.r(26)
             color: Theme.surfaceContainerHigh
             RowLayout {
                 anchors.fill: parent; anchors.leftMargin: 18; anchors.rightMargin: 12

@@ -12,7 +12,12 @@ Rectangle {
     color: Theme.window
 
     readonly property var topics: [
-        { id: "new", icon: "star", title: qsTr("What's new in 5.4"), body: qsTr(
+        { id: "new", icon: "star", title: qsTr("What's new in 5.4.2"), body: qsTr(
+"## What's new in 5.4.2\n\n" +
+"**Hyperthemes.** A `.hypertheme` restyles all of OyNIx: colours, corners, borders, hard shadows, fonts and every panel, on every control and shape. Choose one in Settings › Appearance › Hypertheme, or install one from a file or folder. **Neubrutalism** comes with OyNIx: cream paper, loud colour, thick ink borders and hard offset shadows.\n\n" +
+"**Theme Studio.** Settings › Appearance › Open Theme Studio opens a full page where you make a hypertheme by wiring nodes (colours, numbers, fonts, shaders and panels) with a live preview. Its Zsharpend script writes every part of the theme; Save and use applies it at once.\n\n" +
+"**OyNIx Neu.** The Neumorphic and Graphite styles have their own typeface for headings: a soft, round monoline, drawn with a light rim, a soft shadow and a little depth.\n\n" +
+"**Site icons.** OyNIx now reads each site's page for its best icon, keeps a 64×64 copy (the downloaded original is removed) and fetches it again when the site changes it. **Clear Data Cache** in Settings › Privacy › Website Data removes saved icons and cookies.\n\n" +
 "## What's new in 5.4.1\n\n" +
 "**Modes and styles.** Settings › Appearance now has a **Mode** — Auto, Light, Dark, **OLED** (pure black, so OLED screens switch those pixels off) and **Midnight** (a deep blue-black) — and a **Style**, which works in every mode: **Glass** (Liquid Glass), **Classic** (OyNIx's flat look), **Neumorphic** (soft surfaces that stand out of the window or press into it) and **Graphite** (neumorphic in monochrome graphite with a steel-blue accent).\n\n" +
 "**Themes in Z#++.** The palettes for these modes and styles are a program in Z#++, StonedGem's scripting language (assets/themes.zsp), and every combination is tested to keep text readable.\n\n" +
@@ -95,7 +100,7 @@ Rectangle {
                         implicitHeight: 40
                         hoverEnabled: true
                         readonly property bool sel: help.topic === modelData.id
-                        background: Rectangle { radius: height / 2; color: tb.sel ? Theme.secondaryContainer : (tb.hovered ? Theme.hover : "transparent") }
+                        background: Rectangle { radius: Theme.pill(height); color: tb.sel ? Theme.secondaryContainer : (tb.hovered ? Theme.hover : "transparent") }
                         contentItem: RowLayout {
                             spacing: 12
                             Icon { name: tb.modelData.icon; size: 18; color: tb.sel ? Theme.secondaryContainerFg : Theme.textDim; Layout.leftMargin: 14 }

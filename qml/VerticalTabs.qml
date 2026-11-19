@@ -74,7 +74,7 @@ ColumnLayout {
                 visible: model.pinned
                 Layout.fillWidth: true
                 Layout.preferredHeight: model.pinned ? 38 : 0
-                radius: 8
+                radius: Theme.r(8)
                 color: index === vt.win.currentIndex ? Theme.tabActive : (ph.hovered ? Theme.hover : Theme.card)
                 HoverHandler { id: ph }
                 Favicon { anchors.centerIn: parent; size: 18; source: model.icon || ""; url: model.url || ""; title: model.title || ""; loading: model.loading }
@@ -115,7 +115,7 @@ ColumnLayout {
                 anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
                 height: 34
                 anchors.leftMargin: 8; anchors.rightMargin: 8
-                radius: 7
+                radius: Theme.r(7)
                 color: row.index === vt.win.currentIndex ? Theme.tabActive : (rh.hovered ? Theme.hover : "transparent")
                 border.color: row.index === vt.win.currentIndex && !Theme.dark ? Theme.separator : "transparent"
                 HoverHandler { id: rh }
@@ -199,7 +199,7 @@ ColumnLayout {
         Layout.leftMargin: 8; Layout.rightMargin: 8
         implicitHeight: 32
         hoverEnabled: true
-        background: Rectangle { radius: 7; color: parent.hovered ? Theme.hover : "transparent" }
+        background: Rectangle { radius: Theme.r(7); color: parent.hovered ? Theme.hover : "transparent" }
         contentItem: RowLayout {
             spacing: 8
             Icon { name: "plus"; size: 14; color: Theme.textDim; Layout.leftMargin: 10 }

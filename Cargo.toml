@@ -1,6 +1,6 @@
 [package]
 name = "oynix"
-version = "5.4.1"
+version = "5.4.2"
 edition = "2021"
 rust-version = "1.80"
 license = "MIT"
@@ -27,7 +27,7 @@ sha2 = "0.11"
 ring = "0.17"
 ocrs = { version = "0.14", default-features = false }
 rten = { version = "0.28", default-features = false, features = ["onnx_format"] }
-image = { version = "0.25", default-features = false, features = ["png"] }
+image = { version = "0.25", default-features = false, features = ["png", "ico", "bmp", "jpeg", "gif", "webp"] }
 lopdf = { version = "0.36", default-features = false }
 aes = "0.8"
 cbc = "0.1"
@@ -37,14 +37,16 @@ base64 = "0.23.1"
 sha3 = "0.10"
 
 # StonedGem: the platform OyNIx is moving onto (see its docs/MIGRATION.md).
-stonedgem-url = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "fc9ccfff3ec412ccbddfe00cf339cdaf4f9ba7c0" }
-stonedgem-vault = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "fc9ccfff3ec412ccbddfe00cf339cdaf4f9ba7c0" }
-stonedgem-profile = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "fc9ccfff3ec412ccbddfe00cf339cdaf4f9ba7c0" }
-stonedgem-blocker = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "fc9ccfff3ec412ccbddfe00cf339cdaf4f9ba7c0" }
-stonedgem-library = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "fc9ccfff3ec412ccbddfe00cf339cdaf4f9ba7c0" }
-stonedgem-extensions = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "fc9ccfff3ec412ccbddfe00cf339cdaf4f9ba7c0" }
+stonedgem-url = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "9ebb234fba8a7f4e4c72237f602b9f6080dc9943" }
+stonedgem-vault = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "9ebb234fba8a7f4e4c72237f602b9f6080dc9943" }
+stonedgem-profile = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "9ebb234fba8a7f4e4c72237f602b9f6080dc9943" }
+stonedgem-blocker = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "9ebb234fba8a7f4e4c72237f602b9f6080dc9943" }
+stonedgem-library = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "9ebb234fba8a7f4e4c72237f602b9f6080dc9943" }
+stonedgem-extensions = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "9ebb234fba8a7f4e4c72237f602b9f6080dc9943" }
 # Z#++: OyNIx's theme palettes are a Z#++ program (assets/themes.zsp).
-stonedgem-zsharp = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "accf6928f9dadab51e1c20fbbd44142a23f5f375" }
+stonedgem-zsharp = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "9ebb234fba8a7f4e4c72237f602b9f6080dc9943" }
+# Hyperthemes and Theme Studio (docs/HYPERTHEME.md in StonedGem).
+stonedgem-hypertheme = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "9ebb234fba8a7f4e4c72237f602b9f6080dc9943" }
 
 [build-dependencies]
 cxx-qt-build = "0.10"

@@ -39,7 +39,7 @@ Item {
         anchors.fill: parent
         radius: neu.radius
         color: "transparent"
-        border.width: 1
+        border.width: Theme.edgeW(1)
         border.color: Theme.alpha(Theme.neuShadow, 0.9)
         clip: true
     }
@@ -50,7 +50,7 @@ Item {
         anchors.leftMargin: 2
         radius: neu.radius
         color: "transparent"
-        border.width: 1
+        border.width: Theme.edgeW(1)
         border.color: Theme.neuHighlight
         opacity: 0.8
     }

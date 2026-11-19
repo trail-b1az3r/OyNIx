@@ -8,6 +8,7 @@ pub mod filterlists;
 pub mod library;
 pub mod material;
 pub mod themes;
+pub mod hyper;
 pub mod omnibox;
 pub mod paths;
 pub mod scripts;

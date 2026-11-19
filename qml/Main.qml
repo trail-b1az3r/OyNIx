@@ -145,6 +145,19 @@ QtObject {
         }
     }
     property WebChannel extChannel: WebChannel { registeredObjects: [app.extBridge, app.usb] }
+    // 5.4.2: Theme Studio's page talks to its script over its own channel,
+    // which only tabs showing that page get (WebTab.qml).
+    property StudioBridge studio: StudioBridge {
+        WebChannel.id: "oynixStudio"
+        onApplied: function (file) { Core.setSetting("hypertheme", JSON.stringify(file)) }
+        onNotified: function (text) { var w = app.activeWindow(); if (w) w.toastMessage(text) }
+    }
+    property WebChannel studioChannel: WebChannel { registeredObjects: [app.studio] }
+    function openThemeStudio() {
+        var w = activeWindow()
+        var u = Core.themeStudioUrl()
+        if (w && u) w.openTab(u)
+    }
 
     // WebUSB: device chooser and connect/disconnect detection.
     property UsbBridge usb: UsbBridge { WebChannel.id: "oynixUsb" }

@@ -104,6 +104,10 @@ fn main() {
     resources.push("assets/logo.svg".into());
     // Liquid Glass refraction shader (compiled with qsb; source alongside).
     resources.push("assets/shaders/liquidglass.frag.qsb".into());
+    // Neumorphic headings: the OyNIx Neu typeface (scripts/make-neu-font.py)
+    // and its light, shadow and depth (NeuTextEffect.qml).
+    resources.push("assets/shaders/neutext.frag.qsb".into());
+    resources.push("assets/fonts/OyNIxNeu-Regular.ttf".into());
 
     println!("cargo::rerun-if-changed=qml");
     println!("cargo::rerun-if-changed=cpp");
@@ -116,7 +120,7 @@ fn main() {
         .qt_module("WebEngineQuick")
         .qt_module("WebChannel")
         .qt_module("Network")
-        .files(["src/bridge/agentbridge.rs", "src/bridge/core.rs", "src/bridge/extbridge.rs", "src/bridge/native.rs", "src/bridge/usbbridge.rs", "src/bridge/panel.rs", "src/bridge/updater.rs", "src/bridge/ocrbridge.rs", "src/bridge/outlinebridge.rs"])
+        .files(["src/bridge/agentbridge.rs", "src/bridge/core.rs", "src/bridge/extbridge.rs", "src/bridge/native.rs", "src/bridge/usbbridge.rs", "src/bridge/panel.rs", "src/bridge/updater.rs", "src/bridge/ocrbridge.rs", "src/bridge/outlinebridge.rs", "src/bridge/studio.rs"])
         .cpp_file("cpp/native.cpp")
         .qrc_resources(resources.iter().map(|p| p.to_string_lossy().into_owned()).collect::<Vec<_>>())
         .qrc_resources(QResources::new().resource(

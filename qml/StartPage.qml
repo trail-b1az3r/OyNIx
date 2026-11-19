@@ -74,7 +74,9 @@ Rectangle {
                             width: widgetFlow.width >= 560 ? (widgetFlow.width - 16) / 2 : widgetFlow.width
                             height: 40 + Math.max(60, Math.min(480, wv.contentH))
                             radius: Theme.shapeL
-                            color: Theme.surfaceContainer
+                            color: Theme.card
+                            border.width: Theme.edge
+                            border.color: Theme.edgeColor
                             clip: true
                             RowLayout {
                                 x: 14; y: 10; width: parent.width - 28
@@ -139,7 +141,10 @@ Rectangle {
                 radius: Theme.shapeXL
                 // Neumorphic styles: a raised card rather than a coloured one.
                 color: Theme.neu ? Theme.surface : Theme.primaryContainer
+                border.width: Theme.edge
+                border.color: Theme.edgeColor
                 Neu { z: -1; anchors.fill: parent; radius: parent.radius; depth: 8 }
+                HardShadow { radius: parent.radius; offsetX: Theme.panel("card", "shadow_x", Theme.hardX); offsetY: Theme.panel("card", "shadow_y", Theme.hardY) }
                 RowLayout {
                     id: privacyRow
                     anchors.fill: parent
@@ -188,7 +193,10 @@ Rectangle {
                         radius: rh.hovered ? Theme.shapeXL : Theme.shapeL
                         color: Theme.neu ? Theme.surface : rh.hovered ? Theme.surfaceContainerHigh : Theme.surfaceContainerLow
                         Behavior on radius { SpringAnimation { spring: Theme.springFast; damping: Theme.damping } }
+                        border.width: Theme.edge
+                        border.color: Theme.edgeColor
                         Neu { z: -1; anchors.fill: parent; radius: parent.radius; depth: rh.hovered ? 6 : 4 }
+                        HardShadow { radius: parent.radius; visible: Theme.hard && rh.hovered }
                         HoverHandler { id: rh }
                         TapHandler { onTapped: { Core.markRead(modelData.url, true); page.win.navigate(modelData.url) } }
                         RowLayout {

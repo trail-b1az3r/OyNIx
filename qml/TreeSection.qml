@@ -50,7 +50,7 @@ ColumnLayout {
             background: Rectangle {
                 x: 14 + node.depth * 12 - 4
                 width: parent.width - x - 4
-                radius: 5
+                radius: Theme.r(5)
                 color: node.modelData.active ? Theme.alpha(Theme.accent, 0.14) : (node.hovered ? Theme.hover : "transparent")
             }
             // Guide lines, one per level above this one.
@@ -67,7 +67,7 @@ ColumnLayout {
                 spacing: 6
                 Item { Layout.preferredWidth: 14 + node.depth * 12 - 6 }
                 Rectangle {
-                    Layout.preferredWidth: 5; Layout.preferredHeight: 5; radius: 2.5
+                    Layout.preferredWidth: 5; Layout.preferredHeight: 5; radius: Theme.r(2.5)
                     color: node.modelData.active ? Theme.accent : Theme.textFaint
                 }
                 Txt {

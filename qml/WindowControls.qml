@@ -24,7 +24,7 @@ Row {
         glyph: "close"; iconSize: 18; tip: qsTr("Close")
         iconColor: hovered ? Theme.errorContainerFg : Theme.surfaceVariantFg
         background: Rectangle {
-            radius: closeBtn.pressed ? Theme.shapeM : height / 2
+            radius: closeBtn.pressed ? Theme.shapeM : Theme.pill(height)
             color: closeBtn.hovered ? Theme.errorContainer : "transparent"
             Behavior on radius { SpringAnimation { spring: Theme.springFast; damping: Theme.damping } }
             Behavior on color { ColorAnimation { duration: Theme.animFast } }

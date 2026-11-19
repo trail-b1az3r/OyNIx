@@ -91,13 +91,13 @@ ColumnLayout {
         readonly property bool red: c && (c.s === 1 || c.s === 2)
         readonly property string rank: !c ? "" : ["", "A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"][c.r]
         readonly property string suit: !c ? "" : ["♠", "♥", "♦", "♣"][c.s]
-        width: 66; height: 94; radius: 9
+        width: 66; height: 94; radius: Theme.r(9)
         color: hidden ? Theme.primary : "#fbfaf7"
-        border.width: 1; border.color: hidden ? Theme.primary : "#d6d2c8"
+        border.width: Theme.edgeW(1); border.color: hidden ? Theme.primary : "#d6d2c8"
         Rectangle {   // card back pattern
             visible: card.hidden
-            anchors.fill: parent; anchors.margins: 6; radius: 6
-            color: "transparent"; border.width: 2; border.color: Theme.primaryFg; opacity: 0.5
+            anchors.fill: parent; anchors.margins: 6; radius: Theme.r(6)
+            color: "transparent"; border.width: Theme.edgeW(2); border.color: Theme.primaryFg; opacity: 0.5
         }
         Text { visible: !card.hidden; x: 7; y: 4; text: card.rank; font.pixelSize: 15; font.bold: true; color: card.red ? "#c62828" : "#1d1d1f" }
         Text { visible: !card.hidden; anchors.centerIn: parent; text: card.suit; font.pixelSize: 30; color: card.red ? "#c62828" : "#1d1d1f" }
@@ -115,7 +115,7 @@ ColumnLayout {
     Rectangle {
         Layout.fillWidth: true
         implicitHeight: table.implicitHeight + 40
-        radius: 18
+        radius: Theme.r(18)
         color: Theme.dark ? "#1f3a2c" : "#2e6b4c"
         ColumnLayout {
             id: table

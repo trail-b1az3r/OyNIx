@@ -63,7 +63,7 @@ Popup {
     exit: Transition { NumberAnimation { property: "opacity"; to: 0; duration: 100 } }
 
     background: Item {
-        Rectangle { visible: !Theme.neu; anchors.fill: parent; anchors.topMargin: 3; anchors.margins: -1; radius: Theme.shapeL + 2; color: Theme.shadow; opacity: 0.45 }
+        Rectangle { visible: !Theme.neu && !Theme.hard; anchors.fill: parent; anchors.topMargin: 3; anchors.margins: -1; radius: Theme.shapeL + 2; color: Theme.shadow; opacity: 0.45 }
         // 5.4 Liquid Glass: refracts the page behind it (the window's
         // content; popovers live in the overlay, so they aren't in it).
         // Classic and neumorphic styles: a solid surface (raised in neumorphic)
@@ -72,10 +72,11 @@ Popup {
             visible: !Theme.glass
             anchors.fill: parent
             radius: Theme.shapeL
-            color: Theme.neu ? Theme.surface : Theme.surfaceContainer
-            border.width: 1
+            color: Theme.neu ? Theme.surface : Theme.popover
+            border.width: Theme.edgeW(1)
             border.color: Theme.glassRim
             Neu { z: -1; anchors.fill: parent; radius: parent.radius; depth: 8 }
+            HardShadow { radius: parent.radius }
         }
         LiquidGlass {
             visible: Theme.glass

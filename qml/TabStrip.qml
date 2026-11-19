@@ -77,10 +77,10 @@ Item {
                 width: pinned ? strip.pinnedWidth : strip.tabWidth
                 height: flick.height
                 z: dragArea.drag.active ? 10 : 0
-                radius: current ? height / 2 : (hov.hovered ? height / 2 : Theme.shapeM)
+                radius: current ? Theme.pill(height) : (hov.hovered ? Theme.pill(height) : Theme.shapeM)
                 // 5.4 Liquid Glass: the selected tab is a glass pill.
-                color: current ? Theme.glassFillStrong : (hov.hovered ? Theme.glassFill : "transparent")
-                border.width: current || hov.hovered ? 1 : 0
+                color: current ? (Theme.hyperOn ? Theme.tabActive : Theme.glassFillStrong) : (hov.hovered ? Theme.glassFill : "transparent")
+                border.width: Theme.edgeW(current || hov.hovered ? 1 : 0)
                 border.color: Theme.glassRim
                 Behavior on radius { SpringAnimation { spring: Theme.springFast; damping: Theme.damping } }
                 Behavior on color { ColorAnimation { duration: Theme.animFast } }
@@ -89,6 +89,7 @@ Item {
                 HoverHandler { id: hov }
                 // Neumorphic theme: the selected tab stands out of the bar.
                 Neu { z: -1; anchors.fill: parent; radius: parent.radius; visible: Theme.neu && parent.current; depth: 3 }
+                HardShadow { radius: parent.radius; visible: Theme.hard && t.current }
 
                 // Hover preview card (thumbnail, title, address)
                 Timer {
@@ -172,7 +173,7 @@ Item {
                 Rectangle {
                     visible: t.current && strip.win.privateMode
                     anchors.bottom: parent.bottom; anchors.horizontalCenter: parent.horizontalCenter
-                    width: parent.width * 0.5; height: 2; radius: 1; color: Theme.purple
+                    width: parent.width * 0.5; height: 2; radius: Theme.r(1); color: Theme.purple
                 }
             }
         }
