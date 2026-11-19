@@ -12,10 +12,10 @@ AbstractButton {
     hoverEnabled: true
     focusPolicy: Qt.NoFocus
     background: Rectangle {
-        radius: height / 2
+        radius: Theme.pill(height)
         color: sw.checked ? Theme.primary : Theme.surfaceContainerHighest
-        border.width: sw.checked ? 0 : 2
-        border.color: Theme.outline
+        border.width: Theme.edge > 0 ? Theme.edge : sw.checked ? 0 : 2
+        border.color: Theme.edge > 0 ? Theme.edgeColor : Theme.outline
         opacity: sw.enabled ? 1 : 0.38
         Behavior on color { ColorAnimation { duration: Theme.animFast } }
         Rectangle {
@@ -28,7 +28,7 @@ AbstractButton {
             Behavior on x { SpringAnimation { spring: Theme.springDefault; damping: Theme.damping } }
             Behavior on d { SpringAnimation { spring: Theme.springFast; damping: Theme.damping } }
             Icon { anchors.centerIn: parent; visible: sw.checked && thumb.d > 18; name: "check"; size: 16; stroke: 2.2; color: Theme.primaryContainerFg }
-            Rectangle { anchors.centerIn: parent; width: 40; height: 40; radius: 20; z: -1
+            Rectangle { anchors.centerIn: parent; width: 40; height: 40; radius: Theme.r(20); z: -1
                 color: sw.checked ? Theme.primary : Theme.surfaceFg; opacity: sw.pressed ? 0.12 : sw.hovered ? 0.08 : 0 }
         }
     }

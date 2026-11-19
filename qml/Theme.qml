@@ -18,11 +18,38 @@ QtObject {
     // ("neumorphic" as a mode is from a 5.4 preview: graphite, dark.)
     readonly property string mode: Core.theme === "auto" ? (systemDark ? "dark" : "light")
                                  : Core.theme === "neumorphic" ? "dark" : Core.theme
-    readonly property string style: { var s = JSON.parse(Core.settingsJson); return Core.theme === "neumorphic" ? "graphite" : (s.uiStyle || "normal") }
+    readonly property string style: { var s = JSON.parse(Core.settingsJson); return hyperOn ? "hyper" : Core.theme === "neumorphic" ? "graphite" : (s.uiStyle || "normal") }
     readonly property bool neu: style === "neumorphic" || style === "graphite"
-    readonly property bool classic: style === "classic"
-    readonly property bool glass: style === "normal"
+    // A hypertheme without glass draws like Classic (solid surfaces), with
+    // its own borders, corners and hard shadows on top.
+    readonly property bool classic: style === "classic" || (hyperOn && !ht("glass", false))
+    readonly property bool glass: style === "normal" || (hyperOn && ht("glass", false) === true)
     readonly property bool dark: mode !== "light"
+
+    // ── 5.4.2: hyperthemes (.hypertheme, made in Theme Studio). The chosen
+    // one's tokens for this mode: { name, tokens, panels, warnings }, or {}.
+    readonly property var hyper: { Core.settingsJson; return JSON.parse(Core.hyperthemeJson(mode !== "light")) }
+    readonly property bool hyperOn: hyper.tokens !== undefined
+    function ht(k, d) { return hyperOn && hyper.tokens[k] !== undefined ? hyper.tokens[k] : d }
+    // A panel's style key (toolbar, tab, card, button, field, popup).
+    function panel(name, key, d) { var p = hyperOn && hyper.panels ? hyper.panels[name] : undefined; return p && p[key] !== undefined ? p[key] : d }
+    // Borders: the theme's width (0 = each control's own) and colour.
+    readonly property real edge: hyperOn ? ht("border_width", 0) : 0
+    function edgeOr(w) { return edge > 0 ? edge : w }
+    // A border that's drawn at all takes the theme's width.
+    function edgeW(w) { return w > 0 && edge > 0 ? edge : w }
+    readonly property color edgeColor: hyperOn ? ht("border", outline) : outlineVariant
+    // Hard offset shadows (Neubrutalism): x, y and colour, under cards,
+    // buttons, menus, fields and the selected tab.
+    readonly property real hardX: hyperOn ? ht("shadow_x", 0) : 0
+    readonly property real hardY: hyperOn ? ht("shadow_y", 0) : 0
+    readonly property bool hard: hardX !== 0 || hardY !== 0
+    readonly property color hardColor: hyperOn ? ht("shadow", "#000000") : "#000000"
+    // Corners: any radius scaled by the theme; a pill keeps to the theme's
+    // corner when it's squarer than a pill.
+    function r(px) { return Math.round(px * cornerScale) }
+    function pill(h) { return hyperOn ? Math.min(h / 2, ht("radius", h / 2)) : h / 2 }
+    readonly property int heavy: hyperOn && ht("font_weight", 400) >= 600 ? Font.Bold : Font.Normal
 
     // A browser style from an extension's theme.json: its accent, colour
     // role overrides for light and dark, fonts and corner scale.
@@ -31,12 +58,28 @@ QtObject {
         var s = JSON.parse(Core.themeScheme(custom.accent || Core.accent, mode, style))
         var o = dark ? custom.dark : custom.light
         if (o) for (var k in o) s[k] = o[k]
+        if (hyperOn) {
+            // The hypertheme's colours as Material roles.
+            var t = hyper.tokens
+            var bg = t.background, sf = t.surface || bg, alt = t.surface_alt || sf, fg = t.text, acc = t.accent
+            var mix = function (a, b, x) { var p = Qt.color(a), q = Qt.color(b); return Qt.rgba(p.r + (q.r - p.r) * x, p.g + (q.g - p.g) * x, p.b + (q.b - p.b) * x, 1).toString() }
+            s.surface = bg; s.surfaceDim = bg; s.surfaceBright = sf
+            s.surfaceContainerLowest = sf; s.surfaceContainerLow = sf; s.surfaceContainer = sf
+            s.surfaceContainerHigh = alt; s.surfaceContainerHighest = alt
+            s.onSurface = fg; s.onSurfaceVariant = t.muted || fg
+            s.outline = t.border || fg; s.outlineVariant = t.border || fg
+            s.primary = acc; s.onPrimary = t.on_accent || fg
+            s.primaryContainer = mix(acc, sf, 0.45); s.onPrimaryContainer = fg
+            s.secondaryContainer = mix(acc, sf, 0.55); s.onSecondaryContainer = fg
+            s.tertiaryContainer = alt; s.onTertiaryContainer = fg
+            s.error = t.danger || s.error
+        }
         return s
     }
     // The two neumorphic shadows: light from the top-left, dark below-right.
     readonly property color neuHighlight: scheme.neuHighlight || alpha("#ffffff", 0.11)
     readonly property color neuShadow: scheme.neuShadow || alpha("#000000", 0.5)
-    readonly property real cornerScale: custom.corners !== undefined ? custom.corners : 1
+    readonly property real cornerScale: hyperOn ? ht("radius", 12) / 12 : custom.corners !== undefined ? custom.corners : 1
     function role(n) { return scheme[n] || "#ff00ff" }
     function alpha(c, a) { return Qt.rgba(c.r, c.g, c.b, a) }
 
@@ -84,13 +127,13 @@ QtObject {
     readonly property color window: surface
     readonly property color toolbar: glassBar
     readonly property color toolbarPrivate: glassBarPrivate
-    readonly property color tabActive: secondaryContainer
+    readonly property color tabActive: panel("tab", "fill", secondaryContainer)
     readonly property color tabHover: hover
     readonly property color sidebar: surfaceContainerLow
-    readonly property color field: surfaceContainerHighest
+    readonly property color field: panel("field", "fill", surfaceContainerHighest)
     readonly property color fieldFocus: surfaceContainerLowest
-    readonly property color popover: surfaceContainer
-    readonly property color card: surfaceContainerLow
+    readonly property color popover: panel("popup", "fill", surfaceContainer)
+    readonly property color card: panel("card", "fill", surfaceContainerLow)
     readonly property color separator: outlineVariant
     readonly property color shadow: alpha("#000000", dark ? 0.5 : 0.18)
     readonly property color text: surfaceFg
@@ -110,10 +153,10 @@ QtObject {
     // Classic: OyNIx's flat look — solid containers, no rim or specular line.
     readonly property color glassFill: neu ? surface : classic ? surfaceContainerHighest : alpha(surfaceContainerHighest, dark ? 0.55 : 0.62)
     readonly property color glassFillStrong: neu ? surface : classic ? surfaceContainerHighest : alpha(surfaceContainerHighest, dark ? 0.78 : 0.86)
-    readonly property color glassRim: neu ? alpha(dark ? "#ffffff" : "#000000", 0.04) : classic ? "transparent" : dark ? alpha("#ffffff", 0.14) : alpha(outlineVariant, 0.65)
+    readonly property color glassRim: edge > 0 ? edgeColor : neu ? alpha(dark ? "#ffffff" : "#000000", 0.04) : classic ? "transparent" : dark ? alpha("#ffffff", 0.14) : alpha(outlineVariant, 0.65)
     readonly property color glassSpecular: !glass ? "transparent" : dark ? alpha("#ffffff", 0.20) : alpha("#ffffff", 0.95)
     readonly property color glassShadow: alpha("#000000", dark ? 0.35 : 0.10)
-    readonly property color glassBar: neu ? surface : classic ? surfaceContainer : alpha(surfaceContainer, dark ? 0.88 : 0.86)
+    readonly property color glassBar: panel("toolbar", "fill", "") !== "" ? panel("toolbar", "fill", "") : neu ? surface : classic ? surfaceContainer : alpha(surfaceContainer, dark ? 0.88 : 0.86)
     readonly property color glassBarPrivate: alpha(Qt.tint(surfaceContainer, alpha(tertiary, dark ? 0.18 : 0.14)), 0.9)
     // Smallest click target for icon buttons (Apple / M3 guidance).
     readonly property int target: 40
@@ -133,8 +176,8 @@ QtObject {
     readonly property int sidebarWidth: 300
 
     // ── Type scale (Roboto Flex / Google Sans Flex when installed) ──
-    readonly property string font: (custom.font ? custom.font + ", " : "") + "Roboto Flex, Google Sans Flex, Google Sans Text, Roboto, Inter, Noto Sans, Cantarell, sans-serif"
-    readonly property string displayFont: (custom.displayFont ? custom.displayFont + ", " : "") + "Google Sans Flex, Roboto Flex, Google Sans, Roboto, Inter, Noto Sans, sans-serif"
+    readonly property string font: (hyperOn && ht("font_family", "") ? ht("font_family", "") + ", " : "") + (custom.font ? custom.font + ", " : "") + "Roboto Flex, Google Sans Flex, Google Sans Text, Roboto, Inter, Noto Sans, Cantarell, sans-serif"
+    readonly property string displayFont: (hyperOn && ht("font_family", "") ? ht("font_family", "") + ", " : "") + (custom.displayFont ? custom.displayFont + ", " : "") + "Google Sans Flex, Roboto Flex, Google Sans, Roboto, Inter, Noto Sans, sans-serif"
     readonly property int fontSize: 14
     readonly property int smallFont: 12
     readonly property int titleSize: 16

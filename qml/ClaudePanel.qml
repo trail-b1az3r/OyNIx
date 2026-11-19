@@ -195,7 +195,7 @@ Item {
             visible: Core.agentEnabled && panel.view === "chat"
             Layout.fillWidth: true
             implicitHeight: Math.min(160, Math.max(52, input.contentHeight + 22))
-            radius: 26
+            radius: Theme.r(26)
             color: Theme.surfaceContainerHighest
             RowLayout {
                 anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 6
@@ -235,7 +235,7 @@ Item {
         property string text
         signal copy()
         implicitHeight: code.implicitHeight + 20
-        radius: 12
+        radius: Theme.r(12)
         color: Theme.surfaceContainerHighest
         Text {
             id: code

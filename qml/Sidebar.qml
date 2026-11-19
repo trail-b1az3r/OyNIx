@@ -26,7 +26,7 @@ Rectangle {
             Layout.fillWidth: true
             Layout.leftMargin: 10; Layout.rightMargin: 10; Layout.topMargin: 8
             implicitHeight: 40
-            radius: 20
+            radius: Theme.r(20)
             color: Theme.surfaceContainerHigh
             RowLayout {
                 anchors.fill: parent
@@ -45,7 +45,7 @@ Rectangle {
                         Layout.fillHeight: true
                         hoverEnabled: true
                         background: Rectangle {
-                            radius: height / 2
+                            radius: Theme.pill(height)
                             color: sb.panel === modelData.id ? Theme.secondaryContainer : "transparent"
                             Behavior on color { ColorAnimation { duration: Theme.animFast } }
                         }
@@ -62,7 +62,7 @@ Rectangle {
             Layout.fillWidth: true
             Layout.leftMargin: 10; Layout.rightMargin: 10
             implicitHeight: 40
-            radius: 20
+            radius: Theme.r(20)
             color: Theme.surfaceContainerHigh
             visible: sb.panel !== "tabs" && sb.panel !== "claude"
             RowLayout {
@@ -136,7 +136,7 @@ Rectangle {
                 width: lv.width - 16
                 x: 8
                 height: 40
-                radius: 7
+                radius: Theme.r(7)
                 color: ih.hovered ? Theme.hover : "transparent"
                 HoverHandler { id: ih }
                 MouseArea {

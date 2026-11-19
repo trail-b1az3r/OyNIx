@@ -75,7 +75,7 @@ Item {
             anchors.fill: parent
             radius: width / 2
             color: "transparent"
-            border.width: 1.6
+            border.width: Theme.edgeW(1.6)
             border.color: Theme.separator
         }
         Rectangle {

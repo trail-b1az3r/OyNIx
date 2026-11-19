@@ -129,7 +129,7 @@ Rectangle {
                             implicitHeight: 48
                             Rectangle {
                                 anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
-                                height: 40; radius: 20
+                                height: 40; radius: Theme.r(20)
                                 width: Math.max(height, parent.width * modelData.sites / page.maxSites)
                                 color: Theme.alpha(index === 0 ? Theme.tertiary : Theme.primary, index === 0 ? 0.22 : 0.12)
                             }

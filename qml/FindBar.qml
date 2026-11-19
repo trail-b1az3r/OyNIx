@@ -37,7 +37,7 @@ Rectangle {
         anchors.leftMargin: 12; anchors.rightMargin: 12
         spacing: 8
         Rectangle {
-            Layout.preferredWidth: 300; implicitHeight: 26; radius: 6
+            Layout.preferredWidth: 300; implicitHeight: 26; radius: Theme.r(6)
             color: Theme.fieldFocus
             border.color: fb.matches === 0 && input.text ? Theme.danger : Theme.separator
             RowLayout {
@@ -59,7 +59,7 @@ Rectangle {
             implicitHeight: 24; implicitWidth: 34; checkable: true
             checked: fb.caseSensitive
             onToggled: { fb.caseSensitive = checked; fb.find(false) }
-            background: Rectangle { radius: 5; color: parent.checked ? Theme.selection : "transparent"; border.color: Theme.separator }
+            background: Rectangle { radius: Theme.r(5); color: parent.checked ? Theme.selection : "transparent"; border.color: Theme.separator }
             contentItem: Txt { text: "Aa"; horizontalAlignment: Text.AlignHCenter; font.pixelSize: 12 }
             ToolTip.visible: hovered; ToolTip.text: qsTr("Match Case")
         }

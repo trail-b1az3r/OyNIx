@@ -62,7 +62,7 @@ Rectangle {
                             spacing: 4
                             Rectangle {
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                width: railItem.sel ? 56 : (railItem.hovered ? 56 : 32); height: 32; radius: 16
+                                width: railItem.sel ? 56 : (railItem.hovered ? 56 : 32); height: 32; radius: Theme.r(16)
                                 color: railItem.sel ? Theme.secondaryContainer : (railItem.hovered ? Theme.hover : "transparent")
                                 Behavior on width { SpringAnimation { spring: Theme.springDefault; damping: Theme.damping } }
                                 Icon { anchors.centerIn: parent; name: railItem.modelData.icon; size: 20
@@ -84,12 +84,15 @@ Rectangle {
         default property alias rows: body.data
         Layout.fillWidth: true
         spacing: 6
-        Txt { text: parent.title; font.weight: Font.DemiBold; color: Theme.primary; font.pixelSize: 14; visible: text !== ""; Layout.leftMargin: 8 }
+        Txt { text: parent.title; font.weight: Theme.hyperOn ? Font.Black : Font.DemiBold; color: Theme.hyperOn ? Theme.text : Theme.primary; font.pixelSize: 14; visible: text !== ""; Layout.leftMargin: 8 }
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: body.implicitHeight + 16
             radius: Theme.shapeXL - 4
-            color: Theme.surfaceContainerLow
+            color: Theme.card
+            border.width: Theme.edge
+            border.color: Theme.edgeColor
+            HardShadow { radius: parent.radius }
             ColumnLayout { id: body; anchors.fill: parent; anchors.margins: 4; spacing: 0 }
         }
     }
@@ -127,16 +130,16 @@ Rectangle {
             currentIndex: { for (var i = 0; i < cr.options.length; i++) if (cr.options[i].v === sw.s[cr.key]) return i; return 0 }
             onActivated: function (i) { sw.set(cr.key, cr.options[i].v) }
             font.pixelSize: 12
-            background: Rectangle { radius: 6; color: Theme.field; border.color: Theme.separator }
+            background: Rectangle { radius: Theme.r(6); color: Theme.field; border.color: Theme.separator }
             contentItem: Txt { leftPadding: 10; text: combo.displayText; font.pixelSize: 12 }
-            popup.background: Rectangle { radius: 8; color: Theme.popover; border.color: Theme.separator }
+            popup.background: Rectangle { radius: Theme.r(8); color: Theme.popover; border.color: Theme.separator }
             delegate: ItemDelegate {
                 required property var modelData
                 required property int index
                 width: combo.width
                 height: 28
                 highlighted: combo.highlightedIndex === index
-                background: Rectangle { radius: 5; color: parent.highlighted ? Theme.accent : "transparent" }
+                background: Rectangle { radius: Theme.r(5); color: parent.highlighted ? Theme.accent : "transparent" }
                 contentItem: Txt { text: modelData.t; color: parent.highlighted ? "white" : Theme.text; font.pixelSize: 12 }
             }
         }
@@ -146,7 +149,7 @@ Rectangle {
         property string key: ""
         property string placeholder: ""
         Rectangle {
-            Layout.preferredWidth: 260; implicitHeight: 28; radius: 6; color: Theme.field; border.color: Theme.separator
+            Layout.preferredWidth: 260; implicitHeight: 28; radius: Theme.r(6); color: Theme.field; border.color: Theme.separator
             TextInput {
                 id: ti
                 anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8
@@ -175,7 +178,7 @@ Rectangle {
                     required property string modelData
                     required property int index
                     height: 32; width: chipText.implicitWidth + 44; radius: Theme.shapeS
-                    color: "transparent"; border.color: Theme.outline; border.width: 1
+                    color: "transparent"; border.color: Theme.outline; border.width: Theme.edgeW(1)
                     Txt { id: chipText; x: 12; anchors.verticalCenter: parent.verticalCenter; text: modelData; font.pixelSize: 13 }
                     IconButton { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; implicitWidth: 28; implicitHeight: 28; glyph: "close"; iconSize: 14
                         onClicked: { var l = sl.items.slice(); l.splice(index, 1); sw.set(sl.key, l) } }
@@ -351,8 +354,8 @@ Rectangle {
                                 spacing: 5
                                 Rectangle {
                                     anchors.horizontalCenter: parent.horizontalCenter
-                                    width: 52; height: 38; radius: 7
-                                    border.width: parent.parent.chosen ? 2.5 : 1
+                                    width: 52; height: 38; radius: Theme.r(7)
+                                    border.width: Theme.edgeW(parent.parent.chosen ? 2.5 : 1)
                                     border.color: parent.parent.chosen ? Theme.accent : Theme.separator
                                     gradient: Gradient {
                                         orientation: Gradient.Horizontal
@@ -362,7 +365,7 @@ Rectangle {
                                         GradientStop { position: 1; color: modelData.b }
                                     }
                                     // The accent, as it shows on each mode.
-                                    Rectangle { anchors.bottom: parent.bottom; anchors.bottomMargin: 7; anchors.horizontalCenter: parent.horizontalCenter; width: 18; height: 4; radius: 2; color: Theme.accent; opacity: 0.85 }
+                                    Rectangle { anchors.bottom: parent.bottom; anchors.bottomMargin: 7; anchors.horizontalCenter: parent.horizontalCenter; width: 18; height: 4; radius: Theme.r(2); color: Theme.accent; opacity: 0.85 }
                                 }
                                 Txt { anchors.horizontalCenter: parent.horizontalCenter; text: modelData.t; font.pixelSize: 12 }
                             }
@@ -386,22 +389,22 @@ Rectangle {
                                 Rectangle {
                                     id: chip
                                     anchors.horizontalCenter: parent.horizontalCenter
-                                    width: 56; height: 38; radius: 7
+                                    width: 56; height: 38; radius: Theme.r(7)
                                     readonly property color base: styleBtn.modelData.v === "graphite" ? (Theme.dark ? "#2b2d31" : "#e3e5e9") : Theme.surface
                                     color: base
-                                    border.width: styleBtn.chosen ? 2.5 : 1
+                                    border.width: Theme.edgeW(styleBtn.chosen ? 2.5 : 1)
                                     border.color: styleBtn.chosen ? Theme.accent : Theme.separator
                                     // A small control drawn in each style.
                                     Rectangle {
                                         anchors.centerIn: parent
-                                        width: 30; height: 14; radius: 7
+                                        width: 30; height: 14; radius: Theme.r(7)
                                         color: styleBtn.modelData.v === "normal" ? Theme.alpha(Theme.surfaceContainerHighest, 0.6)
                                              : styleBtn.modelData.v === "classic" ? Theme.surfaceContainerHighest : chip.base
-                                        border.width: styleBtn.modelData.v === "normal" ? 1 : 0
+                                        border.width: Theme.edgeW(styleBtn.modelData.v === "normal" ? 1 : 0)
                                         border.color: Theme.alpha("#ffffff", Theme.dark ? 0.2 : 0.9)
-                                        Neu { z: -1; anchors.fill: parent; radius: 7; depth: 2.5; visible: Theme.neu && (styleBtn.modelData.v === "neumorphic" || styleBtn.modelData.v === "graphite") }
+                                        Neu { z: -1; anchors.fill: parent; radius: Theme.r(7); depth: 2.5; visible: Theme.neu && (styleBtn.modelData.v === "neumorphic" || styleBtn.modelData.v === "graphite") }
                                         RectangularShadow {
-                                            z: -1; anchors.fill: parent; radius: 7; blur: 4; offset.x: 2; offset.y: 2; color: Theme.alpha("#000000", 0.45)
+                                            z: -1; anchors.fill: parent; radius: Theme.r(7); blur: 4; offset.x: 2; offset.y: 2; color: Theme.alpha("#000000", 0.45)
                                             visible: !Theme.neu && (styleBtn.modelData.v === "neumorphic" || styleBtn.modelData.v === "graphite")
                                         }
                                     }
@@ -418,13 +421,52 @@ Rectangle {
                         model: ["#2f7cf6", "#8e5cf7", "#e8457a", "#f2562e", "#f5a623", "#34c759", "#14b8a6", "#8e8e93"]
                         delegate: Rectangle {
                             required property string modelData
-                            width: 20; height: 20; radius: 10
+                            width: 20; height: 20; radius: Theme.r(10)
                             color: modelData
-                            border.width: Core.accent === modelData ? 2 : 0
+                            border.width: Theme.edgeW(Core.accent === modelData ? 2 : 0)
                             border.color: Theme.text
                             TapHandler { onTapped: sw.set("accent", modelData) }
                         }
                     }
+                }
+            }
+            Section {
+                title: qsTr("Hypertheme")
+                ChoiceRow {
+                    label: qsTr("Theme")
+                    hint: qsTr("A .hypertheme restyles all of OyNIx: colours, corners, borders, shadows, fonts and panels. Neubrutalism comes with OyNIx; make your own in Theme Studio.")
+                    key: "hypertheme"
+                    options: { Core.settingsJson; return [{ v: "", t: qsTr("None (the style above)") }].concat(JSON.parse(Core.hyperthemes()).map(function (x) { return { v: x.file, t: x.name } })) }
+                }
+                Txt {
+                    visible: Theme.hyperOn || Theme.hyper.error !== undefined
+                    Layout.fillWidth: true; Layout.leftMargin: 12; Layout.rightMargin: 12; Layout.bottomMargin: 6
+                    wrapMode: Text.WordWrap; font.pixelSize: 12
+                    color: Theme.hyper.error !== undefined ? Theme.error : Theme.textDim
+                    text: Theme.hyper.error !== undefined ? qsTr("Couldn't load it: %1").arg(Theme.hyper.error)
+                        : (Theme.hyper.warnings || []).length ? "⚠ " + Theme.hyper.warnings.join(" · ") : ""
+                }
+                Divider {}
+                Row_ {
+                    label: qsTr("Install")
+                    MTextField { id: htPath; Layout.preferredWidth: 260; placeholder: qsTr("A .hypertheme file or folder"); onAccepted: htInstall.clicked() }
+                    PushButton {
+                        id: htInstall
+                        text: qsTr("Install")
+                        onClicked: {
+                            var r = JSON.parse(Core.installHypertheme(htPath.text))
+                            if (r.error) { htStatus.text = r.error; return }
+                            htPath.text = ""; htStatus.text = qsTr("Installed")
+                            sw.set("hypertheme", r.file)
+                        }
+                    }
+                }
+                Txt { id: htStatus; visible: text !== ""; Layout.leftMargin: 12; Layout.bottomMargin: 6; font.pixelSize: 12; color: Theme.textDim; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                Divider {}
+                Row_ {
+                    label: qsTr("Theme Studio")
+                    hint: qsTr("Make a hypertheme by wiring nodes: colours, numbers, fonts, shaders and panels.")
+                    PushButton { text: qsTr("Open Theme Studio"); primary: true; onClicked: sw.app.openThemeStudio() }
                 }
             }
             Section {
@@ -492,9 +534,9 @@ Rectangle {
                                 spacing: 5
                                 Rectangle {
                                     anchors.horizontalCenter: parent.horizontalCenter
-                                    width: 56; height: 38; radius: 7
+                                    width: 56; height: 38; radius: Theme.r(7)
                                     color: Theme.field
-                                    border.width: Core.tabLayout === modelData.v ? 2.5 : 1
+                                    border.width: Theme.edgeW(Core.tabLayout === modelData.v ? 2.5 : 1)
                                     border.color: Core.tabLayout === modelData.v ? Theme.accent : Theme.separator
                                     Icon { anchors.centerIn: parent; name: modelData.i; size: 20; color: Theme.textDim }
                                 }
@@ -558,7 +600,7 @@ Rectangle {
                         model: JSON.parse(Core.bangs())
                         delegate: Rectangle {
                             required property var modelData
-                            width: bt.implicitWidth + 14; height: 24; radius: 12; color: Theme.field
+                            width: bt.implicitWidth + 14; height: 24; radius: Theme.r(12); color: Theme.field
                             Txt { id: bt; anchors.centerIn: parent; text: "!" + modelData.key + "  " + modelData.name; font.pixelSize: 12 }
                         }
                     }
@@ -663,7 +705,7 @@ Rectangle {
                     label: qsTr("Add a list by URL")
                     hint: qsTr("Any Adblock Plus, uBlock Origin or hosts-format list.")
                     Rectangle {
-                        Layout.preferredWidth: 220; implicitHeight: 28; radius: 6; color: Theme.field; border.color: Theme.separator
+                        Layout.preferredWidth: 220; implicitHeight: 28; radius: Theme.r(6); color: Theme.field; border.color: Theme.separator
                         TextInput {
                             id: listUrl
                             anchors.fill: parent; anchors.margins: 6
@@ -710,6 +752,21 @@ Rectangle {
                 Row_ {
                     label: qsTr("Cache")
                     PushButton { text: qsTr("Clear Cache"); onClicked: { sw.app.defaultProfile.clearHttpCache(); text = qsTr("Cleared") } }
+                }
+                Divider {}
+                Row_ {
+                    label: qsTr("Data cache")
+                    hint: qsTr("Site icons (saved at 64×64 and refreshed as sites change) and cookies. Signs you out of websites.")
+                    PushButton {
+                        text: qsTr("Clear Data Cache")
+                        destructive: true
+                        onClicked: {
+                            var n = Core.clearFavicons()
+                            Core.clearCookies(sw.app.defaultProfile)
+                            sw.app.defaultProfile.clearHttpCache()
+                            text = n === 1 ? qsTr("Cleared (1 icon)") : qsTr("Cleared (%1 icons)").arg(n)
+                        }
+                    }
                 }
                 Divider {}
                 Row_ {
@@ -859,7 +916,7 @@ Rectangle {
                     label: qsTr("OyNIx extensions")
                     hint: qsTr("oynix.json, code.ts and content.css, plus an optional panel, page, data or browser style. OyNIx compiles the TypeScript itself.")
                     Rectangle {
-                        Layout.preferredWidth: 150; implicitHeight: 28; radius: 6; color: Theme.field; border.color: Theme.separator
+                        Layout.preferredWidth: 150; implicitHeight: 28; radius: Theme.r(6); color: Theme.field; border.color: Theme.separator
                         TextInput {
                             id: newExtName
                             anchors.fill: parent; anchors.margins: 6
@@ -910,7 +967,7 @@ Rectangle {
                             Layout.margins: 12
                             spacing: 12
                             Rectangle {
-                                Layout.preferredWidth: 36; Layout.preferredHeight: 36; radius: 8; color: Theme.field
+                                Layout.preferredWidth: 36; Layout.preferredHeight: 36; radius: Theme.r(8); color: Theme.field
                                 Image { anchors.centerIn: parent; width: 24; height: 24; sourceSize: Qt.size(48, 48); source: ext.modelData.icon ? "file://" + ext.modelData.icon : ""; visible: status === Image.Ready }
                                 Icon { anchors.centerIn: parent; visible: !ext.modelData.icon; name: "puzzle"; size: 20; color: Theme.textDim }
                             }
@@ -923,7 +980,7 @@ Rectangle {
                                     Txt { text: ext.modelData.version + (ext.modelData.builtin ? " · " + qsTr("Built in") : ext.modelData.power ? " · " + qsTr("Verified by %1").arg(ext.modelData.verifiedBy) + (ext.modelData.gemprint ? " · " + qsTr("GemPrint %1").arg(ext.modelData.gemprint) : "") : "") + (ext.modelData.hasTheme ? " · " + qsTr("Browser style") : "") + ((ext.modelData.permissions || []).indexOf("ocr") >= 0 ? " · " + qsTr("Reads text from page screenshots") : ""); color: Theme.textDim; font.pixelSize: 11 }
                                     Txt { visible: sw.s.extDeveloperMode === true; Layout.fillWidth: true; text: (ext.modelData.webId ? "ID " + ext.modelData.webId + " · " : "") + ext.modelData.path; color: Theme.textFaint; font.pixelSize: 11; font.family: "monospace"; elide: Text.ElideMiddle }
                                     Rectangle {
-                                        implicitWidth: kindText.implicitWidth + 12; implicitHeight: 18; radius: 9
+                                        implicitWidth: kindText.implicitWidth + 12; implicitHeight: 18; radius: Theme.r(9)
                                         color: ext.modelData.power ? Qt.rgba(Theme.danger.r, Theme.danger.g, Theme.danger.b, 0.18) : ext.modelData.kind === "firefox" ? "#33ff9f0a" : ext.modelData.kind === "oynix" ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.2) : "#330a84ff"
                                         Txt {
                                             id: kindText; anchors.centerIn: parent; font.pixelSize: 10; font.weight: Font.DemiBold
@@ -1001,7 +1058,7 @@ Rectangle {
                 Row_ {
                     label: qsTr("New profile")
                     Rectangle {
-                        Layout.preferredWidth: 180; implicitHeight: 28; radius: 6; color: Theme.field; border.color: Theme.separator
+                        Layout.preferredWidth: 180; implicitHeight: 28; radius: Theme.r(6); color: Theme.field; border.color: Theme.separator
                         TextInput { id: pname; anchors.fill: parent; anchors.margins: 6; color: Theme.text; font.pixelSize: 12; clip: true }
                     }
                     PushButton { text: qsTr("Create & Open"); primary: true; enabled: pname.text.trim() !== ""; onClicked: { Core.launchProfile(pname.text.trim(), false); pname.text = "" } }
@@ -1265,9 +1322,9 @@ Rectangle {
                 Rectangle {
                     visible: updSection.u.state === "downloading"
                     Layout.fillWidth: true; Layout.leftMargin: 12; Layout.rightMargin: 12
-                    implicitHeight: 6; radius: 3
+                    implicitHeight: 6; radius: Theme.r(3)
                     color: Theme.surfaceContainerHighest
-                    Rectangle { width: parent.width * updSection.u.progress; height: parent.height; radius: 3; color: Theme.primary
+                    Rectangle { width: parent.width * updSection.u.progress; height: parent.height; radius: Theme.r(3); color: Theme.primary
                         Behavior on width { NumberAnimation { duration: 200 } } }
                 }
                 Txt {

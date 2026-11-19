@@ -26,7 +26,7 @@ Rectangle {
             Layout.fillWidth: true
             Txt { text: win.privateMode ? qsTr("Private Tabs") : (win.tabs.count === 1 ? qsTr("1 Tab") : qsTr("%1 Tabs").arg(win.tabs.count)); font.pixelSize: 20; font.weight: Font.Bold; Layout.fillWidth: true }
             Rectangle {
-                implicitWidth: 260; implicitHeight: 30; radius: 8; color: Theme.field
+                implicitWidth: 260; implicitHeight: 30; radius: Theme.r(8); color: Theme.field
                 RowLayout {
                     anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 8
                     Icon { name: "search"; size: 14; color: Theme.textDim }
@@ -75,9 +75,9 @@ Rectangle {
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        radius: 10
+                        radius: Theme.r(10)
                         color: Theme.window
-                        border.width: cell.index === ov.win.currentIndex ? 3 : 1
+                        border.width: Theme.edgeW(cell.index === ov.win.currentIndex ? 3 : 1)
                         border.color: cell.index === ov.win.currentIndex ? Theme.accent : Theme.separator
                         clip: true
                         scale: ch.hovered ? 1.02 : 1
@@ -101,7 +101,7 @@ Rectangle {
                             visible: ch.hovered
                             round: true; implicitWidth: 22; implicitHeight: 22
                             glyph: "close"; iconSize: 10
-                            background: Rectangle { radius: 11; color: Theme.popover; border.color: Theme.separator }
+                            background: Rectangle { radius: Theme.r(11); color: Theme.popover; border.color: Theme.separator }
                             onClicked: ov.win.closeTab(cell.index)
                         }
                     }

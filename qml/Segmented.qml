@@ -25,8 +25,11 @@ RowLayout {
             background: Rectangle {
                 // Outer corners fully round, inner corners small; the selected
                 // segment morphs to a full pill.
-                radius: b.selected ? height / 2 : (b.pressed ? Theme.shapeS : Theme.shapeS + 2)
+                radius: b.selected ? Theme.pill(height) : (b.pressed ? Theme.shapeS : Theme.shapeS + 2)
                 color: b.selected ? Theme.secondaryContainer : (b.hovered ? Theme.surfaceContainerHigh : Theme.surfaceContainer)
+                border.width: Theme.edge
+                border.color: Theme.edgeColor
+                HardShadow { radius: parent.radius; visible: Theme.hard && b.selected }
                 Behavior on radius { SpringAnimation { spring: Theme.springFast; damping: Theme.damping } }
                 Behavior on color { ColorAnimation { duration: Theme.animFast } }
             }

@@ -31,9 +31,9 @@ Popover {
                     spacing: 3
                     Txt { text: d.dl.downloadFileName; Layout.fillWidth: true; font.pixelSize: 12 }
                     Rectangle {
-                        Layout.fillWidth: true; height: 4; radius: 2; color: Theme.field
+                        Layout.fillWidth: true; height: 4; radius: Theme.r(2); color: Theme.field
                         visible: d.dl.state === WebEngineDownloadRequest.DownloadInProgress
-                        Rectangle { height: parent.height; radius: 2; color: Theme.accent; width: parent.width * (d.dl.totalBytes > 0 ? d.dl.receivedBytes / d.dl.totalBytes : 0) }
+                        Rectangle { height: parent.height; radius: Theme.r(2); color: Theme.accent; width: parent.width * (d.dl.totalBytes > 0 ? d.dl.receivedBytes / d.dl.totalBytes : 0) }
                     }
                     Txt {
                         font.pixelSize: 11; color: Theme.textDim

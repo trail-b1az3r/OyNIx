@@ -21,6 +21,7 @@ mod bridge {
     pub mod ocrbridge;
     pub mod outlinebridge;
     pub mod usbbridge;
+    pub mod studio;
 }
 mod core;
 mod gpu;

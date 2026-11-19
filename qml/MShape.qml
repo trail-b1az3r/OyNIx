@@ -10,8 +10,9 @@ Item {
     property string shape: "circle"
     property real size: 48
     property color color: Theme.primaryContainer
-    property color borderColor: "transparent"
-    property real borderWidth: 0
+    // Hyperthemes with borders outline every shape.
+    property color borderColor: Theme.edge > 0 ? Theme.edgeColor : "transparent"
+    property real borderWidth: Theme.edge
     property real rotationOffset: 0
     // Optional morphing: amplitude override (used by LoadingShape).
     property real amplitude: -1
@@ -64,8 +65,21 @@ Item {
     }
 
     Neu { anchors.fill: parent; radius: width / 2; visible: Theme.neu && root.neuDepth > 0; depth: root.neuDepth; inset: root.neuInset }
+    // A hypertheme with square-ish corners (Neubrutalism) turns the soft
+    // shapes into its own rounded boxes, with its hard shadow.
+    readonly property bool boxy: Theme.hyperOn && Theme.cornerScale < 1 && custom.status !== Loader.Ready
+    Rectangle {
+        visible: root.boxy
+        anchors.fill: parent
+        anchors.margins: root.size * 0.06
+        radius: Math.min(width / 2, Theme.ht("radius", 12) * 1.5)
+        color: root.color
+        border.width: root.borderWidth
+        border.color: root.borderColor
+        HardShadow { radius: parent.radius }
+    }
     Shape {
-        visible: custom.status !== Loader.Ready
+        visible: custom.status !== Loader.Ready && !root.boxy
         anchors.fill: parent
         layer.enabled: true
         layer.samples: 4

@@ -28,14 +28,15 @@ AbstractButton {
     // light rim) while hovered, pressed or checked; filled stays solid.
     readonly property bool glassy: !filled && enabled && (hovered || pressed || checked || tonal)
     background: Rectangle {
-        radius: btn.pressed ? Math.min(height / 2, Theme.shapeM) : height / 2
+        radius: btn.pressed ? Math.min(Theme.pill(height), Theme.shapeM) : Theme.pill(height)
         color: btn.filled ? Theme.primary : btn.glassy ? ((btn.checked || btn.tonal) ? Qt.tint(Theme.glassFill, Theme.alpha(Theme.secondaryContainer, 0.55)) : Theme.glassFill) : "transparent"
-        border.width: btn.glassy ? 1 : 0
+        border.width: Theme.edgeW(btn.glassy ? 1 : 0)
         border.color: Theme.glassRim
         Behavior on radius { SpringAnimation { spring: Theme.springFast; damping: Theme.damping } }
         Behavior on color { ColorAnimation { duration: Theme.animFast } }
         // Neumorphic theme: raised while hovered or checked, pressed in while pressed.
         Neu { z: -1; anchors.fill: parent; radius: parent.radius; visible: Theme.neu && btn.glassy; inset: btn.pressed; depth: 3 }
+        HardShadow { radius: parent.radius; visible: Theme.hard && (btn.filled || btn.checked) && !btn.pressed }
         Rectangle {
             anchors.fill: parent
             radius: parent.radius
@@ -63,7 +64,7 @@ AbstractButton {
             anchors.topMargin: 2
             height: 16
             width: Math.max(16, badgeText.implicitWidth + 8)
-            radius: 8
+            radius: Theme.r(8)
             color: Theme.error
             Text {
                 id: badgeText

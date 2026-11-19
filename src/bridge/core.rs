@@ -293,6 +293,23 @@ pub mod qobject {
         /// The active browser style (validated theme.json of the chosen extension), or "{}".
         #[qinvokable]
         fn browser_style_json(self: &Core) -> QString;
+        // ── hyperthemes (5.4.2) ──
+        /// The chosen hypertheme for light or dark: { file, name, tokens,
+        /// panels, warnings }, or {} when none (or it didn't load).
+        #[qinvokable]
+        fn hypertheme_json(self: &Core, dark: bool) -> QString;
+        /// [{ file, name, description, builtin }] of built-in and installed hyperthemes.
+        #[qinvokable]
+        fn hyperthemes(self: &Core) -> QString;
+        /// Install a .hypertheme file or folder: { file } or { error }.
+        #[qinvokable]
+        fn install_hypertheme(self: &Core, path: &QString) -> QString;
+        /// Theme Studio's page, written to the cache with its bridge; its file:// URL.
+        #[qinvokable]
+        fn theme_studio_url(self: &Core) -> QString;
+        /// Remove the saved site icons (see core/favicons.rs).
+        #[qinvokable]
+        fn clear_favicons(self: &Core) -> i32;
         /// [{id, name}] of enabled extensions that have a theme.json.
         #[qinvokable]
         fn browser_styles(self: &Core) -> QString;
@@ -1458,6 +1475,32 @@ impl qobject::Core {
             .find(|e| !want.is_empty() && &e.id == want && e.enabled && e.has_theme)
             .and_then(|e| extensions::read_theme(std::path::Path::new(&e.path)).ok().flatten());
         to_qjson(&theme.unwrap_or_else(|| json!({})))
+    }
+
+    pub fn hypertheme_json(&self, dark: bool) -> QString {
+        to_qjson(&crate::core::hyper::resolved(&self.settings.hypertheme, dark))
+    }
+
+    pub fn hyperthemes(&self) -> QString {
+        to_qjson(&crate::core::hyper::list())
+    }
+
+    pub fn install_hypertheme(&self, path: &QString) -> QString {
+        let p = s(path);
+        let p = p.trim().trim_start_matches("file://");
+        to_qjson(&match stonedgem_hypertheme::install(std::path::Path::new(p)) {
+            Ok(file) => json!({ "file": file }),
+            Err(e) => json!({ "error": e }),
+        })
+    }
+
+    pub fn theme_studio_url(&self) -> QString {
+        let shim = crate::core::hyper::studio_shim(&crate::bridge::native::ffi::webchannel_js());
+        qs(crate::core::hyper::studio_page(&shim).unwrap_or_default())
+    }
+
+    pub fn clear_favicons(&self) -> i32 {
+        crate::core::favicons::clear() as i32
     }
 
     pub fn browser_styles(&self) -> QString {

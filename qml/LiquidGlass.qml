@@ -47,7 +47,7 @@ Item {
         visible: !glass.backdrop
         radius: glass.radius
         color: Theme.alpha(Theme.surfaceContainer, 0.94)
-        border.width: 1
+        border.width: Theme.edgeW(1)
         border.color: Theme.glassRim
     }
 

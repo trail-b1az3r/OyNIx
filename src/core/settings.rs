@@ -93,6 +93,9 @@ pub struct Settings {
     pub update_channel: String,
     /// Extension id whose theme.json styles the browser ("" = OyNIx's own style).
     pub browser_style: String,
+    /// The `.hypertheme` in use (its file name; built-in or installed in the
+    /// profile's `hyperthemes/`); empty: OyNIx's own styles.
+    pub hypertheme: String,
     /// Settings › Extensions › Developer mode.
     pub ext_developer_mode: bool,
     /// Developer mode › Allow powerful extension APIs (native messaging,
@@ -183,6 +186,7 @@ impl Default for Settings {
             update_download: true,
             update_channel: "stable".into(),
             browser_style: String::new(),
+            hypertheme: String::new(),
             ext_developer_mode: false,
             ext_powerful_apis: false,
             pinned_extensions: Vec::new(),

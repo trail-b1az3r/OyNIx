@@ -18,16 +18,18 @@ AbstractButton {
     readonly property color fg: !enabled ? Theme.alpha(Theme.surfaceFg, 0.38)
                                : primary ? (destructive ? Theme.errorFg : Theme.primaryFg)
                                : destructive ? Theme.error
-                               : (outlined || textOnly) ? Theme.primary : Theme.secondaryContainerFg
+                               : (outlined || textOnly) ? Theme.primary : Theme.panel("button", "text", Theme.secondaryContainerFg)
     background: Rectangle {
-        radius: b.pressed ? Theme.shapeM : height / 2
+        radius: b.pressed ? Theme.shapeM : Theme.pill(height)
         color: !b.enabled ? Theme.alpha(Theme.surfaceFg, b.textOnly || b.outlined ? 0 : 0.12)
                : b.primary ? (b.destructive ? Theme.error : Theme.primary)
                : (b.outlined || b.textOnly) ? "transparent"
-               : (b.destructive ? Theme.errorContainer : Theme.secondaryContainer)
-        border.width: b.outlined ? 1 : 0
-        border.color: Theme.outlineVariant
+               : (b.destructive ? Theme.errorContainer : Theme.panel("button", "fill", Theme.secondaryContainer))
+        border.width: Theme.edgeW(b.outlined || (Theme.edge > 0 && !b.textOnly) ? 1 : 0)
+        border.color: Theme.edge > 0 ? Theme.edgeColor : Theme.outlineVariant
         Behavior on radius { SpringAnimation { spring: Theme.springFast; damping: Theme.damping } }
+        // Hypertheme: a hard shadow that the button presses down onto.
+        HardShadow { radius: parent.radius; visible: Theme.hard && b.enabled && !b.textOnly && !b.pressed }
         Rectangle {
             anchors.fill: parent; radius: parent.radius
             color: b.fg
@@ -39,7 +41,7 @@ AbstractButton {
         text: b.text
         horizontalAlignment: Text.AlignHCenter
         color: b.fg
-        font.weight: Font.Medium
+        font.weight: Theme.heavy === Font.Bold ? Font.Bold : Font.Medium
         font.pixelSize: 14
     }
 }

@@ -12,9 +12,10 @@ Rectangle {
     implicitHeight: 44
     implicitWidth: 200
     radius: Theme.shapeM
-    color: Theme.surfaceContainerHighest
-    border.width: input.activeFocus ? 2 : 0
-    border.color: Theme.primary
+    color: Theme.field
+    border.width: Theme.edge > 0 ? Theme.edge : input.activeFocus ? 2 : 0
+    border.color: input.activeFocus ? Theme.primary : Theme.edgeColor
+    HardShadow { radius: f.radius; visible: Theme.hard && input.activeFocus }
     TextInput {
         id: input
         anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 14

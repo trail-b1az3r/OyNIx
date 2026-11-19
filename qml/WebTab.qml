@@ -486,10 +486,13 @@ Item {
 
             // Content scripts of Chrome/Firefox extensions talk to OyNIx over
             // this channel; it is only reachable from the isolated world.
-            webChannel: tab.win.app.extChannel
+            // Theme Studio's page (in OyNIx's cache) gets the Studio channel
+            // in its main world, and nothing else does.
+            readonly property bool themeStudio: /^file:\/\/.*\/theme-studio\/theme-studio\.html$/.test(tab.model.url || "")
+            webChannel: themeStudio ? tab.win.app.studioChannel : tab.win.app.extChannel
             // Extension pages opened in a tab use the chrome.* runtime in
             // their own (main) world; websites only in the isolated world.
-            webChannelWorld: (tab.model.url || "").indexOf("chrome-extension://") === 0 ? WebEngineScript.MainWorld : WebEngineScript.ApplicationWorld
+            webChannelWorld: themeStudio || (tab.model.url || "").indexOf("chrome-extension://") === 0 ? WebEngineScript.MainWorld : WebEngineScript.ApplicationWorld
 
             function installScripts() {
                 userScripts.clear()
@@ -552,6 +555,8 @@ Item {
                 // webNavigation events for extensions.
                 var nav = { tabId: tab.model.uid, url: info.url.toString(), frameId: 0, parentFrameId: -1, processId: -1, timeStamp: Date.now() }
                 var exth = tab.win.privateMode ? null : tab.win.app.extensionHost
+                // 5.4.2: save the site's icon (scraped, 64×64) even when Qt has none yet.
+                if (info.status === WebEngineView.LoadSucceededStatus && !tab.win.privateMode) Core.rememberFavicon(nav.url, tab.model.icon || "")
                 if (exth && exth.hasWebExtensions) {
                     if (info.status === WebEngineView.LoadStartedStatus) exth.tabEvent("webNavigation.onBeforeNavigate", [nav])
                     else if (info.status === WebEngineView.LoadSucceededStatus) {

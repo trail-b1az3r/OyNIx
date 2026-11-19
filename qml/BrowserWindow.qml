@@ -934,7 +934,7 @@ ApplicationWindow {
                         implicitWidth: 30; implicitHeight: 28
                         hoverEnabled: true
                         focusPolicy: Qt.NoFocus
-                        background: Rectangle { radius: 6; color: extBtn.pressed ? Theme.pressed : (extBtn.hovered ? Theme.hover : "transparent") }
+                        background: Rectangle { radius: Theme.r(6); color: extBtn.pressed ? Theme.pressed : (extBtn.hovered ? Theme.hover : "transparent") }
                         contentItem: Item {
                             Image {
                                 anchors.centerIn: parent
@@ -949,7 +949,7 @@ ApplicationWindow {
                                 visible: b !== null && b.text !== ""
                                 anchors.right: parent.right; anchors.bottom: parent.bottom
                                 anchors.rightMargin: -2; anchors.bottomMargin: -1
-                                height: 12; width: Math.max(12, bt.implicitWidth + 6); radius: 6
+                                height: 12; width: Math.max(12, bt.implicitWidth + 6); radius: Theme.r(6)
                                 color: b ? b.color : "transparent"
                                 Text { id: bt; anchors.centerIn: parent; text: parent.b ? parent.b.text : ""; color: "white"; font.pixelSize: 8; font.bold: true }
                             }
@@ -1053,7 +1053,7 @@ ApplicationWindow {
                         anchors.verticalCenter: parent.verticalCenter
                         width: Math.min(180, favRow.implicitWidth + 16)
                         hoverEnabled: true
-                        background: Rectangle { radius: 5; color: parent.hovered ? Theme.hover : "transparent" }
+                        background: Rectangle { radius: Theme.r(5); color: parent.hovered ? Theme.hover : "transparent" }
                         contentItem: Row {
                             id: favRow
                             spacing: 6
@@ -1071,7 +1071,7 @@ ApplicationWindow {
                 anchors.verticalCenter: parent.verticalCenter
                 height: 24; width: allBmRow.implicitWidth + 16
                 hoverEnabled: true
-                background: Rectangle { radius: 5; color: allBmBtn.hovered ? Theme.hover : "transparent" }
+                background: Rectangle { radius: Theme.r(5); color: allBmBtn.hovered ? Theme.hover : "transparent" }
                 contentItem: Row {
                     id: allBmRow
                     spacing: 6; leftPadding: 2
@@ -1087,7 +1087,7 @@ ApplicationWindow {
             }
         }
 
-        Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.separator; visible: win.chromeVisible }
+        Rectangle { Layout.fillWidth: true; Layout.preferredHeight: Theme.edgeOr(1); color: Theme.edge > 0 ? Theme.edgeColor : Theme.separator; visible: win.chromeVisible }
 
         FindBar { id: findBar; win: winRef; visible: false; Layout.fillWidth: true }
 
@@ -1182,7 +1182,7 @@ ApplicationWindow {
                     visible: win.currentTab !== null && win.currentTab.hoveredLink !== ""
                     width: Math.min(statusText.implicitWidth + 16, parent.width * 0.6)
                     height: 22
-                    radius: 6
+                    radius: Theme.r(6)
                     color: Theme.popover
                     border.color: Theme.separator
                     Txt {
@@ -1210,8 +1210,8 @@ ApplicationWindow {
                     anchors.fill: parent
                     z: 40
                     color: "transparent"
-                    radius: 0
-                    border.width: 3
+                    radius: Theme.r(0)
+                    border.width: Theme.edgeW(3)
                     border.color: Theme.primary
                     visible: parent.agentHere
                     opacity: 0.6 + 0.4 * Math.sin(glowPhase.p)
@@ -1226,7 +1226,7 @@ ApplicationWindow {
                     visible: parent.agentHere || (win.app.agent.stopped && win.app.agent.lastActivity > 0 && Date.now() - win.app.agent.lastActivity < 60000)
                     height: 40
                     width: chipRow.implicitWidth + 16
-                    radius: 20
+                    radius: Theme.r(20)
                     color: Theme.inverseSurface
                     Row {
                         id: chipRow
@@ -1417,7 +1417,7 @@ ApplicationWindow {
                                         width: usbList.width; height: 64
                                         radius: picked ? Theme.shapeL : Theme.shapeM
                                         color: picked ? Theme.secondaryContainer : (devHover.hovered ? Theme.surfaceContainerHighest : Theme.surfaceContainer)
-                                        border.width: picked ? 0 : 1
+                                        border.width: Theme.edgeW(picked ? 0 : 1)
                                         border.color: Theme.alpha(Theme.outlineVariant, 0.7)
                                         Behavior on radius { SpringAnimation { spring: Theme.springFast; damping: Theme.damping } }
                                         HoverHandler { id: devHover; cursorShape: Qt.PointingHandCursor }
@@ -1548,7 +1548,7 @@ ApplicationWindow {
                     anchors.bottomMargin: 26
                     width: toastText.implicitWidth + 28
                     height: 32
-                    radius: 16
+                    radius: Theme.r(16)
                     color: Theme.dark ? "#3a3a3d" : "#2c2c2e"
                     opacity: 0
                     visible: opacity > 0
@@ -1751,7 +1751,7 @@ ApplicationWindow {
                     readonly property bool pinned: Core.extensionsRevision >= 0 && Core.isExtensionPinned(modelData.id)
                     Layout.fillWidth: true
                     Layout.preferredHeight: 36
-                    radius: 8
+                    radius: Theme.r(8)
                     color: rowHover.hovered && clickable ? Theme.hover : "transparent"
                     HoverHandler { id: rowHover }
                     RowLayout {
@@ -1853,9 +1853,9 @@ ApplicationWindow {
                                     spacing: 10
                                     Txt { text: modelData[1]; font.pixelSize: 12; Layout.fillWidth: true }
                                     Rectangle {
-                                        implicitWidth: keyText.implicitWidth + 12; implicitHeight: 20; radius: 5
+                                        implicitWidth: keyText.implicitWidth + 12; implicitHeight: 20; radius: Theme.r(5)
                                         color: Theme.surfaceContainerHigh
-                                        border.width: 1; border.color: Theme.separator
+                                        border.width: Theme.edgeW(1); border.color: Theme.separator
                                         Txt { id: keyText; anchors.centerIn: parent; text: modelData[0]; font.pixelSize: 11; font.family: "monospace"; color: Theme.textDim }
                                     }
                                 }

@@ -22,9 +22,9 @@ Rectangle {
     implicitHeight: 44
     // 5.4 Liquid Glass: a glass capsule with a light rim and a bright top
     // edge; while editing it firms up and shows a primary ring.
-    radius: editing ? Theme.shapeL : height / 2
-    color: editing ? Theme.surfaceContainerLowest : (hover.hovered ? Theme.glassFillStrong : Theme.glassFill)
-    border.width: editing ? 2 : 1
+    radius: editing ? Theme.shapeL : Theme.pill(height)
+    color: Theme.hyperOn ? Theme.field : editing ? Theme.surfaceContainerLowest : (hover.hovered ? Theme.glassFillStrong : Theme.glassFill)
+    border.width: Theme.edgeW(editing ? 2 : 1)
     border.color: editing ? Theme.primary : Theme.glassRim
     Rectangle {
         // Specular line along the top of the glass.
@@ -41,6 +41,7 @@ Rectangle {
 
     // Neumorphic theme: the field is pressed into the bar.
     Neu { z: -1; anchors.fill: parent; radius: parent.radius; inset: true }
+    HardShadow { radius: parent.radius; visible: Theme.hard && field.editing }
 
     HoverHandler { id: hover }
 

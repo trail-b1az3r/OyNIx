@@ -209,7 +209,7 @@ ColumnLayout {
         Layout.alignment: Qt.AlignHCenter
         Layout.preferredWidth: cell * go.size
         Layout.preferredHeight: cell * go.size
-        radius: 14
+        radius: Theme.r(14)
         color: Theme.dark ? "#3a3226" : "#e3c58d"
         // Grid lines through the centres of the points.
         Repeater {
@@ -235,7 +235,7 @@ ColumnLayout {
                         visible: pt.stone !== 0 || (hov.hovered && go.turn === 1 && !go.over)
                         opacity: pt.stone === 0 ? 0.35 : 1
                         color: pt.stone === 2 ? "#f4f1ea" : "#1d1d1f"
-                        border.width: pt.stone === 2 ? 1 : 0
+                        border.width: Theme.edgeW(pt.stone === 2 ? 1 : 0)
                         border.color: "#9a948a"
                         Rectangle {   // marks the last move
                             anchors.centerIn: parent
