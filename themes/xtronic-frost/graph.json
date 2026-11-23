@@ -138,19 +138,10 @@
       }
     },
     {
-      "id": "shape_font_weight",
-      "type": "number",
-      "x": 530,
-      "y": 640,
-      "props": {
-        "value": 500
-      }
-    },
-    {
       "id": "font_inter",
       "type": "font",
       "x": 530,
-      "y": 760,
+      "y": 680,
       "props": {
         "family": "Inter",
         "weight": 500
@@ -359,11 +350,6 @@
       "from": "shape_shadow_blur",
       "to": "theme_light",
       "in": "shadow_blur"
-    },
-    {
-      "from": "shape_font_weight",
-      "to": "theme_light",
-      "in": "font_weight"
     },
     {
       "from": "font_inter",
