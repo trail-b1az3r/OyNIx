@@ -1,21 +1,61 @@
-// Xtronic Frost — static soft-focus backdrop for the start page.
-// Hypertheme background shaders are rasterized to a PNG by the host;
-// this shader deliberately uses no time uniform.
-func glow(p: vec2, center: vec2, radius: float) -> float {
+// Xtronic Frost — a layered, soft-focus icefield backdrop.
+// This is a still .hypertheme backdrop: the host rasterizes it to PNG.
+// Curved light ribbons, diffused blooms and fine contour lines give it depth
+// without bright neon bands or harsh geometric shapes.
+
+func soft_glow(p: vec2, center: vec2, radius: float) -> float {
     let d = length(p - center)
     return 1.0 - smoothstep(0.0, radius, d)
+}
+
+func ribbon(y: float, center: float, width: float) -> float {
+    return 1.0 - smoothstep(width * 0.28, width, abs(y - center))
 }
 
 fragment background(uv: vec2) -> color {
     let aspect = resolution.x / resolution.y
     let p = (uv - vec2(0.5, 0.5)) * vec2(aspect, 1.0)
 
-    var c = vec3(0.035, 0.050, 0.067)
-    c += vec3(0.055, 0.105, 0.135) * glow(p, vec2(-0.48, -0.28), 0.92)
-    c += vec3(0.040, 0.075, 0.115) * glow(p, vec2(0.46, 0.30), 0.88)
-    c += vec3(0.025, 0.055, 0.070) * glow(p, vec2(0.05, -0.62), 0.72)
+    // Deep graphite-blue base with two broad, low-contrast light blooms.
+    var c = vec3(0.030, 0.045, 0.060)
+    c += vec3(0.045, 0.105, 0.135) * soft_glow(p, vec2(-0.42, -0.18), 0.98)
+    c += vec3(0.035, 0.070, 0.125) * soft_glow(p, vec2(0.46, 0.20), 0.86)
+    c += vec3(0.035, 0.032, 0.070) * soft_glow(p, vec2(0.08, -0.62), 0.68)
 
-    let lowerFade = smoothstep(0.25, 1.0, uv.y)
-    c = mix(c, vec3(0.025, 0.037, 0.050), lowerFade * 0.42)
+    // Two long, overlapping aurora ribbons. Their curvature is spatial,
+    // so the pattern remains stable in the host's cached PNG renderer.
+    let wave_a = -0.15 + 0.105 * sin(p.x * 2.35 + 0.45) + 0.030 * cos(p.x * 5.2 - 0.7)
+    let wave_b = 0.22 + 0.080 * sin(p.x * 1.85 - 1.15) + 0.022 * cos(p.x * 4.6 + 0.4)
+
+    let halo_a = ribbon(p.y, wave_a, 0.205)
+    let core_a = ribbon(p.y, wave_a, 0.042)
+    let halo_b = ribbon(p.y, wave_b, 0.155)
+    let core_b = ribbon(p.y, wave_b, 0.032)
+
+    let xfade = clamp(uv.x * 0.92 + 0.04, 0.0, 1.0)
+    let ice = mix(vec3(0.055, 0.205, 0.285), vec3(0.105, 0.340, 0.425), xfade)
+    let periwinkle = mix(vec3(0.105, 0.135, 0.245), vec3(0.105, 0.245, 0.335), xfade)
+    c += ice * halo_a * 0.22
+    c += vec3(0.16, 0.43, 0.52) * core_a * 0.19
+    c += periwinkle * halo_b * 0.20
+    c += vec3(0.20, 0.30, 0.43) * core_b * 0.16
+
+    // Barely visible concentric contours in the left bloom add texture
+    // without reading as a grid or a bright decorative pattern.
+    let orbit = length((p - vec2(-0.43, 0.18)) * vec2(0.88, 1.12))
+    let orbit_phase = abs(fract(orbit * 8.0) - 0.5)
+    let contours = 1.0 - smoothstep(0.012, 0.050, orbit_phase)
+    c += vec3(0.025, 0.050, 0.064) * contours * 0.42
+
+    // Soft vignette keeps the edges quiet and lets page content remain clear.
+    let edge = length(vec2(p.x * 0.72, p.y * 0.92))
+    let vignette = smoothstep(0.34, 0.92, edge)
+    c = mix(c, vec3(0.018, 0.028, 0.039), vignette * 0.52)
+
+    // A very slight deterministic grain avoids an overly synthetic flat fill.
+    let pixel = floor(uv * resolution)
+    let grain = fract(sin(dot(pixel, vec2(12.9898, 78.233))) * 43758.5453)
+    c += vec3(grain - 0.5, grain - 0.5, grain - 0.5) * 0.004
+
     return vec4(c, 1.0)
 }
