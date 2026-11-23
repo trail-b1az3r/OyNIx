@@ -1,0 +1,9 @@
+[card]
+fill = "#18212dcc"
+shadow_x = 0
+shadow_y = 0
+
+[dark.card]
+fill = "#18212dcc"
+shadow_x = 0
+shadow_y = 0
