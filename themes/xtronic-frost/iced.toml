@@ -1,108 +1,108 @@
-# Xtronic Frost 2.1 — panel styles.
+# Xtronic Frost — Iced panel surfaces, using restrained frosted fills.
 
 [toolbar]
-fill = "#D8F3F7FA"
-text = "#18252E"
-border = "#263A4650"
+fill = "#d8f3f7fa"
+text = "#18252e"
+border = "#263a4650"
 radius = 18
 border_width = 1
 shadow_x = 0
 shadow_y = 0
 
 [tab]
-fill = "#B8E3EDF2"
-text = "#18252E"
-border = "#263A4650"
+fill = "#b8e3edf2"
+text = "#18252e"
+border = "#263a4650"
 radius = 16
 border_width = 1
 shadow_x = 0
 shadow_y = 0
 
 [card]
-fill = "#CBEAF0F4"
-text = "#18252E"
-border = "#263A4650"
+fill = "#cbeaf0f4"
+text = "#18252e"
+border = "#263a4650"
 radius = 18
 border_width = 1
 shadow_x = 0
 shadow_y = 0
 
 [button]
-fill = "#A82D7D98"
-text = "#18252E"
-border = "#263A4650"
+fill = "#a82d7d98"
+text = "#18252e"
+border = "#263a4650"
 radius = 999
 border_width = 1
 shadow_x = 0
 shadow_y = 0
 
 [field]
-fill = "#D0F7FAFC"
-text = "#18252E"
-border = "#263A4650"
+fill = "#d0f7fafc"
+text = "#18252e"
+border = "#263a4650"
 radius = 14
 border_width = 1
 shadow_x = 0
 shadow_y = 0
 
 [popup]
-fill = "#F0F8FBFC"
-text = "#18252E"
-border = "#263A4650"
+fill = "#f0f8fbfc"
+text = "#18252e"
+border = "#263a4650"
 radius = 18
 border_width = 1
 shadow_x = 0
 shadow_y = 0
 
 [dark.toolbar]
-fill = "#B80D151D"
-text = "#E6EEF3"
-border = "#35D6E8F2"
+fill = "#b80d151d"
+text = "#e6eef3"
+border = "#35293a45"
 radius = 18
 border_width = 1
 shadow_x = 0
 shadow_y = 0
 
 [dark.tab]
-fill = "#8C1B2B38"
-text = "#E6EEF3"
-border = "#35D6E8F2"
+fill = "#8c1b2b38"
+text = "#e6eef3"
+border = "#35293a45"
 radius = 16
 border_width = 1
 shadow_x = 0
 shadow_y = 0
 
 [dark.card]
-fill = "#B81A2732"
-text = "#E6EEF3"
-border = "#35D6E8F2"
+fill = "#b81a2732"
+text = "#e6eef3"
+border = "#35293a45"
 radius = 18
 border_width = 1
 shadow_x = 0
 shadow_y = 0
 
 [dark.button]
-fill = "#824C7F94"
-text = "#E6EEF3"
-border = "#35D6E8F2"
+fill = "#824c7f94"
+text = "#e6eef3"
+border = "#35293a45"
 radius = 999
 border_width = 1
 shadow_x = 0
 shadow_y = 0
 
 [dark.field]
-fill = "#C2101923"
-text = "#E6EEF3"
-border = "#35D6E8F2"
+fill = "#c2101923"
+text = "#e6eef3"
+border = "#35293a45"
 radius = 14
 border_width = 1
 shadow_x = 0
 shadow_y = 0
 
 [dark.popup]
-fill = "#F0121D27"
-text = "#E6EEF3"
-border = "#35D6E8F2"
+fill = "#f0121d27"
+text = "#e6eef3"
+border = "#35293a45"
 radius = 18
 border_width = 1
 shadow_x = 0
