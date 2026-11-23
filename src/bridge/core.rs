@@ -1501,6 +1501,7 @@ impl qobject::Core {
                 // Match StonedGem's profile layout:
                 // <XDG_DATA_HOME>/stonedgem/<profile>/hyperthemes
                 let data_home = std::env::var_os("XDG_DATA_HOME")
+                    .filter(|value| !value.is_empty())
                     .map(std::path::PathBuf::from)
                     .unwrap_or_else(|| {
                         std::env::var_os("HOME")
