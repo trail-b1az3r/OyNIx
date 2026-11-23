@@ -1,0 +1,17 @@
+/* Xtronic Frost — animated frosted glass; flat surfaces, no neumorphic extrusion */
+:root {
+  --xf-cyan: #75e5ff;
+  --xf-blue: #7daeff;
+  --xf-violet: #b3a0ff;
+}
+html, body { background: radial-gradient(ellipse at 15% 10%, #14344b66, transparent 45%), radial-gradient(ellipse at 80% 90%, #34254d66, transparent 48%); }
+* { transition: background-color 220ms ease, border-color 220ms ease, color 180ms ease, opacity 220ms ease; }
+a, button, input, select { -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 2px solid var(--xf-cyan); outline-offset: 3px; }
+@keyframes frost-breathe { 0%,100% { opacity: .45; } 50% { opacity: .78; } }
+@keyframes frost-drift { from { transform: translate3d(-2%,0,0); } to { transform: translate3d(2%,1%,0); } }
+@media (prefers-reduced-motion: no-preference) {
+  body::before { content: ""; position: fixed; inset: -20%; pointer-events: none; z-index: -1;
+    background: radial-gradient(circle at 20% 35%, #64dfff20, transparent 25%), radial-gradient(circle at 72% 62%, #a18aff1c, transparent 30%);
+    filter: blur(36px); animation: frost-drift 20s ease-in-out infinite alternate; }
+}
