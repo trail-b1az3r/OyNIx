@@ -1,0 +1,12 @@
+// Xtronic Frost — Zsharpend token refinements.
+// Runs after tokens.json, so mode-aware values here intentionally take priority.
+fn tokens(dark) {
+    let danger = #b84f5c
+    let muted = dark ? #94a7b2 : #5d707d
+    let accent = dark ? #8bcfe2 : #277d9b
+    return {
+        muted: muted,
+        accent: accent,
+        danger: dark ? mix(danger, #ffffff, 0.20) : danger
+    }
+}
