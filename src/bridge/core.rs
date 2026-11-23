@@ -1486,6 +1486,10 @@ impl qobject::Core {
     }
 
     pub fn install_hypertheme(&self, path: &QString) -> QString {
+        // The shared StonedGem installer uses stonedgem_profile::data_dir().
+        // Select OyNIx's app/profile first, just as hyperthemes() and
+        // hypertheme_json() do, so the installed file appears in OyNIx's list.
+        crate::core::paths::data_dir();
         let p = s(path);
         let p = p.trim().trim_start_matches("file://");
         to_qjson(&match stonedgem_hypertheme::install(std::path::Path::new(p)) {
