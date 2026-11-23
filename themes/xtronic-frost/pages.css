@@ -1,17 +1,75 @@
-/* Xtronic Frost — animated frosted glass; flat surfaces, no neumorphic extrusion */
+/* Xtronic Frost — page styling only. OyNIx chrome uses Theme.qml's
+   native Liquid Glass surfaces; this file is for start/extension pages. */
 :root {
-  --xf-cyan: #75e5ff;
-  --xf-blue: #7daeff;
-  --xf-violet: #b3a0ff;
+  color-scheme: light dark;
+  --xf-ice: #8BCFE2;
+  --xf-rim: rgba(190, 224, 238, 0.20);
+  --xf-glass: rgba(18, 31, 42, 0.58);
 }
-html, body { background: radial-gradient(ellipse at 15% 10%, #14344b66, transparent 45%), radial-gradient(ellipse at 80% 90%, #34254d66, transparent 48%); }
-* { transition: background-color 220ms ease, border-color 220ms ease, color 180ms ease, opacity 220ms ease; }
-a, button, input, select { -webkit-tap-highlight-color: transparent; }
-:focus-visible { outline: 2px solid var(--xf-cyan); outline-offset: 3px; }
-@keyframes frost-breathe { 0%,100% { opacity: .45; } 50% { opacity: .78; } }
-@keyframes frost-drift { from { transform: translate3d(-2%,0,0); } to { transform: translate3d(2%,1%,0); } }
+html, body {
+  min-height: 100%;
+  background-color: var(--ht-background);
+}
+body {
+  position: relative;
+  isolation: isolate;
+}
+body::before {
+  content: "";
+  position: fixed;
+  inset: -18%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 18% 22%, rgba(87, 164, 192, 0.12), transparent 38%),
+    radial-gradient(ellipse at 83% 78%, rgba(105, 130, 177, 0.10), transparent 42%);
+  filter: blur(42px);
+}
+.ht-start {
+  max-width: 1040px;
+  padding: 72px 36px;
+}
+.ht-start h1 {
+  letter-spacing: -0.035em;
+  font-weight: 550;
+}
+.ht-card {
+  background: rgba(28, 43, 55, 0.54);
+  border: 1px solid var(--xf-rim);
+  border-radius: 18px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.14);
+  -webkit-backdrop-filter: blur(26px) saturate(125%);
+  backdrop-filter: blur(26px) saturate(125%);
+}
+.ht-field {
+  background: rgba(20, 34, 46, 0.48);
+  border: 1px solid rgba(174, 213, 229, 0.22);
+  border-radius: 14px;
+  -webkit-backdrop-filter: blur(22px);
+  backdrop-filter: blur(22px);
+}
+.ht-button {
+  border: 1px solid rgba(190, 224, 238, 0.28);
+  border-radius: 12px;
+  transition: transform 180ms ease, background-color 180ms ease, border-color 180ms ease;
+}
+.ht-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(190, 224, 238, 0.48);
+}
+:focus-visible {
+  outline: 2px solid var(--xf-ice);
+  outline-offset: 3px;
+}
 @media (prefers-reduced-motion: no-preference) {
-  body::before { content: ""; position: fixed; inset: -20%; pointer-events: none; z-index: -1;
-    background: radial-gradient(circle at 20% 35%, #64dfff20, transparent 25%), radial-gradient(circle at 72% 62%, #a18aff1c, transparent 30%);
-    filter: blur(36px); animation: frost-drift 20s ease-in-out infinite alternate; }
+  body::before {
+    animation: xf-ambient-drift 42s ease-in-out infinite alternate;
+  }
+  .ht-card, .ht-field, .ht-button {
+    transition: background-color 220ms ease, border-color 220ms ease, box-shadow 220ms ease;
+  }
+}
+@keyframes xf-ambient-drift {
+  from { transform: translate3d(-1.2%, -0.7%, 0) scale(1); }
+  to   { transform: translate3d(1.2%, 0.8%, 0) scale(1.035); }
 }
