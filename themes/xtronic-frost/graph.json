@@ -1,0 +1,434 @@
+{
+  "version": 1,
+  "nodes": [
+    {
+      "id": "light_background",
+      "type": "color",
+      "x": 40,
+      "y": 40,
+      "props": {
+        "value": "#E9F0F4"
+      }
+    },
+    {
+      "id": "light_surface",
+      "type": "color",
+      "x": 40,
+      "y": 145,
+      "props": {
+        "value": "#F5F8FA"
+      }
+    },
+    {
+      "id": "light_surface_alt",
+      "type": "color",
+      "x": 40,
+      "y": 250,
+      "props": {
+        "value": "#FFFFFF"
+      }
+    },
+    {
+      "id": "light_text",
+      "type": "color",
+      "x": 40,
+      "y": 355,
+      "props": {
+        "value": "#18252E"
+      }
+    },
+    {
+      "id": "light_muted",
+      "type": "color",
+      "x": 40,
+      "y": 460,
+      "props": {
+        "value": "#5D707D"
+      }
+    },
+    {
+      "id": "light_accent",
+      "type": "color",
+      "x": 290,
+      "y": 40,
+      "props": {
+        "value": "#277D9B"
+      }
+    },
+    {
+      "id": "light_border",
+      "type": "color",
+      "x": 290,
+      "y": 145,
+      "props": {
+        "value": "#CCD8DE"
+      }
+    },
+    {
+      "id": "light_danger",
+      "type": "color",
+      "x": 290,
+      "y": 250,
+      "props": {
+        "value": "#B84F5C"
+      }
+    },
+    {
+      "id": "light_shadow",
+      "type": "color",
+      "x": 290,
+      "y": 355,
+      "props": {
+        "value": "#253640"
+      }
+    },
+    {
+      "id": "light_on_accent",
+      "type": "readable",
+      "x": 530,
+      "y": 40,
+      "props": {
+        "dark": "#10242B",
+        "light": "#FFFFFF"
+      }
+    },
+    {
+      "id": "shape_radius",
+      "type": "number",
+      "x": 530,
+      "y": 180,
+      "props": {
+        "value": 16
+      }
+    },
+    {
+      "id": "shape_border_width",
+      "type": "number",
+      "x": 530,
+      "y": 272,
+      "props": {
+        "value": 0
+      }
+    },
+    {
+      "id": "shape_shadow_x",
+      "type": "number",
+      "x": 530,
+      "y": 364,
+      "props": {
+        "value": 0
+      }
+    },
+    {
+      "id": "shape_shadow_y",
+      "type": "number",
+      "x": 530,
+      "y": 456,
+      "props": {
+        "value": 0
+      }
+    },
+    {
+      "id": "shape_shadow_blur",
+      "type": "number",
+      "x": 530,
+      "y": 548,
+      "props": {
+        "value": 0
+      }
+    },
+    {
+      "id": "shape_font_weight",
+      "type": "number",
+      "x": 530,
+      "y": 640,
+      "props": {
+        "value": 500
+      }
+    },
+    {
+      "id": "font_inter",
+      "type": "font",
+      "x": 530,
+      "y": 760,
+      "props": {
+        "family": "Inter",
+        "weight": 500
+      }
+    },
+    {
+      "id": "icefield_shader",
+      "type": "shader",
+      "x": 40,
+      "y": 650,
+      "props": {
+        "code": "// Xtronic Frost — a layered, soft-focus icefield backdrop.\n// This is a still .hypertheme backdrop: the host rasterizes it to PNG.\n// Curved light ribbons, diffused blooms and fine contour lines give it depth\n// without bright neon bands or harsh geometric shapes.\n\nfunc soft_glow(p: vec2, center: vec2, radius: float) -> float {\n    let d = length(p - center)\n    return 1.0 - smoothstep(0.0, radius, d)\n}\n\nfunc ribbon(y: float, center: float, width: float) -> float {\n    return 1.0 - smoothstep(width * 0.28, width, abs(y - center))\n}\n\nfragment background(uv: vec2) -> color {\n    let aspect = resolution.x / resolution.y\n    let p = (uv - vec2(0.5, 0.5)) * vec2(aspect, 1.0)\n\n    // Deep graphite-blue base with two broad, low-contrast light blooms.\n    var c = vec3(0.030, 0.045, 0.060)\n    c += vec3(0.045, 0.105, 0.135) * soft_glow(p, vec2(-0.42, -0.18), 0.98)\n    c += vec3(0.035, 0.070, 0.125) * soft_glow(p, vec2(0.46, 0.20), 0.86)\n    c += vec3(0.035, 0.032, 0.070) * soft_glow(p, vec2(0.08, -0.62), 0.68)\n\n    // Two long, overlapping aurora ribbons. Their curvature is spatial,\n    // so the pattern remains stable in the host's cached PNG renderer.\n    let wave_a = -0.15 + 0.105 * sin(p.x * 2.35 + 0.45) + 0.030 * cos(p.x * 5.2 - 0.7)\n    let wave_b = 0.22 + 0.080 * sin(p.x * 1.85 - 1.15) + 0.022 * cos(p.x * 4.6 + 0.4)\n\n    let halo_a = ribbon(p.y, wave_a, 0.205)\n    let core_a = ribbon(p.y, wave_a, 0.042)\n    let halo_b = ribbon(p.y, wave_b, 0.155)\n    let core_b = ribbon(p.y, wave_b, 0.032)\n\n    let xfade = clamp(uv.x * 0.92 + 0.04, 0.0, 1.0)\n    let ice = mix(vec3(0.055, 0.205, 0.285), vec3(0.105, 0.340, 0.425), xfade)\n    let periwinkle = mix(vec3(0.105, 0.135, 0.245), vec3(0.105, 0.245, 0.335), xfade)\n    c += ice * halo_a * 0.22\n    c += vec3(0.16, 0.43, 0.52) * core_a * 0.19\n    c += periwinkle * halo_b * 0.20\n    c += vec3(0.20, 0.30, 0.43) * core_b * 0.16\n\n    // Barely visible concentric contours in the left bloom add texture\n    // without reading as a grid or a bright decorative pattern.\n    let orbit = length((p - vec2(-0.43, 0.18)) * vec2(0.88, 1.12))\n    let orbit_phase = abs(fract(orbit * 8.0) - 0.5)\n    let contours = 1.0 - smoothstep(0.012, 0.050, orbit_phase)\n    c += vec3(0.025, 0.050, 0.064) * contours * 0.42\n\n    // Soft vignette keeps the edges quiet and lets page content remain clear.\n    let edge = length(vec2(p.x * 0.72, p.y * 0.92))\n    let vignette = smoothstep(0.34, 0.92, edge)\n    c = mix(c, vec3(0.018, 0.028, 0.039), vignette * 0.52)\n\n    // A very slight deterministic grain avoids an overly synthetic flat fill.\n    let pixel = floor(uv * resolution)\n    let grain = fract(sin(dot(pixel, vec2(12.9898, 78.233))) * 43758.5453)\n    c += vec3(grain - 0.5, grain - 0.5, grain - 0.5) * 0.004\n\n    return vec4(c, 1.0)\n}\n"
+      }
+    },
+    {
+      "id": "theme_light",
+      "type": "theme",
+      "x": 1080,
+      "y": 40,
+      "props": {
+        "name": "Xtronic Frost",
+        "author": "trail-b1az3r",
+        "description": "Quiet graphite Liquid Glass with restrained ice-blue accents and a soft-focus shader backdrop.",
+        "mode": "light",
+        "glass": true
+      }
+    },
+    {
+      "id": "dark_background",
+      "type": "color",
+      "x": 1530,
+      "y": 40,
+      "props": {
+        "value": "#0B1117"
+      }
+    },
+    {
+      "id": "dark_surface",
+      "type": "color",
+      "x": 1530,
+      "y": 145,
+      "props": {
+        "value": "#111A22"
+      }
+    },
+    {
+      "id": "dark_surface_alt",
+      "type": "color",
+      "x": 1530,
+      "y": 250,
+      "props": {
+        "value": "#18242D"
+      }
+    },
+    {
+      "id": "dark_text",
+      "type": "color",
+      "x": 1530,
+      "y": 355,
+      "props": {
+        "value": "#E6EEF3"
+      }
+    },
+    {
+      "id": "dark_muted",
+      "type": "color",
+      "x": 1530,
+      "y": 460,
+      "props": {
+        "value": "#94A7B2"
+      }
+    },
+    {
+      "id": "dark_accent",
+      "type": "color",
+      "x": 1780,
+      "y": 40,
+      "props": {
+        "value": "#8BCFE2"
+      }
+    },
+    {
+      "id": "dark_border",
+      "type": "color",
+      "x": 1780,
+      "y": 145,
+      "props": {
+        "value": "#293A45"
+      }
+    },
+    {
+      "id": "dark_danger",
+      "type": "color",
+      "x": 1780,
+      "y": 250,
+      "props": {
+        "value": "#E28C96"
+      }
+    },
+    {
+      "id": "dark_shadow",
+      "type": "color",
+      "x": 1780,
+      "y": 355,
+      "props": {
+        "value": "#02070B"
+      }
+    },
+    {
+      "id": "dark_on_accent",
+      "type": "readable",
+      "x": 2020,
+      "y": 40,
+      "props": {
+        "dark": "#10242B",
+        "light": "#FFFFFF"
+      }
+    },
+    {
+      "id": "theme_dark",
+      "type": "theme",
+      "x": 2300,
+      "y": 40,
+      "props": {
+        "mode": "dark"
+      }
+    }
+  ],
+  "wires": [
+    {
+      "from": "light_background",
+      "to": "theme_light",
+      "in": "background"
+    },
+    {
+      "from": "light_surface",
+      "to": "theme_light",
+      "in": "surface"
+    },
+    {
+      "from": "light_surface_alt",
+      "to": "theme_light",
+      "in": "surface_alt"
+    },
+    {
+      "from": "light_text",
+      "to": "theme_light",
+      "in": "text"
+    },
+    {
+      "from": "light_muted",
+      "to": "theme_light",
+      "in": "muted"
+    },
+    {
+      "from": "light_accent",
+      "to": "theme_light",
+      "in": "accent"
+    },
+    {
+      "from": "light_border",
+      "to": "theme_light",
+      "in": "border"
+    },
+    {
+      "from": "light_danger",
+      "to": "theme_light",
+      "in": "danger"
+    },
+    {
+      "from": "light_shadow",
+      "to": "theme_light",
+      "in": "shadow"
+    },
+    {
+      "from": "light_accent",
+      "to": "light_on_accent",
+      "in": "on"
+    },
+    {
+      "from": "light_on_accent",
+      "to": "theme_light",
+      "in": "on_accent"
+    },
+    {
+      "from": "shape_radius",
+      "to": "theme_light",
+      "in": "radius"
+    },
+    {
+      "from": "shape_border_width",
+      "to": "theme_light",
+      "in": "border_width"
+    },
+    {
+      "from": "shape_shadow_x",
+      "to": "theme_light",
+      "in": "shadow_x"
+    },
+    {
+      "from": "shape_shadow_y",
+      "to": "theme_light",
+      "in": "shadow_y"
+    },
+    {
+      "from": "shape_shadow_blur",
+      "to": "theme_light",
+      "in": "shadow_blur"
+    },
+    {
+      "from": "shape_font_weight",
+      "to": "theme_light",
+      "in": "font_weight"
+    },
+    {
+      "from": "font_inter",
+      "to": "theme_light",
+      "in": "font"
+    },
+    {
+      "from": "icefield_shader",
+      "to": "theme_light",
+      "in": "backdrop"
+    },
+    {
+      "from": "dark_background",
+      "to": "theme_dark",
+      "in": "background"
+    },
+    {
+      "from": "dark_surface",
+      "to": "theme_dark",
+      "in": "surface"
+    },
+    {
+      "from": "dark_surface_alt",
+      "to": "theme_dark",
+      "in": "surface_alt"
+    },
+    {
+      "from": "dark_text",
+      "to": "theme_dark",
+      "in": "text"
+    },
+    {
+      "from": "dark_muted",
+      "to": "theme_dark",
+      "in": "muted"
+    },
+    {
+      "from": "dark_accent",
+      "to": "theme_dark",
+      "in": "accent"
+    },
+    {
+      "from": "dark_border",
+      "to": "theme_dark",
+      "in": "border"
+    },
+    {
+      "from": "dark_danger",
+      "to": "theme_dark",
+      "in": "danger"
+    },
+    {
+      "from": "dark_shadow",
+      "to": "theme_dark",
+      "in": "shadow"
+    },
+    {
+      "from": "dark_accent",
+      "to": "dark_on_accent",
+      "in": "on"
+    },
+    {
+      "from": "dark_on_accent",
+      "to": "theme_dark",
+      "in": "on_accent"
+    }
+  ]
+}
