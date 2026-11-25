@@ -13,9 +13,23 @@ Rectangle {
     property var app
     property string page: "general"
     property bool shown: visible
-    color: Theme.surface
+    color: Theme.page
 
     function set(key, value) { Core.setSetting(key, JSON.stringify(value)) }
+    // Install a .hypertheme / .phypertheme; a power theme asks first (htConfirm).
+    function installTheme(path, allowPower) {
+        path = String(path).replace(/^file:\/\//, "")
+        if (!path.trim()) return
+        var r = JSON.parse(Core.installHypertheme(path, allowPower))
+        if (r.needsConfirm) { htConfirmRow().name = r.name; htConfirmRow().path = path; htStatusText(""); return }
+        if (r.error) { htStatusText(r.error); return }
+        htStatusText(qsTr("Installed %1").arg(r.file))
+        set("hypertheme", r.file)
+    }
+    property var _htConfirm: null
+    property var _htStatus: null
+    function htConfirmRow() { return _htConfirm }
+    function htStatusText(t) { if (_htStatus) _htStatus.text = t }
     readonly property var s: JSON.parse(Core.settingsJson)
 
     readonly property var pages: [
@@ -88,7 +102,7 @@ Rectangle {
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: body.implicitHeight + 16
-            radius: Theme.shapeXL - 4
+            radius: Theme.sx("card", "radius", Theme.shapeXL - 4)
             color: Theme.card
             border.width: Theme.edge
             border.color: Theme.edgeColor
@@ -269,6 +283,13 @@ Rectangle {
     }
 
     FileDialog {
+        id: htDialog
+        title: qsTr("Install a hypertheme")
+        fileMode: FileDialog.OpenFile
+        nameFilters: [qsTr("Hyperthemes (*.hypertheme *.phypertheme)"), qsTr("All files (*)")]
+        onAccepted: { var p = decodeURIComponent(selectedFile.toString().replace(/^file:\/\//, "")); sw.installTheme(p, false) }
+    }
+    FileDialog {
         id: importDialog
         title: qsTr("Import Bookmarks")
         nameFilters: [qsTr("Bookmark files (*.html *.htm)")]
@@ -446,26 +467,47 @@ Rectangle {
                     text: Theme.hyper.error !== undefined ? qsTr("Couldn't load it: %1").arg(Theme.hyper.error)
                         : (Theme.hyper.warnings || []).length ? "⚠ " + Theme.hyper.warnings.join(" · ") : ""
                 }
-                Divider {}
                 Row_ {
-                    label: qsTr("Install")
-                    MTextField { id: htPath; Layout.preferredWidth: 260; placeholder: qsTr("A .hypertheme file or folder"); onAccepted: htInstall.clicked() }
+                    label: ""
+                    readonly property var current: { Core.settingsJson; var f = sw.s.hypertheme || ""; return JSON.parse(Core.hyperthemes()).filter(function (x) { return x.file === f })[0] }
+                    Txt { visible: !!parent.current && parent.current.power; text: qsTr("Power hypertheme: its QML and programs run in OyNIx's interface") + (Theme.wantsSeeThrough && !Theme.seeThrough ? qsTr(". Restart OyNIx to see through the window.") : ""); font.pixelSize: 12; color: Theme.warning; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+                    Item { Layout.fillWidth: true; visible: !parent.current || !parent.current.power }
+                    PushButton { text: qsTr("Edit in Theme Studio"); onClicked: sw.app.openThemeStudio(sw.s.hypertheme || "") }
                     PushButton {
-                        id: htInstall
-                        text: qsTr("Install")
+                        text: qsTr("Remove")
+                        destructive: true
+                        visible: !!parent.current && !parent.current.builtin
                         onClicked: {
-                            var r = JSON.parse(Core.installHypertheme(htPath.text))
-                            if (r.error) { htStatus.text = r.error; return }
-                            htPath.text = ""; htStatus.text = qsTr("Installed")
-                            sw.set("hypertheme", r.file)
+                            var r = JSON.parse(Core.uninstallHypertheme(parent.current.file))
+                            htStatus.text = r.error ? r.error : qsTr("Removed")
                         }
                     }
                 }
-                Txt { id: htStatus; visible: text !== ""; Layout.leftMargin: 12; Layout.bottomMargin: 6; font.pixelSize: 12; color: Theme.textDim; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                Divider {}
+                Row_ {
+                    label: qsTr("Install")
+                    hint: qsTr(".hypertheme or .phypertheme, a file or a folder")
+                    MTextField { id: htPath; Layout.preferredWidth: 220; placeholder: qsTr("A theme file or folder"); onAccepted: sw.installTheme(htPath.text, false) }
+                    PushButton { text: qsTr("Browse…"); onClicked: htDialog.open() }
+                    PushButton { id: htInstall; text: qsTr("Install"); onClicked: sw.installTheme(htPath.text, false) }
+                }
+                // A power hypertheme: ask before installing it.
+                Row_ {
+                    id: htConfirm
+                    Component.onCompleted: sw._htConfirm = htConfirm
+                    visible: htConfirm.path !== ""
+                    property string path: ""
+                    property string name: ""
+                    label: qsTr("Install “%1”?").arg(htConfirm.name)
+                    hint: qsTr("It's a power hypertheme: its QML and programs run inside OyNIx's interface, with the same access as OyNIx. Install it only if you trust where it came from.")
+                    PushButton { text: qsTr("Cancel"); onClicked: { htConfirm.path = ""; htStatus.text = qsTr("Not installed") } }
+                    PushButton { text: qsTr("Install"); primary: true; onClicked: { var p = htConfirm.path; htConfirm.path = ""; sw.installTheme(p, true) } }
+                }
+                Txt { id: htStatus; Component.onCompleted: sw._htStatus = htStatus; visible: text !== ""; Layout.leftMargin: 12; Layout.bottomMargin: 6; font.pixelSize: 12; color: Theme.textDim; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                 Divider {}
                 Row_ {
                     label: qsTr("Theme Studio")
-                    hint: qsTr("Make a hypertheme by wiring nodes: colours, numbers, fonts, shaders and panels.")
+                    hint: qsTr("Make a hypertheme by wiring nodes: colours, numbers, fonts, shaders and panels. Open… in the Studio edits any installed theme.")
                     PushButton { text: qsTr("Open Theme Studio"); primary: true; onClicked: sw.app.openThemeStudio() }
                 }
             }

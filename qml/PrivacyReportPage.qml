@@ -8,7 +8,7 @@ import OyNIx
 Rectangle {
     id: page
     property var win
-    color: Theme.surface
+    color: Theme.page
 
     readonly property var report: { Core.totalBlocked; page.win.app.filterGeneration; return JSON.parse(Core.privacyReport()) }
     readonly property int maxSites: report.top.length ? report.top[0].sites : 1

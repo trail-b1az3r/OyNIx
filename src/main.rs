@@ -249,6 +249,10 @@ fn main() {
     std::env::set_var("QTWEBENGINE_CHROMIUM_FLAGS", chromium.trim());
     native::ffi::init_webengine();
     native::ffi::prepare_graphics(selection.backend.id());
+    // A see-through power hypertheme needs windows with an alpha channel.
+    if core::hyper::wants_transparent_window(&early.hypertheme) {
+        native::ffi::enable_window_alpha();
+    }
 
     let mut app = QGuiApplication::new();
     native::ffi::set_app_metadata(&args.profile);

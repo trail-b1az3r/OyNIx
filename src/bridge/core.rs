@@ -301,12 +301,23 @@ pub mod qobject {
         /// [{ file, name, description, builtin }] of built-in and installed hyperthemes.
         #[qinvokable]
         fn hyperthemes(self: &Core) -> QString;
-        /// Install a .hypertheme file or folder: { file } or { error }.
+        /// Install a .hypertheme or .phypertheme file or folder: { file },
+        /// { error }, or { needsConfirm, name } for a power theme the user
+        /// hasn't agreed to yet (call again with allow_power).
         #[qinvokable]
-        fn install_hypertheme(self: &Core, path: &QString) -> QString;
+        fn install_hypertheme(self: &Core, path: &QString, allow_power: bool) -> QString;
+        /// Windows have an alpha channel (a see-through theme was chosen at start-up).
+        #[qinvokable]
+        fn window_alpha(self: &Core) -> bool;
+        /// Remove an installed hypertheme (built-ins can't be): { ok } or { error }.
+        #[qinvokable]
+        fn uninstall_hypertheme(self: Pin<&mut Core>, file: &QString) -> QString;
         /// Theme Studio's page, written to the cache with its bridge; its file:// URL.
         #[qinvokable]
         fn theme_studio_url(self: &Core) -> QString;
+        /// The same, opening installed theme `file` in it.
+        #[qinvokable]
+        fn theme_studio_url_for(self: &Core, file: &QString) -> QString;
         /// Remove the saved site icons (see core/favicons.rs).
         #[qinvokable]
         fn clear_favicons(self: &Core) -> i32;
@@ -1485,81 +1496,91 @@ impl qobject::Core {
         to_qjson(&crate::core::hyper::list())
     }
 
-    pub fn install_hypertheme(&self, path: &QString) -> QString {
+    pub fn install_hypertheme(&self, path: &QString, allow_power: bool) -> QString {
         // Prefer OyNIx's own profile directory. Only use StonedGem's original
         // shared directory when the normal OyNIx installation fails.
+        let first = crate::core::hyper::install(&s(path), allow_power);
+        if first.get("error").is_none() || first.get("needsConfirm").is_some() {
+            return to_qjson(&first);
+        }
+        let oynix_error = first["error"].as_str().unwrap_or("").to_string();
         let oynix_data = crate::core::paths::data_dir();
         let p = s(path);
         let p = p.trim().trim_start_matches("file://");
         let source = std::path::Path::new(p);
+        let result = (|| -> Result<String, String> {
+            let theme = stonedgem_hypertheme::Hypertheme::open(source)?;
+            if theme.is_power() && !allow_power {
+                return Err("a power hypertheme needs your OK".into());
+            }
 
-        let result = match stonedgem_hypertheme::install(source) {
-            Ok(file) => Ok(file),
-            Err(oynix_error) => (|| -> Result<String, String> {
-                let theme = stonedgem_hypertheme::Hypertheme::open(source)?;
+            // Match StonedGem's profile layout:
+            // <XDG_DATA_HOME>/stonedgem/<profile>/hyperthemes
+            let data_home = std::env::var_os("XDG_DATA_HOME")
+                .filter(|value| !value.is_empty())
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|| {
+                    std::env::var_os("HOME")
+                        .map(std::path::PathBuf::from)
+                        .unwrap_or_else(|| std::path::PathBuf::from("."))
+                        .join(".local/share")
+                });
+            let shared_dir = data_home.join("stonedgem").join(stonedgem_profile::profile()).join("hyperthemes");
+            std::fs::create_dir_all(&shared_dir).map_err(|e| format!("{}: {e}", shared_dir.display()))?;
+            let file = theme.file_name();
+            let shared_file = shared_dir.join(&file);
+            theme.write(&shared_file)?;
 
-                // Match StonedGem's profile layout:
-                // <XDG_DATA_HOME>/stonedgem/<profile>/hyperthemes
-                let data_home = std::env::var_os("XDG_DATA_HOME")
-                    .filter(|value| !value.is_empty())
-                    .map(std::path::PathBuf::from)
-                    .unwrap_or_else(|| {
-                        std::env::var_os("HOME")
-                            .map(std::path::PathBuf::from)
-                            .unwrap_or_else(|| std::path::PathBuf::from("."))
-                            .join(".local/share")
-                    });
-                let shared_dir = data_home
-                    .join("stonedgem")
-                    .join(stonedgem_profile::profile())
-                    .join("hyperthemes");
-                std::fs::create_dir_all(&shared_dir)
-                    .map_err(|e| format!("{}: {e}", shared_dir.display()))?;
-
-                // Use the same safe filename rule as stonedgem_hypertheme::install.
-                let slug: String = theme.manifest.name.to_lowercase().chars()
-                    .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
-                    .collect::<String>()
-                    .trim_matches('-')
-                    .to_string();
-                let file = format!("{}.hypertheme", if slug.is_empty() { "theme".into() } else { slug });
-                let shared_file = shared_dir.join(&file);
-                theme.write(&shared_file)?;
-
-                // OyNIx lists and loads from its own profile directory. Link the
-                // shared fallback there so a successful fallback is still visible.
-                let oynix_dir = oynix_data.join("hyperthemes");
-                std::fs::create_dir_all(&oynix_dir)
-                    .map_err(|e| format!("{}: {e}", oynix_dir.display()))?;
-                let visible_file = oynix_dir.join(&file);
-                if let Ok(meta) = std::fs::symlink_metadata(&visible_file) {
-                    if meta.file_type().is_symlink() {
-                        std::fs::remove_file(&visible_file)
-                            .map_err(|e| format!("{}: {e}", visible_file.display()))?;
-                    } else {
-                        return Err(format!("{} already exists and is not a symlink", visible_file.display()));
-                    }
+            // OyNIx lists and loads from its own profile directory. Link the
+            // shared fallback there so a successful fallback is still visible.
+            let oynix_dir = oynix_data.join("hyperthemes");
+            std::fs::create_dir_all(&oynix_dir).map_err(|e| format!("{}: {e}", oynix_dir.display()))?;
+            let visible_file = oynix_dir.join(&file);
+            if let Ok(meta) = std::fs::symlink_metadata(&visible_file) {
+                if meta.file_type().is_symlink() {
+                    std::fs::remove_file(&visible_file).map_err(|e| format!("{}: {e}", visible_file.display()))?;
+                } else {
+                    return Err(format!("{} already exists and is not a symlink", visible_file.display()));
                 }
-                #[cfg(unix)]
-                std::os::unix::fs::symlink(&shared_file, &visible_file)
-                    .map_err(|e| format!("couldn't link StonedGem fallback into OyNIx: {e}"))?;
-                #[cfg(windows)]
-                std::os::windows::fs::symlink_file(&shared_file, &visible_file)
-                    .map_err(|e| format!("couldn't link StonedGem fallback into OyNIx: {e}"))?;
-                #[cfg(not(any(unix, windows)))]
-                std::fs::copy(&shared_file, &visible_file)
-                    .map_err(|e| format!("couldn't expose StonedGem fallback in OyNIx: {e}"))?;
-
-                Ok(file)
-            })().map_err(|fallback_error| {
-                format!("OyNIx install failed: {oynix_error}; StonedGem shared fallback failed: {fallback_error}")
-            }),
-        };
+            }
+            #[cfg(unix)]
+            std::os::unix::fs::symlink(&shared_file, &visible_file).map_err(|e| format!("couldn't link StonedGem fallback into OyNIx: {e}"))?;
+            #[cfg(windows)]
+            std::os::windows::fs::symlink_file(&shared_file, &visible_file).map_err(|e| format!("couldn't link StonedGem fallback into OyNIx: {e}"))?;
+            #[cfg(not(any(unix, windows)))]
+            std::fs::copy(&shared_file, &visible_file).map_err(|e| format!("couldn't expose StonedGem fallback in OyNIx: {e}"))?;
+            Ok(file)
+        })()
+        .map_err(|fallback_error| format!("OyNIx install failed: {oynix_error}; StonedGem shared fallback failed: {fallback_error}"));
 
         to_qjson(&match result {
             Ok(file) => json!({ "file": file }),
             Err(e) => json!({ "error": e }),
         })
+    }
+
+    pub fn window_alpha(&self) -> bool {
+        crate::bridge::native::ffi::window_alpha()
+    }
+
+    pub fn uninstall_hypertheme(mut self: Pin<&mut Self>, file: &QString) -> QString {
+        crate::core::paths::data_dir();
+        let f = s(file);
+        let r = stonedgem_hypertheme::uninstall(&f);
+        if r.is_ok() && self.rust().settings.hypertheme == f {
+            self.as_mut().rust_mut().settings.hypertheme.clear();
+            self.rust().settings.save();
+            self.sync();
+        }
+        to_qjson(&match r {
+            Ok(()) => json!({ "ok": true }),
+            Err(e) => json!({ "error": e }),
+        })
+    }
+
+    pub fn theme_studio_url_for(&self, file: &QString) -> QString {
+        let shim = crate::core::hyper::studio_shim(&crate::bridge::native::ffi::webchannel_js());
+        qs(crate::core::hyper::studio_page_for(&shim, &s(file)).unwrap_or_default())
     }
 
     pub fn theme_studio_url(&self) -> QString {

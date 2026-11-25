@@ -19,6 +19,8 @@ pub mod ffi {
         type QObject = cxx_qt::QObject;
 
         fn prepare_graphics(backend: i32);
+        fn enable_window_alpha();
+        fn window_alpha() -> bool;
         fn init_webengine();
         fn start_expose_guard();
         fn set_app_metadata(profile: &str);

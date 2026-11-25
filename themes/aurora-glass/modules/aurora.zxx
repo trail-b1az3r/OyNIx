@@ -1,0 +1,4 @@
+// Aurora Glass's palette, shared by theme.zxx and global.zxx.
+fn green() { return #7ee0c3 }
+fn violet() { return #9b8cff }
+fn night(dark) { return dark ? #0a0f1f : #eef2fb }

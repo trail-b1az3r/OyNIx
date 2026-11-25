@@ -416,7 +416,7 @@ Item {
             profile: tab.win.profile
             // Pages without their own background get white, as in every browser;
             // only force-darkened pages use the dark canvas.
-            backgroundColor: settings.forceDarkMode ? Theme.window : "white"
+            backgroundColor: settings.forceDarkMode ? Theme.opaque(Theme.window) : "white"
             audioMuted: tab.model.muted
             lifecycleState: (Core.lowPowerMode && !tab.isCurrent && !recentlyAudible)
                             ? WebEngineView.LifecycleState.Frozen : WebEngineView.LifecycleState.Active
@@ -439,6 +439,8 @@ Item {
             // sites that have none, when enabled globally or for the site.
             settings.forceDarkMode: {
                 Core.settingsJson
+                // Theme Studio shows a theme's real colours: never darken it.
+                if (themeStudio) return false
                 var s = JSON.parse(Core.siteSettings(tab.host))
                 return s.forceDark !== undefined ? s.forceDark : tab.win.app.websitesDark
             }
@@ -488,7 +490,7 @@ Item {
             // this channel; it is only reachable from the isolated world.
             // Theme Studio's page (in OyNIx's cache) gets the Studio channel
             // in its main world, and nothing else does.
-            readonly property bool themeStudio: /^file:\/\/.*\/theme-studio\/theme-studio\.html$/.test(tab.model.url || "")
+            readonly property bool themeStudio: /^file:\/\/.*\/theme-studio\/theme-studio\.html(#.*)?$/.test(tab.model.url || "")
             webChannel: themeStudio ? tab.win.app.studioChannel : tab.win.app.extChannel
             // Extension pages opened in a tab use the chrome.* runtime in
             // their own (main) world; websites only in the isolated world.

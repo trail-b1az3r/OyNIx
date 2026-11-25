@@ -1,0 +1,5 @@
+// A faint sheen across the top of the window, fading out downwards.
+fragment global(uv: vec2) -> color {
+    let a = smoothstep(0.22, 0.0, uv.y) * 0.10
+    return vec4(0.55, 0.95, 0.85, a)
+}

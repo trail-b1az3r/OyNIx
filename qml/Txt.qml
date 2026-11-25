@@ -8,6 +8,8 @@ Text {
     color: Theme.text
     font.family: neuHeading ? Theme.displayFont : Theme.font
     font.pixelSize: Theme.fontSize
+    // styles.tsx: `export const text = { letterSpacing }`.
+    font.letterSpacing: Theme.sx("text", "letterSpacing", 0)
     elide: Text.ElideRight
     verticalAlignment: Text.AlignVCenter
     renderType: neuHeading ? Text.QtRendering : Text.NativeRendering

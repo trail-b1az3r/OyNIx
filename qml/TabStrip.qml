@@ -77,7 +77,7 @@ Item {
                 width: pinned ? strip.pinnedWidth : strip.tabWidth
                 height: flick.height
                 z: dragArea.drag.active ? 10 : 0
-                radius: current ? Theme.pill(height) : (hov.hovered ? Theme.pill(height) : Theme.shapeM)
+                radius: Theme.sx("tab", "radius", current ? Theme.pill(height) : (hov.hovered ? Theme.pill(height) : Theme.shapeM))
                 // 5.4 Liquid Glass: the selected tab is a glass pill.
                 color: current ? (Theme.hyperOn ? Theme.tabActive : Theme.glassFillStrong) : (hov.hovered ? Theme.glassFill : "transparent")
                 border.width: Theme.edgeW(current || hov.hovered ? 1 : 0)

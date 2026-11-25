@@ -12,6 +12,9 @@ namespace oynix {
 
 // Choose the Qt Quick RHI backend. 1=Vulkan 2=OpenGL ES 3=OpenGL 4=Software.
 void prepare_graphics(int32_t backend);
+// Windows get an alpha channel, so a see-through theme shows the desktop.
+void enable_window_alpha();
+bool window_alpha();
 
 // Must run before QGuiApplication is constructed.
 void init_webengine();

@@ -1,0 +1,10 @@
+import QtQuick
+
+// Aurora Glass's format: a slightly roomier toolbar, rounder corners.
+QtObject {
+    property int toolbarHeight: 58
+    property int tabHeight: 36
+    property real cornerScale: 1.2
+    property int spacing: 10
+    property int titleSize: 17
+}
