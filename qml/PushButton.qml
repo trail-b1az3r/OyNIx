@@ -12,7 +12,7 @@ AbstractButton {
     property bool outlined: false
     property bool textOnly: false
     implicitHeight: 40
-    implicitWidth: Math.max(64, lbl.implicitWidth + 32)
+    implicitWidth: Math.max(64, lbl.implicitWidth + 2 * Theme.sx("button", "padding", 16))
     hoverEnabled: true
     focusPolicy: Qt.NoFocus
     readonly property color fg: !enabled ? Theme.alpha(Theme.surfaceFg, 0.38)
@@ -20,7 +20,8 @@ AbstractButton {
                                : destructive ? Theme.error
                                : (outlined || textOnly) ? Theme.primary : Theme.panel("button", "text", Theme.secondaryContainerFg)
     background: Rectangle {
-        radius: b.pressed ? Theme.shapeM : Theme.pill(height)
+        // styles.tsx: `export const button = { radius, weight, padding }`.
+        radius: b.pressed ? Theme.shapeM : Theme.sx("button", "radius", Theme.pill(height))
         color: !b.enabled ? Theme.alpha(Theme.surfaceFg, b.textOnly || b.outlined ? 0 : 0.12)
                : b.primary ? (b.destructive ? Theme.error : Theme.primary)
                : (b.outlined || b.textOnly) ? "transparent"
@@ -41,7 +42,7 @@ AbstractButton {
         text: b.text
         horizontalAlignment: Text.AlignHCenter
         color: b.fg
-        font.weight: Theme.heavy === Font.Bold ? Font.Bold : Font.Medium
+        font.weight: Theme.sx("button", "weight", Theme.heavy === Font.Bold ? Font.Bold : Font.Medium)
         font.pixelSize: 14
     }
 }

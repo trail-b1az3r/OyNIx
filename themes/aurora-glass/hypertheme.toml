@@ -1,0 +1,7 @@
+[hypertheme]
+name = "Aurora Glass"
+version = "1.0.0"
+author = "OyNIx"
+description = "Deep night glass over a drifting aurora: a power hypertheme showing global.zxx, global.zsg, global.qml, effect.qml, format-panel.qt, styles.tsx and a module."
+modes = "both"
+power = true

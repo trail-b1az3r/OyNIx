@@ -2701,7 +2701,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 [[package]]
 name = "stonedgem-blocker"
 version = "0.1.0"
-source = "git+https://github.com/trail-b1az3r/StonedGem?rev=bda2a43abf63f1cd49f1c985b02e757c8735a047#bda2a43abf63f1cd49f1c985b02e757c8735a047"
+source = "git+https://github.com/trail-b1az3r/StonedGem?rev=1441ed69682ec239d77b23467b1b0c0292095fdf#1441ed69682ec239d77b23467b1b0c0292095fdf"
 dependencies = [
  "aho-corasick",
  "serde",
@@ -2713,7 +2713,7 @@ dependencies = [
 [[package]]
 name = "stonedgem-extensions"
 version = "0.1.0"
-source = "git+https://github.com/trail-b1az3r/StonedGem?rev=bda2a43abf63f1cd49f1c985b02e757c8735a047#bda2a43abf63f1cd49f1c985b02e757c8735a047"
+source = "git+https://github.com/trail-b1az3r/StonedGem?rev=1441ed69682ec239d77b23467b1b0c0292095fdf#1441ed69682ec239d77b23467b1b0c0292095fdf"
 dependencies = [
  "base64",
  "oxc",
@@ -2732,7 +2732,7 @@ dependencies = [
 [[package]]
 name = "stonedgem-hypertheme"
 version = "0.1.0"
-source = "git+https://github.com/trail-b1az3r/StonedGem?rev=bda2a43abf63f1cd49f1c985b02e757c8735a047#bda2a43abf63f1cd49f1c985b02e757c8735a047"
+source = "git+https://github.com/trail-b1az3r/StonedGem?rev=1441ed69682ec239d77b23467b1b0c0292095fdf#1441ed69682ec239d77b23467b1b0c0292095fdf"
 dependencies = [
  "serde",
  "serde_json",
@@ -2747,7 +2747,7 @@ dependencies = [
 [[package]]
 name = "stonedgem-library"
 version = "0.1.0"
-source = "git+https://github.com/trail-b1az3r/StonedGem?rev=bda2a43abf63f1cd49f1c985b02e757c8735a047#bda2a43abf63f1cd49f1c985b02e757c8735a047"
+source = "git+https://github.com/trail-b1az3r/StonedGem?rev=1441ed69682ec239d77b23467b1b0c0292095fdf#1441ed69682ec239d77b23467b1b0c0292095fdf"
 dependencies = [
  "serde",
  "serde_json",
@@ -2758,7 +2758,7 @@ dependencies = [
 [[package]]
 name = "stonedgem-poweroynix"
 version = "0.1.0"
-source = "git+https://github.com/trail-b1az3r/StonedGem?rev=bda2a43abf63f1cd49f1c985b02e757c8735a047#bda2a43abf63f1cd49f1c985b02e757c8735a047"
+source = "git+https://github.com/trail-b1az3r/StonedGem?rev=1441ed69682ec239d77b23467b1b0c0292095fdf#1441ed69682ec239d77b23467b1b0c0292095fdf"
 dependencies = [
  "num-bigint 0.4.8",
  "ring",
@@ -2770,12 +2770,12 @@ dependencies = [
 [[package]]
 name = "stonedgem-profile"
 version = "0.1.0"
-source = "git+https://github.com/trail-b1az3r/StonedGem?rev=bda2a43abf63f1cd49f1c985b02e757c8735a047#bda2a43abf63f1cd49f1c985b02e757c8735a047"
+source = "git+https://github.com/trail-b1az3r/StonedGem?rev=1441ed69682ec239d77b23467b1b0c0292095fdf#1441ed69682ec239d77b23467b1b0c0292095fdf"
 
 [[package]]
 name = "stonedgem-theme"
 version = "0.1.0"
-source = "git+https://github.com/trail-b1az3r/StonedGem?rev=bda2a43abf63f1cd49f1c985b02e757c8735a047#bda2a43abf63f1cd49f1c985b02e757c8735a047"
+source = "git+https://github.com/trail-b1az3r/StonedGem?rev=1441ed69682ec239d77b23467b1b0c0292095fdf#1441ed69682ec239d77b23467b1b0c0292095fdf"
 dependencies = [
  "serde_json",
 ]
@@ -2783,7 +2783,7 @@ dependencies = [
 [[package]]
 name = "stonedgem-url"
 version = "0.1.0"
-source = "git+https://github.com/trail-b1az3r/StonedGem?rev=bda2a43abf63f1cd49f1c985b02e757c8735a047#bda2a43abf63f1cd49f1c985b02e757c8735a047"
+source = "git+https://github.com/trail-b1az3r/StonedGem?rev=1441ed69682ec239d77b23467b1b0c0292095fdf#1441ed69682ec239d77b23467b1b0c0292095fdf"
 dependencies = [
  "url",
 ]
@@ -2791,7 +2791,7 @@ dependencies = [
 [[package]]
 name = "stonedgem-vault"
 version = "0.1.0"
-source = "git+https://github.com/trail-b1az3r/StonedGem?rev=bda2a43abf63f1cd49f1c985b02e757c8735a047#bda2a43abf63f1cd49f1c985b02e757c8735a047"
+source = "git+https://github.com/trail-b1az3r/StonedGem?rev=1441ed69682ec239d77b23467b1b0c0292095fdf#1441ed69682ec239d77b23467b1b0c0292095fdf"
 dependencies = [
  "aes",
  "base64",
@@ -2808,7 +2808,7 @@ dependencies = [
 [[package]]
 name = "stonedgem-zsharp"
 version = "0.1.0"
-source = "git+https://github.com/trail-b1az3r/StonedGem?rev=bda2a43abf63f1cd49f1c985b02e757c8735a047#bda2a43abf63f1cd49f1c985b02e757c8735a047"
+source = "git+https://github.com/trail-b1az3r/StonedGem?rev=1441ed69682ec239d77b23467b1b0c0292095fdf#1441ed69682ec239d77b23467b1b0c0292095fdf"
 dependencies = [
  "naga",
  "tiny-skia",
@@ -3555,7 +3555,7 @@ dependencies = [
 [[package]]
 name = "zsharpend"
 version = "0.1.0"
-source = "git+https://github.com/trail-b1az3r/StonedGem?rev=bda2a43abf63f1cd49f1c985b02e757c8735a047#bda2a43abf63f1cd49f1c985b02e757c8735a047"
+source = "git+https://github.com/trail-b1az3r/StonedGem?rev=1441ed69682ec239d77b23467b1b0c0292095fdf#1441ed69682ec239d77b23467b1b0c0292095fdf"
 dependencies = [
  "naga",
  "tiny-skia",

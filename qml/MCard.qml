@@ -8,8 +8,8 @@ Rectangle {
     property string title: ""
     property color tone: Theme.surfaceContainerLow
     default property alias content: col.data
-    implicitHeight: col.implicitHeight + 32
-    radius: Theme.shapeXL - 4
+    implicitHeight: col.implicitHeight + 2 * Theme.sx("card", "padding", 16)
+    radius: Theme.sx("card", "radius", Theme.shapeXL - 4)
     color: tone
     border.width: Theme.edgeW(1)
     border.color: Theme.glassRim
@@ -18,7 +18,7 @@ Rectangle {
     ColumnLayout {
         id: col
         anchors.fill: parent
-        anchors.margins: 16
+        anchors.margins: Theme.sx("card", "padding", 16)
         spacing: 10
         Txt { visible: card.title !== ""; text: card.title; font.pixelSize: Theme.titleSize; font.weight: Font.DemiBold }
     }

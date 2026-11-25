@@ -11,7 +11,7 @@ Rectangle {
     signal accepted()
     implicitHeight: 44
     implicitWidth: 200
-    radius: Theme.shapeM
+    radius: Theme.sx("field", "radius", Theme.shapeM)
     color: Theme.field
     border.width: Theme.edge > 0 ? Theme.edge : input.activeFocus ? 2 : 0
     border.color: input.activeFocus ? Theme.primary : Theme.edgeColor

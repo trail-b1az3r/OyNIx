@@ -1,0 +1,11 @@
+// Global settings: the glass, the overlay and the effect's strength.
+import aurora
+
+fn global(dark) {
+    return {
+        glass: { blur: 18, tint: dark ? "#16213d" : "#ffffff", opacity: dark ? 0.62 : 0.7 },
+        overlay_opacity: dark ? 0.9 : 0.5,
+        aurora: { green: "#7ee0c3", violet: "#9b8cff", speed: 0.6 },
+        grade: { saturation: dark ? 0.18 : 0.08, contrast: 0.04 }
+    }
+}

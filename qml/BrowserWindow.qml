@@ -777,10 +777,52 @@ ApplicationWindow {
     Shortcut { sequences: ["Ctrl+,"]; onActivated: win.app.openSettings("") }
     Shortcut { sequences: ["Ctrl+J", "Ctrl+Shift+Y"]; onActivated: downloadsPopover.open() }
 
+    // ── Hypertheme layers (5.5) ─────────────────────────────────────
+    // The backdrop, under the whole interface (shows through glass bars).
+    Image {
+        anchors.fill: parent
+        z: -2
+        visible: Theme.backdrop !== "" && status === Image.Ready
+        source: Theme.backdrop
+        fillMode: Image.PreserveAspectCrop
+        asynchronous: true
+        cache: false
+    }
+    // A power theme's global.zsg, laid over everything (its alpha decides
+    // how much shows), and its global.qml layers. Neither takes input.
+    Image {
+        anchors.fill: parent
+        z: 900
+        enabled: false
+        visible: Theme.overlay !== "" && status === Image.Ready
+        source: Theme.overlay
+        fillMode: Image.Stretch
+        opacity: Theme.globalSetting("overlay_opacity", 1)
+        asynchronous: true
+        cache: false
+    }
+    Loader {
+        id: globalLayer
+        anchors.fill: parent
+        z: item && item.behind === true ? -1 : 901
+        enabled: false
+        active: Theme.globalQml !== ""
+        source: Theme.globalQml
+        onLoaded: {
+            if ("ui" in item) item.ui = uiRoot
+            if ("window" in item) item.window = win
+        }
+        onStatusChanged: if (status === Loader.Error) console.warn("global.qml didn't load: see the messages above")
+    }
+
     // ── Layout ──────────────────────────────────────────────────────
     ColumnLayout {
+        id: uiRoot
         anchors.fill: parent
         spacing: 0
+        // A power theme's effect.qml: a layer effect over the whole interface.
+        layer.enabled: Theme.effectComponent !== null
+        layer.effect: Theme.effectComponent
 
         // Toolbar
         Rectangle {

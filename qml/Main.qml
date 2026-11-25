@@ -153,9 +153,10 @@ QtObject {
         onNotified: function (text) { var w = app.activeWindow(); if (w) w.toastMessage(text) }
     }
     property WebChannel studioChannel: WebChannel { registeredObjects: [app.studio] }
-    function openThemeStudio() {
+    // Theme Studio, opening installed theme `file` if given.
+    function openThemeStudio(file) {
         var w = activeWindow()
-        var u = Core.themeStudioUrl()
+        var u = file ? Core.themeStudioUrlFor(file) : Core.themeStudioUrl()
         if (w && u) w.openTab(u)
     }
 

@@ -12,10 +12,11 @@ Item {
     property Item backdrop: null
     property real radius: Theme.shapeL
     property real bend: 14
-    property real frost: 4
+    // A power theme's global.zxx can set the glass: { blur, tint, opacity }.
+    property real frost: Theme.glassSetting("blur", 4)
     // Strong enough that text on the glass stays legible (≥ 4.5:1) over
     // busy pages, while the page still shows through and bends at the rim.
-    property color tint: Theme.alpha(Theme.surfaceContainer, Theme.dark ? 0.84 : 0.80)
+    property color tint: Theme.alpha(Theme.glassSetting("tint", Theme.surfaceContainer), Theme.glassSetting("opacity", Theme.dark ? 0.84 : 0.80))
     property color rim: Theme.dark ? Theme.alpha("#ffffff", 0.35) : Theme.alpha("#ffffff", 0.9)
     // Pointer in glass coordinates, for the moving highlight.
     property point pointer: Qt.point(-10000, -10000)

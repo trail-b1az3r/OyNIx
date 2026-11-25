@@ -16,6 +16,17 @@ Rectangle {
         GradientStop { position: 1; color: Theme.window }
     }
 
+    // A hypertheme's backdrop: its background.zsg drawn, or the picture its
+    // global.zxx names.
+    Image {
+        anchors.fill: parent
+        visible: Theme.backdrop !== "" && status === Image.Ready
+        source: Theme.backdrop
+        fillMode: Image.PreserveAspectCrop
+        asynchronous: true
+        cache: false
+    }
+
     Flickable {
         anchors.fill: parent
         contentHeight: col.implicitHeight + 120

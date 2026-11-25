@@ -1,0 +1,10 @@
+// Light mode turns the night into a pale dawn; the accent stays aurora green.
+import aurora
+
+fn tokens(dark) {
+    if dark { return { tertiary: aurora.violet() } }
+    return {
+        background: aurora.night(false), surface: #ffffff, surface_alt: #e3e9f8,
+        text: #0d1530, muted: #4a5878, border: #c5d0ea, accent: #127a5e, on_accent: #ffffff
+    }
+}
