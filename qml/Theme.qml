@@ -56,6 +56,18 @@ QtObject {
     readonly property var hyperGlobal: hyperOn && hyper.global ? hyper.global : ({})
     function globalSetting(k, d) { var v = hyperGlobal[k]; return v === undefined ? d : v }
     function glassSetting(k, d) { var g = hyperGlobal.glass; return g && g[k] !== undefined ? g[k] : d }
+    // global.zxx `window: { transparent: true, opacity, surfaces }`: the
+    // window itself is see-through (the desktop shows behind OyNIx, and a
+    // compositor such as Hyprland or KWin blurs it). Needs the window's
+    // alpha channel, which OyNIx sets up at start-up for such a theme.
+    readonly property var windowSetting: hyperGlobal.window || ({})
+    readonly property bool wantsSeeThrough: hyperOn && windowSetting.transparent === true
+    readonly property bool seeThrough: wantsSeeThrough && Core.windowAlpha()
+    readonly property real windowOpacity: windowSetting.opacity !== undefined ? windowSetting.opacity : 0.2
+    // A full page's background: clear in a see-through theme (the window's
+    // own tint is the one layer over the desktop), the surface otherwise.
+    readonly property color page: seeThrough ? "transparent" : surface
+    readonly property real surfaceOpacity: windowSetting.surfaces !== undefined ? windowSetting.surfaces : 0.4
     // What the window draws: the theme's backdrop (background.zsg drawn, or
     // a picture), the global.zsg overlay, and the power theme's QML parts.
     readonly property string backdrop: hyperOn && hyper.background ? hyper.background : ""
@@ -137,8 +149,18 @@ QtObject {
     readonly property FontLoader neuFont: FontLoader { source: "qrc:/qt/qml/OyNIx/assets/fonts/OyNIxNeu-Regular.ttf" }
     readonly property string neuFamily: neuFont.status === FontLoader.Ready ? neuFont.name : ""
     readonly property real cornerScale: (hyperOn ? ht("radius", 12) / 12 : custom.corners !== undefined ? custom.corners : 1) * fmt("cornerScale", 1)
-    function role(n) { return scheme[n] || "#ff00ff" }
-    function alpha(c, a) { c = Qt.color(c); return Qt.rgba(c.r, c.g, c.b, a) }
+    function role(n) {
+        var c = scheme[n] || "#ff00ff"
+        // A see-through theme: surfaces let the desktop show through.
+        if (seeThrough && n.indexOf("surface") === 0) return alpha(c, n === "surface" ? windowOpacity : surfaceOpacity)
+        // Coloured containers (primaryContainer, …) are glass too, a little denser.
+        if (seeThrough && n.indexOf("on") !== 0 && /Container$/.test(n)) return alpha(c, Math.min(1, surfaceOpacity + 0.2))
+        return c
+    }
+    // An opaque version of a colour (web pages keep a solid background).
+    function opaque(c) { c = Qt.color(c); return Qt.rgba(c.r, c.g, c.b, 1) }
+    // `c` at opacity `a` (multiplied with c's own, so translucent stays translucent).
+    function alpha(c, a) { c = Qt.color(c); return Qt.rgba(c.r, c.g, c.b, c.a * a) }
 
     // ── Material 3 colour roles ──
     readonly property color primary: role("primary")

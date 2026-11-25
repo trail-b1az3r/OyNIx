@@ -15,7 +15,9 @@ ApplicationWindow {
     minimumWidth: 620
     minimumHeight: 440
     title: qsTr("OyNIx Settings")
-    color: Theme.surface
+    // See BrowserWindow: a see-through window's tint is drawn, not cleared.
+    color: Theme.seeThrough ? "transparent" : Theme.surface
+    Rectangle { anchors.fill: parent; visible: Theme.seeThrough; color: Theme.surface }
     SettingsView { id: view; anchors.fill: parent; app: w.app; shown: w.visible }
     Shortcut { sequences: ["Escape", "Ctrl+W"]; onActivated: w.close() }
 }

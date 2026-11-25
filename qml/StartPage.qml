@@ -9,11 +9,11 @@ import OyNIx
 Rectangle {
     id: page
     property var win
-    color: Theme.window
+    color: Theme.page
 
     gradient: Gradient {
-        GradientStop { position: 0; color: Theme.window }
-        GradientStop { position: 1; color: Theme.window }
+        GradientStop { position: 0; color: Theme.page }
+        GradientStop { position: 1; color: Theme.page }
     }
 
     // A hypertheme's backdrop: its background.zsg drawn, or the picture its

@@ -8,7 +8,7 @@ import OyNIx
 Rectangle {
     id: page
     property var win
-    color: Theme.surface
+    color: Theme.page
 
     readonly property var entries: {
         Core.historyRevision

@@ -143,6 +143,19 @@ void prepare_graphics(int32_t backend) {
     }
 }
 
+// A power hypertheme can make the window see-through (global.zxx
+// `window: { transparent: true }`). Qt needs the alpha channel before any
+// window exists, so this runs at start-up when the chosen theme asks.
+static bool g_windowAlpha = false;
+void enable_window_alpha() {
+    QSurfaceFormat fmt = QSurfaceFormat::defaultFormat();
+    fmt.setAlphaBufferSize(8);
+    QSurfaceFormat::setDefaultFormat(fmt);
+    QQuickWindow::setDefaultAlphaBuffer(true);
+    g_windowAlpha = true;
+}
+bool window_alpha() { return g_windowAlpha; }
+
 // Qt on Wayland waits for the compositor's "frame done" after each frame;
 // if none arrives in time it marks the window unexposed and stops drawing
 // until one does. Some compositors (Hyprland, at times) never send it for

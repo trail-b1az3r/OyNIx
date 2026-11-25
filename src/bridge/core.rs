@@ -306,6 +306,9 @@ pub mod qobject {
         /// hasn't agreed to yet (call again with allow_power).
         #[qinvokable]
         fn install_hypertheme(self: &Core, path: &QString, allow_power: bool) -> QString;
+        /// Windows have an alpha channel (a see-through theme was chosen at start-up).
+        #[qinvokable]
+        fn window_alpha(self: &Core) -> bool;
         /// Remove an installed hypertheme (built-ins can't be): { ok } or { error }.
         #[qinvokable]
         fn uninstall_hypertheme(self: Pin<&mut Core>, file: &QString) -> QString;
@@ -1554,6 +1557,10 @@ impl qobject::Core {
             Ok(file) => json!({ "file": file }),
             Err(e) => json!({ "error": e }),
         })
+    }
+
+    pub fn window_alpha(&self) -> bool {
+        crate::bridge::native::ffi::window_alpha()
     }
 
     pub fn uninstall_hypertheme(mut self: Pin<&mut Self>, file: &QString) -> QString {

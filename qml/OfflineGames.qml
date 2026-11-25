@@ -13,7 +13,7 @@ Rectangle {
     property string body: ""
     property string game: Core.offlineGame === "blackjack" ? "blackjack" : "go"
     signal retry()
-    color: Theme.surface
+    color: Theme.page
 
     // Watch for the connection coming back.
     property bool backOnline: false

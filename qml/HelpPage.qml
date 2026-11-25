@@ -9,11 +9,12 @@ Rectangle {
     id: help
     property var win
     property string topic: "start"
-    color: Theme.window
+    color: Theme.page
 
     readonly property var topics: [
-        { id: "new", icon: "star", title: qsTr("What's new in 5.4.2"), body: qsTr(
-"## Coming next\n\n" +
+        { id: "new", icon: "star", title: qsTr("What's new in 5.5.0"), body: qsTr(
+"## What's new in 5.5.0\n\n" +
+"**Liquid Glass, see-through.** The new built-in **Liquid Glass** power hypertheme makes the OyNIx window itself glass: your desktop shows through the toolbar, the Start page and Settings, behind clear bars and cards with a light rim and a bright top sheen, in light and dark. Web pages stay solid inside the glass. On Hyprland, KWin or picom with blur, what's behind is frosted too. Pick it in Settings › Appearance › Hypertheme; it applies fully after a restart.\n\n" +
 "**Power hyperthemes.** A `.phypertheme` can restyle OyNIx from the inside: global.zxx sets the glass and other global settings, global.zsg lays a shader over the window, global.qml adds layers over or behind the interface, effect.qml applies an effect to the whole interface, format-panel.qt changes bar heights, font sizes and spacing, and styles.tsx styles buttons, cards, fields and tabs. A theme's programs can import its own modules (modules/*.zxx, include/*.zsx), and it can carry pictures. Installing one asks you first, because its QML runs in OyNIx. Aurora Glass (themes/aurora-glass) shows every part.\n\n" +
 "**Themes in Settings.** Settings › Appearance › Hypertheme installs .hypertheme and .phypertheme files (Browse…), removes them, and opens the chosen one in Theme Studio, which also lists every installed theme under Open theme…. A theme's background shader now shows behind the Start page.\n\n" +
 "**WebUSB.** Sites that talk to a phone or headset over ADB, such as ModsBeforeFriday for Quest, now work: long USB transfers no longer lose or repeat data. If the device is busy, OyNIx tells you to stop the adb server on this computer (`adb kill-server`).\n\n" +

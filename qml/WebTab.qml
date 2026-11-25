@@ -416,7 +416,7 @@ Item {
             profile: tab.win.profile
             // Pages without their own background get white, as in every browser;
             // only force-darkened pages use the dark canvas.
-            backgroundColor: settings.forceDarkMode ? Theme.window : "white"
+            backgroundColor: settings.forceDarkMode ? Theme.opaque(Theme.window) : "white"
             audioMuted: tab.model.muted
             lifecycleState: (Core.lowPowerMode && !tab.isCurrent && !recentlyAudible)
                             ? WebEngineView.LifecycleState.Frozen : WebEngineView.LifecycleState.Active

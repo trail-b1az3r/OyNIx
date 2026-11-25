@@ -13,7 +13,7 @@ Rectangle {
     property var app
     property string page: "general"
     property bool shown: visible
-    color: Theme.surface
+    color: Theme.page
 
     function set(key, value) { Core.setSetting(key, JSON.stringify(value)) }
     // Install a .hypertheme / .phypertheme; a power theme asks first (htConfirm).
@@ -470,7 +470,7 @@ Rectangle {
                 Row_ {
                     label: ""
                     readonly property var current: { Core.settingsJson; var f = sw.s.hypertheme || ""; return JSON.parse(Core.hyperthemes()).filter(function (x) { return x.file === f })[0] }
-                    Txt { visible: !!parent.current && parent.current.power; text: qsTr("Power hypertheme: its QML and programs run in OyNIx's interface"); font.pixelSize: 12; color: Theme.warning; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+                    Txt { visible: !!parent.current && parent.current.power; text: qsTr("Power hypertheme: its QML and programs run in OyNIx's interface") + (Theme.wantsSeeThrough && !Theme.seeThrough ? qsTr(". Restart OyNIx to see through the window.") : ""); font.pixelSize: 12; color: Theme.warning; Layout.fillWidth: true; wrapMode: Text.WordWrap }
                     Item { Layout.fillWidth: true; visible: !parent.current || !parent.current.power }
                     PushButton { text: qsTr("Edit in Theme Studio"); onClicked: sw.app.openThemeStudio(sw.s.hypertheme || "") }
                     PushButton {

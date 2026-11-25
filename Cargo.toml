@@ -1,6 +1,6 @@
 [package]
 name = "oynix"
-version = "5.4.2"
+version = "5.5.0"
 edition = "2021"
 rust-version = "1.80"
 license = "MIT"
@@ -37,16 +37,16 @@ base64 = "0.23.1"
 sha3 = "0.10"
 
 # StonedGem: the platform OyNIx is moving onto (see its docs/MIGRATION.md).
-stonedgem-url = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "1441ed69682ec239d77b23467b1b0c0292095fdf" }
-stonedgem-vault = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "1441ed69682ec239d77b23467b1b0c0292095fdf" }
-stonedgem-profile = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "1441ed69682ec239d77b23467b1b0c0292095fdf" }
-stonedgem-blocker = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "1441ed69682ec239d77b23467b1b0c0292095fdf" }
-stonedgem-library = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "1441ed69682ec239d77b23467b1b0c0292095fdf" }
-stonedgem-extensions = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "1441ed69682ec239d77b23467b1b0c0292095fdf" }
+stonedgem-url = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "f799f3c2c6f224637ebfa642bc2c12b906139d83" }
+stonedgem-vault = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "f799f3c2c6f224637ebfa642bc2c12b906139d83" }
+stonedgem-profile = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "f799f3c2c6f224637ebfa642bc2c12b906139d83" }
+stonedgem-blocker = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "f799f3c2c6f224637ebfa642bc2c12b906139d83" }
+stonedgem-library = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "f799f3c2c6f224637ebfa642bc2c12b906139d83" }
+stonedgem-extensions = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "f799f3c2c6f224637ebfa642bc2c12b906139d83" }
 # Z#++: OyNIx's theme palettes are a Z#++ program (assets/themes.zsp).
-stonedgem-zsharp = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "1441ed69682ec239d77b23467b1b0c0292095fdf" }
+stonedgem-zsharp = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "f799f3c2c6f224637ebfa642bc2c12b906139d83" }
 # Hyperthemes and Theme Studio (docs/HYPERTHEME.md in StonedGem).
-stonedgem-hypertheme = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "1441ed69682ec239d77b23467b1b0c0292095fdf" }
+stonedgem-hypertheme = { git = "https://github.com/trail-b1az3r/StonedGem", rev = "f799f3c2c6f224637ebfa642bc2c12b906139d83" }
 
 [build-dependencies]
 cxx-qt-build = "0.10"

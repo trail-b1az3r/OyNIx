@@ -39,7 +39,10 @@ ApplicationWindow {
     minimumWidth: 560
     minimumHeight: 380
     visible: true
-    color: Theme.window
+    // A see-through window clears to transparent; its tint is the Rectangle
+    // below, which the scene graph premultiplies (a translucent clear colour
+    // isn't, so a light tint would wash the desktop out to white).
+    color: Theme.seeThrough ? "transparent" : Theme.window
     // Theme Qt's own popups (tooltips, file dialogs) with the M3 scheme.
     palette.window: Theme.surfaceContainer
     palette.windowText: Theme.surfaceFg
@@ -778,6 +781,7 @@ ApplicationWindow {
     Shortcut { sequences: ["Ctrl+J", "Ctrl+Shift+Y"]; onActivated: downloadsPopover.open() }
 
     // ── Hypertheme layers (5.5) ─────────────────────────────────────
+    Rectangle { anchors.fill: parent; z: -3; visible: Theme.seeThrough; color: Theme.window }
     // The backdrop, under the whole interface (shows through glass bars).
     Image {
         anchors.fill: parent

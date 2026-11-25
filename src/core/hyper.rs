@@ -66,6 +66,17 @@ pub fn resolved(file: &str, dark: bool) -> Value {
     out
 }
 
+/// Whether power theme `file` asks for a see-through window (global.zxx:
+/// `window: { transparent: true }`), in light or dark mode.
+pub fn wants_transparent_window(file: &str) -> bool {
+    if file.is_empty() {
+        return false;
+    }
+    super::paths::data_dir();
+    let Ok(h) = stonedgem_hypertheme::load(file) else { return false };
+    h.is_power() && [false, true].iter().any(|&dark| h.resolve(dark).global.get("window").and_then(|w| w.get("transparent")).and_then(Value::as_bool) == Some(true))
+}
+
 /// The theme unpacked in the cache (`hypertheme/<file>/`), once per version
 /// of the installed file: QML parts and pictures are loaded from there.
 fn unpacked(file: &str, h: &stonedgem_hypertheme::Hypertheme) -> Result<std::path::PathBuf, String> {
