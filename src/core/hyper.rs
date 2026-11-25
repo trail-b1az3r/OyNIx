@@ -201,8 +201,12 @@ pub fn studio_store() -> std::path::PathBuf {
 mod tests {
     use super::*;
 
+    /// The tests point XDG_* at their own folders; one at a time.
+    static ENV: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
     fn aurora_glass_power_theme() {
+        let _env = ENV.lock().unwrap_or_else(|e| e.into_inner());
         let dir = std::env::temp_dir().join(format!("oynix-aurora-{}", std::process::id()));
         std::env::set_var("XDG_DATA_HOME", dir.join("data"));
         std::env::set_var("XDG_CACHE_HOME", dir.join("cache"));
@@ -232,6 +236,7 @@ mod tests {
 
     #[test]
     fn builtin_neubrutalism_resolves() {
+        let _env = ENV.lock().unwrap_or_else(|e| e.into_inner());
         let dir = std::env::temp_dir().join(format!("oynix-hyper-{}", std::process::id()));
         std::env::set_var("XDG_DATA_HOME", dir.join("data"));
         std::env::set_var("XDG_CACHE_HOME", dir.join("cache"));
