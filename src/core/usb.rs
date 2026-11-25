@@ -381,6 +381,14 @@ fn transfer_status(e: &rusb::Error) -> Option<&'static str> {
     }
 }
 
+/// (class, subclass, protocol) of interface `i` in the active configuration.
+fn interface_triple(d: &OpenDevice, i: u8) -> Option<(u8, u8, u8)> {
+    let c = d.handle.device().active_config_descriptor().ok()?;
+    let iface = c.interfaces().find(|x| x.number() == i)?;
+    let alt = iface.descriptors().next()?;
+    Some((alt.class_code(), alt.sub_class_code(), alt.protocol_code()))
+}
+
 fn net_err(e: rusb::Error) -> String {
     match e {
         rusb::Error::NoDevice => "NotFoundError: The device was disconnected.".into(),
@@ -398,6 +406,58 @@ fn sliced<T>(d: &OpenDevice, mut f: impl FnMut(Duration) -> rusb::Result<T>) -> 
             Err(rusb::Error::Timeout) if !d.closed.load(Ordering::SeqCst) => continue,
             Err(rusb::Error::Timeout) => return Err(rusb::Error::Interrupted),
             r => return r,
+        }
+    }
+}
+
+/// A bulk or interrupt transfer that keeps every byte. libusb's sync
+/// transfers report what moved before a timeout, but rusb drops it; with
+/// timeout slices that lost data on reads and sent data twice on writes,
+/// corrupting streams such as ADB. Here a read returns whatever arrived
+/// (a short transfer, which WebUSB allows), and a write carries on from
+/// where the last slice stopped. A slice that moves nothing just waits
+/// again, until the device is closed.
+fn stream(d: &OpenDevice, addr: u8, buf: &mut [u8], interrupt: bool) -> rusb::Result<usize> {
+    let handle = d.handle.as_raw();
+    stream_loop(buf, addr & 0x80 != 0, || d.closed.load(Ordering::SeqCst), |rest| {
+        let mut moved: std::os::raw::c_int = 0;
+        // SAFETY: the handle stays open while `d` is alive; `rest` is valid
+        // for `rest.len()` bytes and outlives the call.
+        let rc = unsafe {
+            let f = if interrupt { rusb::ffi::libusb_interrupt_transfer } else { rusb::ffi::libusb_bulk_transfer };
+            f(handle, addr, rest.as_mut_ptr(), rest.len() as std::os::raw::c_int, &mut moved, SLICE.as_millis() as std::os::raw::c_uint)
+        };
+        (rc, moved.max(0) as usize)
+    })
+}
+
+/// The slice loop of [`stream`], given one libusb transfer as `call`
+/// (returning libusb's code and how many bytes moved).
+fn stream_loop(buf: &mut [u8], input: bool, closed: impl Fn() -> bool, mut call: impl FnMut(&mut [u8]) -> (i32, usize)) -> rusb::Result<usize> {
+    use rusb::ffi::constants::*;
+    let len = buf.len();
+    let mut done = 0usize;
+    loop {
+        let (rc, moved) = call(&mut buf[done..]);
+        done = (done + moved).min(len);
+        match rc {
+            0 => return Ok(done),
+            LIBUSB_ERROR_TIMEOUT => {
+                if (input && done > 0) || (!input && done >= len) {
+                    return Ok(done);
+                }
+                if closed() {
+                    return Err(rusb::Error::Interrupted);
+                }
+            }
+            LIBUSB_ERROR_PIPE => return Err(rusb::Error::Pipe),
+            LIBUSB_ERROR_OVERFLOW => return Err(rusb::Error::Overflow),
+            LIBUSB_ERROR_NO_DEVICE => return Err(rusb::Error::NoDevice),
+            LIBUSB_ERROR_ACCESS => return Err(rusb::Error::Access),
+            LIBUSB_ERROR_BUSY => return Err(rusb::Error::Busy),
+            LIBUSB_ERROR_INTERRUPTED => return Err(rusb::Error::Interrupted),
+            LIBUSB_ERROR_IO => return Err(rusb::Error::Io),
+            _ => return Err(rusb::Error::Other),
         }
     }
 }
@@ -428,7 +488,13 @@ pub fn run(d: &OpenDevice, op: &str, args: &Value) -> Result<Value, String> {
             } else {
                 return Err(format!("NotFoundError: The configuration has no interface {i}."));
             }
-            h.claim_interface(i).map_err(net_err)?;
+            h.claim_interface(i).map_err(|e| match (e, interface_triple(d, i)) {
+                // An Android/Quest ADB interface held by a desktop adb server.
+                (rusb::Error::Busy, Some((0xff, 0x42, 0x01))) => {
+                    "NetworkError: The device's ADB interface is in use by another program, usually the adb server on this computer. Run `adb kill-server`, then try again.".to_string()
+                }
+                (e, _) => net_err(e),
+            })?;
             if let Ok(mut c) = d.claimed.lock() {
                 c.insert(i);
             }
@@ -474,16 +540,16 @@ pub fn run(d: &OpenDevice, op: &str, args: &Value) -> Result<Value, String> {
             let res = if op == "transferIn" {
                 let mut buf = vec![0u8; args["length"].as_u64().unwrap_or(0).min(16 << 20) as usize];
                 let r = match kind {
-                    TransferType::Bulk => sliced(d, |t| h.read_bulk(addr, &mut buf, t)),
-                    TransferType::Interrupt => sliced(d, |t| h.read_interrupt(addr, &mut buf, t)),
+                    TransferType::Bulk => stream(d, addr, &mut buf, false),
+                    TransferType::Interrupt => stream(d, addr, &mut buf, true),
                     _ => return Err("NotSupportedError: Isochronous transfers are not supported.".into()),
                 };
                 r.map(|k| json!({ "status": "ok", "data": b64(&buf[..k]) }))
             } else {
-                let data = unb64(args["data"].as_str().unwrap_or(""))?;
+                let mut data = unb64(args["data"].as_str().unwrap_or(""))?;
                 let r = match kind {
-                    TransferType::Bulk => sliced(d, |t| h.write_bulk(addr, &data, t)),
-                    TransferType::Interrupt => sliced(d, |t| h.write_interrupt(addr, &data, t)),
+                    TransferType::Bulk => stream(d, addr, &mut data, false),
+                    TransferType::Interrupt => stream(d, addr, &mut data, true),
                     _ => return Err("NotSupportedError: Isochronous transfers are not supported.".into()),
                 };
                 r.map(|k| json!({ "status": "ok", "bytesWritten": k }))
@@ -532,6 +598,53 @@ pub fn available() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use rusb::ffi::constants::{LIBUSB_ERROR_PIPE, LIBUSB_ERROR_TIMEOUT};
+
+    #[test]
+    fn writes_carry_on_after_a_partial_slice() {
+        // 10 bytes: 4 move, then the slice times out; then the rest.
+        let mut buf: Vec<u8> = (0..10).collect();
+        let mut seen: Vec<Vec<u8>> = vec![];
+        let mut step = 0;
+        let r = stream_loop(&mut buf, false, || false, |rest| {
+            seen.push(rest.to_vec());
+            step += 1;
+            if step == 1 { (LIBUSB_ERROR_TIMEOUT, 4) } else { (0, rest.len()) }
+        });
+        assert_eq!(r.unwrap(), 10);
+        assert_eq!(seen[1], (4..10).collect::<Vec<u8>>(), "the second slice sends only what's left, nothing twice");
+    }
+
+    #[test]
+    fn reads_hand_over_what_arrived() {
+        let mut buf = vec![0u8; 16];
+        let mut step = 0;
+        let r = stream_loop(&mut buf, true, || false, |rest| {
+            step += 1;
+            match step {
+                1 => (LIBUSB_ERROR_TIMEOUT, 0), // nothing yet: wait again
+                _ => {
+                    rest[..3].copy_from_slice(b"abc");
+                    (LIBUSB_ERROR_TIMEOUT, 3) // part arrived, then a timeout
+                }
+            }
+        });
+        assert_eq!(r.unwrap(), 3, "a short transfer, not lost data");
+        assert_eq!(&buf[..3], b"abc");
+    }
+
+    #[test]
+    fn transfers_stop_when_closed_and_report_stalls() {
+        let mut buf = vec![0u8; 8];
+        assert!(matches!(stream_loop(&mut buf, true, || true, |_| (LIBUSB_ERROR_TIMEOUT, 0)), Err(rusb::Error::Interrupted)));
+        assert!(matches!(stream_loop(&mut buf, false, || false, |_| (LIBUSB_ERROR_PIPE, 0)), Err(rusb::Error::Pipe)));
+        // A zero-length write (ADB's end-of-transfer marker) is one call.
+        let mut empty: Vec<u8> = vec![];
+        let mut calls = 0;
+        assert_eq!(stream_loop(&mut empty, false, || false, |_| { calls += 1; (0, 0) }).unwrap(), 0);
+        assert_eq!(calls, 1);
+    }
 
     fn dev() -> Value {
         json!({
